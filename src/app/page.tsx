@@ -375,7 +375,7 @@ export default function HomePage() {
                   setMapClickCoords({ latitude: lat, longitude: lng, commune })
                   setEditingInterventionId(null)
                   setIsFormOpen(true)
-                }} />}
+                }} onRefresh={async () => { await fetchStats(); await fetchInterventions() }} />}
                 {currentView === 'interventions' && (
                   <InterventionsView interventions={interventions} total={interventionsTotal}
                     page={interventionsPage} setPage={setInterventionsPage}
@@ -685,9 +685,9 @@ function DashboardView({ stats, onNavigate, selectedCommune }: { stats: Statisti
 }
 
 // ===== MAP VIEW =====
-function MapView({ interventions, quartiers, selectedCommune, onMapClick }: { interventions: Intervention[]; quartiers: Quartier[]; selectedCommune: CommuneType | 'ALL'; onMapClick: (lat: number, lng: number, commune: string | null) => void }) {
+function MapView({ interventions, quartiers, selectedCommune, onMapClick, onRefresh }: { interventions: Intervention[]; quartiers: Quartier[]; selectedCommune: CommuneType | 'ALL'; onMapClick: (lat: number, lng: number, commune: string | null) => void; onRefresh?: () => void }) {
   const [mapLoaded, setMapLoaded] = useState(false)
-  const [MapComponent, setMapComponent] = useState<React.ComponentType<{ interventions: Intervention[]; quartiers: Quartier[]; selectedCommune: string; onMapClick?: (lat: number, lng: number, commune: string | null) => void; mapClickEnabled?: boolean; showCommunePopups?: boolean }> | null>(null)
+  const [MapComponent, setMapComponent] = useState<React.ComponentType<{ interventions: Intervention[]; quartiers: Quartier[]; selectedCommune: string; onMapClick?: (lat: number, lng: number, commune: string | null) => void; mapClickEnabled?: boolean; showCommunePopups?: boolean; onInterventionCreated?: () => void }> | null>(null)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [hoveredCommune, setHoveredCommune] = useState<string | null>(null)
   const { setSelectedCommune, settings } = useAppStore()
@@ -934,7 +934,7 @@ function MapView({ interventions, quartiers, selectedCommune, onMapClick }: { in
 
       {/* Map Container */}
       <div className="flex-1 relative">
-        {mapLoaded && MapComponent ? <MapComponent interventions={interventions} quartiers={quartiers} selectedCommune={selectedCommune} onMapClick={onMapClick} mapClickEnabled={settings.mapClickEnabled} showCommunePopups={settings.showCommunePopups} /> : (
+        {mapLoaded && MapComponent ? <MapComponent interventions={interventions} quartiers={quartiers} selectedCommune={selectedCommune} onMapClick={onMapClick} mapClickEnabled={settings.mapClickEnabled} showCommunePopups={settings.showCommunePopups} onInterventionCreated={onRefresh} /> : (
           <div className="h-full flex items-center justify-center bg-slate-50">
             <div className="text-center space-y-4">
               <div className="w-14 h-14 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mx-auto" />
@@ -954,7 +954,7 @@ function MapView({ interventions, quartiers, selectedCommune, onMapClick }: { in
             <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-white text-sm shadow-md">📍</div>
             <div>
               <p className="text-[11px] font-bold text-emerald-700">انقر على الخريطة لإضافة تدخل</p>
-              <p className="text-[9px] text-slate-400">اضغط على أي موقع لإنشاء تدخل جديد</p>
+              <p className="text-[9px] text-slate-400">اضغط على أي موقع لملء استمارة التدخل</p>
             </div>
           </div>
         </motion.div>

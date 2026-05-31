@@ -459,82 +459,197 @@ function buildInterventionPopup(intervention: Intervention): string {
   `
 }
 
-// ===== NEW INTERVENTION POPUP =====
-function buildNewInterventionPopup(lat: number, lng: number, commune: string | null): string {
+// ===== NEW INTERVENTION POPUP WITH FORM =====
+const inputStyle = `
+  width: 100%;
+  padding: 7px 10px;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 12px;
+  font-family: inherit;
+  outline: none;
+  background: #fff;
+  color: #1e293b;
+  transition: border-color 0.2s;
+  direction: rtl;
+  text-align: right;
+  box-sizing: border-box;
+`
+const selectStyle = `
+  width: 100%;
+  padding: 7px 10px;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 12px;
+  font-family: inherit;
+  outline: none;
+  background: #fff;
+  color: #1e293b;
+  direction: rtl;
+  text-align: right;
+  cursor: pointer;
+  box-sizing: border-box;
+  appearance: auto;
+`
+const labelStyle = `
+  display: block;
+  font-size: 10px;
+  font-weight: 700;
+  color: #475569;
+  margin-bottom: 3px;
+  direction: rtl;
+  text-align: right;
+`
+const requiredStar = `<span style="color:#ef4444;font-size:11px;margin-right:2px;">*</span>`
+
+function buildNewInterventionPopup(lat: number, lng: number, commune: string | null, quartiers: Quartier[]): string {
   const communeLabel = commune ? COMMUNE_NAME_MAP[commune] || commune : 'خارج حدود الجماعات'
   const communeColor = commune === 'سيدي أبي القنادل' ? '#7c3aed' : commune === 'سلا' ? '#059669' : commune === 'عامر' ? '#d97706' : '#64748b'
+  const today = new Date().toISOString().split('T')[0]
+
+  const quartierOptions = quartiers.map(q => `<option value="${q.nom}">${q.nom}</option>`).join('')
 
   const headerContent = `
     <div style="display:flex;align-items:center;gap:10px;position:relative;z-index:1;">
       <div style="width:34px;height:34px;border-radius:10px;background:rgba(255,255,255,0.2);display:flex;align-items:center;justify-content:center;font-size:17px;backdrop-filter:blur(4px);">➕</div>
       <div style="flex:1;">
         <div style="font-size:14px;font-weight:800;letter-spacing:0.2px;">إضافة تدخل جديد</div>
-        <div style="font-size:10px;opacity:0.8;margin-top:1px;">انقر على الزر لإنشاء تدخل في هذا الموقع</div>
+        <div style="font-size:10px;opacity:0.8;margin-top:1px;">أدخل معلومات التدخل مباشرة</div>
       </div>
     </div>
   `
 
-  const coordsSection = sectionCard(
-    '#f0fdf4', '#bbf7d0',
-    `
-      <div style="display:flex;align-items:center;gap:5px;margin-bottom:6px;">
-        <div style="width:18px;height:18px;border-radius:5px;background:#059669;display:flex;align-items:center;justify-content:center;font-size:9px;color:white;">📍</div>
-        <span style="font-weight:700;font-size:10px;color:#059669;">موقع التدخل</span>
+  const coordsBar = `
+    <div style="display:flex;align-items:center;gap:6px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:8px 10px;margin-bottom:10px;">
+      <div style="width:24px;height:24px;border-radius:7px;background:#059669;display:flex;align-items:center;justify-content:center;font-size:12px;color:white;flex-shrink:0;">📍</div>
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:11px;color:#115e59;font-weight:700;direction:ltr;text-align:right;">${lat.toFixed(6)}, ${lng.toFixed(6)}</div>
+        <div style="display:flex;align-items:center;gap:4px;margin-top:2px;">
+          <span style="font-size:10px;">🏛️</span>
+          <span style="background:${communeColor}15;color:${communeColor};padding:1px 7px;border-radius:12px;font-size:9px;font-weight:700;border:1px solid ${communeColor}25;">${communeLabel}</span>
+        </div>
       </div>
-      <div style="font-size:13px;color:#115e59;font-weight:700;direction:ltr;text-align:right;margin-bottom:6px;">
-        ${lat.toFixed(6)}, ${lng.toFixed(6)}
-      </div>
-      <div style="display:flex;align-items:center;gap:6px;">
-        <span style="font-size:13px;">🏛️</span>
-        <span style="font-size:11px;color:#166534;font-weight:600;">الجماعة:</span>
-        <span style="background:${communeColor}15;color:${communeColor};padding:3px 10px;border-radius:20px;font-size:10px;font-weight:700;border:1px solid ${communeColor}25;">${communeLabel}</span>
-      </div>
-    `,
-    'margin-bottom:12px;'
-  )
+    </div>
+  `
 
-  const addButton = `
-    <button id="add-intervention-btn" style="
-      width: 100%;
-      background: linear-gradient(135deg, #059669, #10b981);
-      color: white;
-      border: none;
-      padding: 11px 16px;
-      border-radius: 12px;
-      font-size: 13px;
-      font-weight: 700;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
-      box-shadow: 0 4px 14px rgba(5,150,105,0.3);
-      transition: all 0.2s;
-      font-family: inherit;
-      letter-spacing: 0.3px;
-    " onmouseover="this.style.transform='scale(1.02)'; this.style.boxShadow='0 6px 20px rgba(5,150,105,0.4)'" onmouseout="this.style.transform='scale(1)'; this.style.boxShadow='0 4px 14px rgba(5,150,105,0.3)'">
-      ➕ إضافة تدخل في هذا الموقع
-    </button>
+  const formContent = `
+    <form id="new-intervention-form" onsubmit="return false;" style="margin:0;">
+      ${coordsBar}
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
+        <div>
+          <label style="${labelStyle}">${requiredStar}نوع التدخل</label>
+          <select name="type" style="${selectStyle}" required>
+            <option value="DERATISATION">🐀 مكافحة القوارض</option>
+            <option value="DESINSECTISATION">🦟 مكافحة الحشرات</option>
+            <option value="DESINFECTION">🧴 التطهير والتعقيم</option>
+          </select>
+        </div>
+        <div>
+          <label style="${labelStyle}">${requiredStar}الحالة</label>
+          <select name="statut" style="${selectStyle}" required>
+            <option value="PLANIFIEE">📅 مبرمجة</option>
+            <option value="EN_COURS">🔄 جارية</option>
+            <option value="TERMINEE">✅ منجزة</option>
+            <option value="ANNULEE">❌ ملغاة</option>
+          </select>
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
+        <div>
+          <label style="${labelStyle}">${requiredStar}التاريخ</label>
+          <input type="date" name="date" value="${today}" style="${inputStyle}" required />
+        </div>
+        <div>
+          <label style="${labelStyle}">${requiredStar}اسم العون</label>
+          <input type="text" name="agentNom" placeholder="اسم العون المكلف" style="${inputStyle}" required />
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
+        <div>
+          <label style="${labelStyle}">${requiredStar}الحي</label>
+          <select name="quartier" style="${selectStyle}" required>
+            <option value="">اختر الحي</option>
+            ${quartierOptions}
+          </select>
+        </div>
+        <div>
+          <label style="${labelStyle}">العنوان</label>
+          <input type="text" name="adresse" placeholder="رقم واسم الشارع" style="${inputStyle}" />
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px;">
+        <div>
+          <label style="${labelStyle}">المادة المستعملة</label>
+          <input type="text" name="produitUtilise" placeholder="اسم المادة" style="${inputStyle}" />
+        </div>
+        <div>
+          <label style="${labelStyle}">الكمية</label>
+          <input type="text" name="quantite" placeholder="الكمية والوحدة" style="${inputStyle}" />
+        </div>
+        <div>
+          <label style="${labelStyle}">المساحة</label>
+          <input type="text" name="superficie" placeholder="م²" style="${inputStyle}" />
+        </div>
+      </div>
+
+      <div style="margin-bottom:8px;">
+        <label style="${labelStyle}">الوصف</label>
+        <textarea name="description" placeholder="وصف التدخل..." rows="2" style="${inputStyle} resize:none;"></textarea>
+      </div>
+
+      <div style="margin-bottom:10px;">
+        <label style="${labelStyle}">الملاحظات</label>
+        <textarea name="observations" placeholder="ملاحظات إضافية..." rows="2" style="${inputStyle} resize:none;"></textarea>
+      </div>
+
+      <div id="popup-form-status" style="display:none;margin-bottom:8px;padding:8px 10px;border-radius:8px;font-size:11px;font-weight:700;text-align:center;"></div>
+
+      <button type="submit" id="save-intervention-btn" style="
+        width: 100%;
+        background: linear-gradient(135deg, #059669, #10b981);
+        color: white;
+        border: none;
+        padding: 10px 16px;
+        border-radius: 10px;
+        font-size: 13px;
+        font-weight: 700;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        box-shadow: 0 4px 14px rgba(5,150,105,0.3);
+        transition: all 0.2s;
+        font-family: inherit;
+        letter-spacing: 0.3px;
+      " onmouseover="this.style.transform='scale(1.02)'; this.style.boxShadow='0 6px 20px rgba(5,150,105,0.4)'" onmouseout="this.style.transform='scale(1)'; this.style.boxShadow='0 4px 14px rgba(5,150,105,0.3)'">
+        💾 حفظ التدخل
+      </button>
+    </form>
   `
 
   return `
-    <div style="${popupBase} min-width:260px;">
+    <div style="${popupBase} min-width:340px;max-width:400px;">
       <div style="${popupCardShadow}">
         ${gradientHeader('#059669', '#10b981', headerContent)}
-        <div style="padding:12px;">
-          ${coordsSection}
-          ${addButton}
+        <div style="padding:12px;max-height:420px;overflow-y:auto;">
+          ${formContent}
         </div>
       </div>
     </div>
   `
 }
 
-export default function MapComponent({ interventions, quartiers, selectedCommune, onMapClick, mapClickEnabled, showCommunePopups }: { 
+export default function MapComponent({ interventions, quartiers, selectedCommune, onMapClick, mapClickEnabled, showCommunePopups, onInterventionCreated }: { 
   interventions: Intervention[]; quartiers: Quartier[]; selectedCommune: string;
   onMapClick?: (lat: number, lng: number, commune: string | null) => void;
   mapClickEnabled?: boolean;
   showCommunePopups?: boolean;
+  onInterventionCreated?: () => void;
 }) {
   const mapRef = useRef<L.Map | null>(null)
   const mapContainerRef = useRef<HTMLDivElement>(null)
@@ -546,6 +661,7 @@ export default function MapComponent({ interventions, quartiers, selectedCommune
   const onMapClickRef = useRef(onMapClick)
   const mapClickEnabledRef = useRef(mapClickEnabled ?? true)
   const showCommunePopupsRef = useRef(showCommunePopups ?? true)
+  const onInterventionCreatedRef = useRef(onInterventionCreated)
 
   // Keep the callback ref up-to-date
   useEffect(() => {
@@ -561,6 +677,11 @@ export default function MapComponent({ interventions, quartiers, selectedCommune
   useEffect(() => {
     showCommunePopupsRef.current = showCommunePopups ?? true
   }, [showCommunePopups])
+
+  // Keep the onInterventionCreated ref up-to-date
+  useEffect(() => {
+    onInterventionCreatedRef.current = onInterventionCreated
+  }, [onInterventionCreated])
 
   useEffect(() => {
     if (!mapContainerRef.current || mapRef.current) return
@@ -691,28 +812,112 @@ export default function MapComponent({ interventions, quartiers, selectedCommune
         zIndexOffset: 1000 
       })
 
-      // Build professional popup
-      const popupContent = buildNewInterventionPopup(lat, lng, commune)
+      // Build form popup
+      const popupContent = buildNewInterventionPopup(lat, lng, commune, quartiers)
 
-      newMarker.bindPopup(popupContent, { maxWidth: 320, closeButton: true })
+      newMarker.bindPopup(popupContent, { maxWidth: 440, minWidth: 360, closeButton: true })
       newMarker.addTo(map)
       clickMarkerRef.current = newMarker
 
       // Open popup immediately
       newMarker.openPopup()
 
-      // Listen for popup open to attach click handler to the button
+      // Listen for popup open to attach form submit handler
       newMarker.on('popupopen', () => {
         setTimeout(() => {
-          const btn = document.getElementById('add-intervention-btn')
-          if (btn) {
-            btn.onclick = () => {
-              if (onMapClickRef.current) {
-                onMapClickRef.current(lat, lng, commune)
+          const form = document.getElementById('new-intervention-form') as HTMLFormElement | null
+          if (form) {
+            form.onsubmit = (e) => {
+              e.preventDefault()
+              const formData = new FormData(form)
+              const data: Record<string, string> = {
+                type: formData.get('type') as string || 'DERATISATION',
+                date: formData.get('date') as string || new Date().toISOString().split('T')[0],
+                quartier: formData.get('quartier') as string || '',
+                adresse: formData.get('adresse') as string || '',
+                latitude: lat.toString(),
+                longitude: lng.toString(),
+                statut: formData.get('statut') as string || 'PLANIFIEE',
+                description: formData.get('description') as string || '',
+                agentNom: formData.get('agentNom') as string || '',
+                produitUtilise: formData.get('produitUtilise') as string || '',
+                quantite: formData.get('quantite') as string || '',
+                superficie: formData.get('superficie') as string || '',
+                nombrePrestations: '1',
+                observations: formData.get('observations') as string || '',
               }
+
+              // Validate required fields
+              if (!data.quartier || !data.agentNom || !data.date) {
+                const statusEl = document.getElementById('popup-form-status')
+                if (statusEl) {
+                  statusEl.style.display = 'block'
+                  statusEl.style.background = '#fef2f2'
+                  statusEl.style.color = '#dc2626'
+                  statusEl.style.border = '1px solid #fecaca'
+                  statusEl.textContent = '⚠️ يرجى ملء جميع الحقول المطلوبة'
+                }
+                return
+              }
+
+              // Show loading state
+              const btn = document.getElementById('save-intervention-btn') as HTMLButtonElement | null
+              if (btn) {
+                btn.disabled = true
+                btn.style.opacity = '0.7'
+                btn.innerHTML = '⏳ جاري الحفظ...'
+              }
+
+              // Submit to API
+              fetch('/api/interventions', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data),
+              })
+              .then(res => {
+                if (res.ok) {
+                  // Show success
+                  const statusEl = document.getElementById('popup-form-status')
+                  if (statusEl) {
+                    statusEl.style.display = 'block'
+                    statusEl.style.background = '#f0fdf4'
+                    statusEl.style.color = '#16a34a'
+                    statusEl.style.border = '1px solid #bbf7d0'
+                    statusEl.textContent = '✅ تم إضافة التدخل بنجاح'
+                  }
+                  // Close popup after delay
+                  setTimeout(() => {
+                    if (clickMarkerRef.current) {
+                      map.removeLayer(clickMarkerRef.current)
+                      clickMarkerRef.current = null
+                    }
+                    // Notify parent to refresh data
+                    if (onInterventionCreatedRef.current) {
+                      onInterventionCreatedRef.current()
+                    }
+                  }, 1200)
+                } else {
+                  throw new Error('Failed')
+                }
+              })
+              .catch(() => {
+                const statusEl = document.getElementById('popup-form-status')
+                if (statusEl) {
+                  statusEl.style.display = 'block'
+                  statusEl.style.background = '#fef2f2'
+                  statusEl.style.color = '#dc2626'
+                  statusEl.style.border = '1px solid #fecaca'
+                  statusEl.textContent = '❌ حدث خطأ أثناء الحفظ'
+                }
+                if (btn) {
+                  btn.disabled = false
+                  btn.style.opacity = '1'
+                  btn.innerHTML = '💾 حفظ التدخل'
+                }
+              })
             }
           }
-        }, 50)
+        }, 100)
       })
     })
 
