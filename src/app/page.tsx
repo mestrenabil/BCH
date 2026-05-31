@@ -630,7 +630,7 @@ function MapView({ interventions, quartiers }: { interventions: Intervention[]; 
       <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }}
         className="absolute top-4 right-4 z-10 bg-white/95 backdrop-blur-md rounded-2xl border border-slate-100 p-5 max-w-xs shadow-xl">
         <h3 className="font-bold text-slate-800 mb-1">الخريطة التفاعلية — SIG</h3>
-        <p className="text-[11px] text-slate-400 mb-3">الحدود الترابية — 🇲🇦 الجريدة الرسمية | السكان — HCP إحصاء 2024</p>
+        <p className="text-[11px] text-slate-400 mb-3">حدود سلا — قرار رقم 1954.24 (الجريدة الرسمية عدد 7340) | السكان — HCP إحصاء 2024</p>
         {/* Commune Boundaries Legend */}
         <div className="space-y-1.5 mb-3">
           <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">الحدود الترابية • السكان القانونيون 2024</p>

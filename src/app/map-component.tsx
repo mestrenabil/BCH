@@ -172,6 +172,9 @@ export default function MapComponent({ interventions, quartiers }: { interventio
           const codeHCP = feat.properties?.codeHCP || ''
           const sourcePopulation = feat.properties?.sourcePopulation || ''
           const source = feat.properties?.source || ''
+          const sourceDecree = feat.properties?.sourceDecree || ''
+          const sourceGazette = feat.properties?.sourceGazette || ''
+          const sourceProjection = feat.properties?.sourceProjection || ''
 
           // Format number with Arabic locale
           const formatNum = (n: string) => Number(n).toLocaleString('ar-MA')
@@ -197,7 +200,10 @@ export default function MapComponent({ interventions, quartiers }: { interventio
                 <div style="margin-bottom: 4px;">🇬🇧 ${nameEn}</div>
               </div>
               <div style="font-size: 10px; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 6px;">
-                🗺️ حدود ترابية — ${source === 'الجريدة الرسمية' ? '🇲🇦 الجريدة الرسمية' : source}
+                🗺️ حدود ترابية — ${source.includes('قرار') ? `🇲🇦 ${source}` : source === 'الجريدة الرسمية' ? '🇲🇦 الجريدة الرسمية' : source}
+                ${sourceDecree ? `<br>📜 ${sourceDecree}` : ''}
+                ${sourceGazette ? `<br>📰 ${sourceGazette}` : ''}
+                ${sourceProjection ? `<br>📐 المسقط: ${sourceProjection}` : ''}
                 ${sourcePopulation ? `<br>📊 سكان — ${sourcePopulation}` : ''}
               </div>
             </div>
