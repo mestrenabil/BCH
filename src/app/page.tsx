@@ -185,8 +185,8 @@ export default function HomePage() {
                   🏛️
                 </motion.div>
                 <div>
-                  <h1 className="text-lg font-bold leading-tight tracking-tight">نظام 3D — مكتب محاربة الآفات</h1>
-                  <p className="text-[11px] text-emerald-100/80 font-medium">جماعة بوقنادل سلا ⚡ مكافحة الجرذان • مكافحة الحشرات • التطهير</p>
+                  <h1 className="text-lg font-extrabold leading-tight tracking-tight">عمالة سلا</h1>
+                  <p className="text-[12px] text-emerald-100/90 font-semibold">قسم حفظ الصحة والبيئة ⚡ مكافحة الجرذان • مكافحة الحشرات • التطهير</p>
                 </div>
               </div>
             </div>
@@ -394,7 +394,7 @@ export default function HomePage() {
       {/* Footer */}
       <footer className="bg-white/80 backdrop-blur-sm border-t border-slate-200 py-3 px-4 mt-auto">
         <div className="max-w-[1800px] mx-auto flex flex-col sm:flex-row items-center justify-between gap-1">
-          <p className="text-xs text-slate-500">© 2025 مكتب محاربة الآفات — جماعة بوقنادل سلا</p>
+          <p className="text-xs text-slate-500">© 2025 عمالة سلا — قسم حفظ الصحة والبيئة</p>
           <p className="text-xs text-emerald-600 font-medium">نظام تدبير عمليات 3D ⚡ مكافحة الجرذان • مكافحة الحشرات • التطهير</p>
         </div>
       </footer>
@@ -1333,7 +1333,7 @@ function SettingsView() {
         <div className="p-6">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {[
-              { label: 'اسم التطبيق', value: 'نظام 3D — مكتب محاربة الآفات' },
+              { label: 'اسم التطبيق', value: 'عمالة سلا — قسم حفظ الصحة والبيئة' },
               { label: 'الإصدار', value: '2.0.0' },
               { label: 'الجماعة', value: 'بوقنادل سلا' },
               { label: 'المصالح', value: 'مكافحة الجرذان • مكافحة الحشرات • التطهير' },

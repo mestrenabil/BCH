@@ -3,7 +3,7 @@ import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
 
 export const metadata: Metadata = {
-  title: "نظام 3D - مكتب محاربة الآفات | بوقنادل سلا",
+  title: "نظام 3D - عمالة سلا | قسم حفظ الصحة والبيئة",
   description: "نظام تدبير ومتابعة عمليات مكافحة الجرذان ومكافحة الحشرات والتطهير لجماعة بوقنادل سلا",
 };
 
