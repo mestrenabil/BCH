@@ -1339,7 +1339,6 @@ function SettingsView() {
               { label: 'المصالح', value: 'مكتب مكافحة الجرذان • مكافحة الحشرات • التطهير' },
               { label: 'الحدود الترابية', value: 'قرار رقم 1954.24 — الجريدة الرسمية عدد 7340' },
               { label: 'السكان', value: 'RGPH 2024 — HCP المندوبية السامية للتخطيط' },
-              { label: 'التقنية', value: 'Next.js 16 • Leaflet SIG • Prisma ORM' },
               { label: 'التطوير', value: 'Nabil EL BOUOSSI — 2026' },
             ].map((item, i) => (
               <motion.div key={item.label} initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }}
