@@ -1,9 +1,18 @@
 import { create } from 'zustand'
 
-export type ViewType = 'dashboard' | 'map' | 'interventions' | 'reports'
+export type ViewType = 'dashboard' | 'map' | 'interventions' | 'reports' | 'settings'
 export type InterventionType = 'DERATISATION' | 'DESINSECTISATION' | 'DESINFECTION'
 export type StatutType = 'PLANIFIEE' | 'EN_COURS' | 'TERMINEE' | 'ANNULEE'
 export type CommuneType = 'سلا' | 'سيدي أبي القنادل' | 'عامر'
+
+interface AppSettings {
+  animationsEnabled: boolean
+  mapDefaultTile: 'light' | 'satellite'
+  mapClusterRadius: number
+  defaultCommune: CommuneType | 'ALL'
+  defaultYear: string
+  interventionsPerPage: number
+}
 
 interface AppState {
   currentView: ViewType
@@ -22,6 +31,18 @@ interface AppState {
   setEditingInterventionId: (id: string | null) => void
   sidebarOpen: boolean
   setSidebarOpen: (open: boolean) => void
+  settings: AppSettings
+  updateSettings: (partial: Partial<AppSettings>) => void
+  resetSettings: () => void
+}
+
+const DEFAULT_SETTINGS: AppSettings = {
+  animationsEnabled: true,
+  mapDefaultTile: 'light',
+  mapClusterRadius: 50,
+  defaultCommune: 'ALL',
+  defaultYear: '2025',
+  interventionsPerPage: 50,
 }
 
 export const useAppStore = create<AppState>((set) => ({
@@ -41,4 +62,7 @@ export const useAppStore = create<AppState>((set) => ({
   setEditingInterventionId: (id) => set({ editingInterventionId: id, isFormOpen: !!id }),
   sidebarOpen: false,
   setSidebarOpen: (open) => set({ sidebarOpen: open }),
+  settings: DEFAULT_SETTINGS,
+  updateSettings: (partial) => set((state) => ({ settings: { ...state.settings, ...partial } })),
+  resetSettings: () => set({ settings: DEFAULT_SETTINGS }),
 }))
