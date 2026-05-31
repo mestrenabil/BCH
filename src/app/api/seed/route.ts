@@ -54,10 +54,37 @@ function generateReference(index: number, type: string, year: number): string {
 export async function POST() {
   try {
     await db.intervention.deleteMany()
+    await db.product.deleteMany()
     await db.quartier.deleteMany()
 
     for (const q of quartiers) {
       await db.quartier.create({ data: q })
+    }
+
+    // Seed products
+    const productsSeed = [
+      { nom: 'رودينال', categorie: 'DERATISATION', unite: 'كيلوغرام', quantiteStock: 45, seuilAlerte: 10, prixUnitaire: 120, fournisseur: 'شركة باير المغرب', description: 'مادة سامة لمكافحة القوارض - عجينة' },
+      { nom: 'كوماتراكال', categorie: 'DERATISATION', unite: 'كيلوغرام', quantiteStock: 30, seuilAlerte: 8, prixUnitaire: 95, fournisseur: 'شركة سيرتا', description: 'مضاد تخثر لمكافحة الجرذان' },
+      { nom: 'بروماديولون', categorie: 'DERATISATION', unite: 'كيلوغرام', quantiteStock: 5, seuilAlerte: 10, prixUnitaire: 150, fournisseur: 'شركة باير المغرب', description: 'مادة فعالة ضد القوارض المقاومة' },
+      { nom: 'ديفيناكوم', categorie: 'DERATISATION', unite: 'كيلوغرام', quantiteStock: 0, seuilAlerte: 5, prixUnitaire: 180, fournisseur: 'مختبرات فيرين', description: 'مادة سامة من الجيل الثاني' },
+      { nom: 'ديلتميثرين', categorie: 'DESINSECTISATION', unite: 'لتر', quantiteStock: 60, seuilAlerte: 15, prixUnitaire: 85, fournisseur: 'شركة سينجنتا المغرب', description: 'مبيد حشري واسع الطيف' },
+      { nom: 'بيرميثرين', categorie: 'DESINSECTISATION', unite: 'لتر', quantiteStock: 3, seuilAlerte: 10, prixUnitaire: 75, fournisseur: 'شركة سينجنتا المغرب', description: 'مبيد حشري للرش المتبقي' },
+      { nom: 'سيبرميثرين', categorie: 'DESINSECTISATION', unite: 'لتر', quantiteStock: 40, seuilAlerte: 12, prixUnitaire: 90, fournisseur: 'شركة فايفر', description: 'مبيد حشري سريع المفعول' },
+      { nom: 'مالاثيون', categorie: 'DESINSECTISATION', unite: 'لتر', quantiteStock: 25, seuilAlerte: 10, prixUnitaire: 65, fournisseur: 'شركة إيفا فارما', description: 'مبيد حشري عضوي فسفوري' },
+      { nom: 'هيبوكلوريت الصوديوم', categorie: 'DESINFECTION', unite: 'لتر', quantiteStock: 100, seuilAlerte: 20, prixUnitaire: 15, fournisseur: 'شركة الكلور المغرب', description: 'محلول مطهر بتركيز 12%' },
+      { nom: 'فورمالدهيد', categorie: 'DESINFECTION', unite: 'لتر', quantiteStock: 8, seuilAlerte: 5, prixUnitaire: 45, fournisseur: 'مختبرات كيميد', description: 'مطهر قوي للتعقيم' },
+      { nom: 'فينول', categorie: 'DESINFECTION', unite: 'لتر', quantiteStock: 15, seuilAlerte: 8, prixUnitaire: 55, fournisseur: 'مختبرات كيميد', description: 'مطهر للأسطح والأرضيات' },
+      { nom: 'أمونيوم رباعي', categorie: 'DESINFECTION', unite: 'لتر', quantiteStock: 50, seuilAlerte: 15, prixUnitaire: 35, fournisseur: 'شركة سيرتا', description: 'مطهر متعدد الاستعمالات' },
+      { nom: 'أقنعة واقية', categorie: 'GENERAL', unite: 'وحدة', quantiteStock: 200, seuilAlerte: 50, prixUnitaire: 8, fournisseur: 'مستلزمات السلامة المغرب', description: 'أقنعة FFP2 للحماية' },
+      { nom: 'قفازات مطاطية', categorie: 'GENERAL', unite: 'علبة', quantiteStock: 30, seuilAlerte: 10, prixUnitaire: 25, fournisseur: 'مستلزمات السلامة المغرب', description: 'قفازات نيتريل - علبة 100 قطعة' },
+      { nom: 'رشاشات ظهرية', categorie: 'GENERAL', unite: 'وحدة', quantiteStock: 12, seuilAlerte: 3, prixUnitaire: 450, fournisseur: 'معدات البستنة المغرب', description: 'رشاشة ظهرية 16 لتر' },
+    ]
+
+    for (const p of productsSeed) {
+      const prefix = p.categorie === 'DERATISATION' ? 'PR-DR' : p.categorie === 'DESINSECTISATION' ? 'PR-DI' : p.categorie === 'DESINFECTION' ? 'PR-DF' : 'PR-GN'
+      const count = await db.product.count({ where: { categorie: p.categorie } })
+      const reference = `${prefix}-${String(count + 1).padStart(4, '0')}`
+      await db.product.create({ data: { ...p, reference } })
     }
 
     const interventions = []

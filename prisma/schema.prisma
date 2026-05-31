@@ -35,3 +35,18 @@ model Quartier {
   latitude  Float
   longitude Float
 }
+
+model Product {
+  id            String   @id @default(cuid())
+  nom           String   // اسم المنتج
+  categorie     String   // DERATISATION, DESINSECTISATION, DESINFECTION, GENERAL
+  unite         String   @default("لتر") // وحدة القياس: لتر، كيلوغرام، علبة، وحدة
+  quantiteStock Int      @default(0) // الكمية المتوفرة في المخزون
+  seuilAlerte   Int      @default(10) // عتبة التنبيه عند انخفاض المخزون
+  prixUnitaire  Float    @default(0) // السعر الوحدة
+  fournisseur   String   @default("") // المورد
+  description   String   @default("") // وصف المنتج
+  reference     String   @unique // مرجع المنتج
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}

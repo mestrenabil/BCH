@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 
-export type ViewType = 'dashboard' | 'map' | 'interventions' | 'reports' | 'settings'
+export type ViewType = 'dashboard' | 'map' | 'interventions' | 'inventory' | 'reports' | 'settings'
 export type InterventionType = 'DERATISATION' | 'DESINSECTISATION' | 'DESINFECTION'
 export type StatutType = 'PLANIFIEE' | 'EN_COURS' | 'TERMINEE' | 'ANNULEE'
 export type CommuneType = 'سلا' | 'سيدي أبي القنادل' | 'عامر'
