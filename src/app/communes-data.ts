@@ -7,6 +7,8 @@
 //   - جماعة سيدي أبي القنادل: جماعة ترابية (بوقنادل)
 //   - جماعة عامر: جماعة قروية
 // ملاحظة: البيانات مستقاة من الجريدة الرسمية والملف المرفق الرسمي
+// السكان: الإحصاء العام للسكان والسكنى 2024 — المندوبية السامية للتخطيط (HCP)
+// Population: RGPH 2024 — Haut Commissariat au Plan (HCP)
 
 const COMMUNES_GEOJSON = {
   type: "FeatureCollection" as const,
@@ -18,8 +20,13 @@ const COMMUNES_GEOJSON = {
         nameFr: "Commune de Salé",
         nameEn: "Municipality of Salé",
         source: "الجريدة الرسمية",
+        sourcePopulation: "المندوبية السامية للتخطيط — إحصاء 2024",
         color: "#059669",
-        population: "890403",
+        population: "945101",
+        populationMunicipale: "938475",
+        populationCompteeAPart: "6626",
+        menages: "256144",
+        codeHCP: "04.441.01.0",
       },
       geometry: {
         type: "Polygon" as const,
@@ -75,11 +82,16 @@ const COMMUNES_GEOJSON = {
       properties: {
         name: "جماعة سيدي أبي القنادل",
         nameAr: "بوقنادل",
-        nameFr: "Commune de Sidi Aby El Kanadel",
+        nameFr: "Commune de Sidi Bouknadel",
         nameEn: "Municipality of Sidi Bouknadel",
         source: "الجريدة الرسمية",
+        sourcePopulation: "المندوبية السامية للتخطيط — إحصاء 2024",
         color: "#7c3aed",
-        population: "25255",
+        population: "43598",
+        populationMunicipale: "43550",
+        populationCompteeAPart: "48",
+        menages: "10439",
+        codeHCP: "04.441.01.08",
       },
       geometry: {
         type: "Polygon" as const,
@@ -118,8 +130,13 @@ const COMMUNES_GEOJSON = {
         nameFr: "Commune rurale d'Ameur",
         nameEn: "Rural Municipality of Ameur",
         source: "الجريدة الرسمية",
+        sourcePopulation: "المندوبية السامية للتخطيط — إحصاء 2024",
         color: "#d97706",
-        population: "25255",
+        population: "75942",
+        populationMunicipale: "75896",
+        populationCompteeAPart: "46",
+        menages: "18540",
+        codeHCP: "04.441.01.13",
       },
       geometry: {
         type: "Polygon" as const,

@@ -166,22 +166,39 @@ export default function MapComponent({ interventions, quartiers }: { interventio
           const nameEn = feat.properties?.nameEn || ''
           const nameAr = feat.properties?.nameAr || ''
           const population = feat.properties?.population || ''
+          const populationMunicipale = feat.properties?.populationMunicipale || ''
+          const populationCompteeAPart = feat.properties?.populationCompteeAPart || ''
+          const menages = feat.properties?.menages || ''
+          const codeHCP = feat.properties?.codeHCP || ''
+          const sourcePopulation = feat.properties?.sourcePopulation || ''
           const source = feat.properties?.source || ''
+
+          // Format number with Arabic locale
+          const formatNum = (n: string) => Number(n).toLocaleString('ar-MA')
+
           layer.bindPopup(`
-            <div style="direction: rtl; text-align: right; min-width: 260px; font-family: inherit;">
+            <div style="direction: rtl; text-align: right; min-width: 280px; font-family: inherit;">
               <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px;">
                 <div style="width: 14px; height: 14px; border-radius: 50%; background: ${color};"></div>
                 <strong style="font-size: 15px; color: #1e293b;">${feat.properties?.name || ''}</strong>
                 ${isBouknadel ? '<span style="background:#7c3aed18;color:#7c3aed;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;">مقر المكتب</span>' : ''}
               </div>
+              <div style="background: #f0fdf4; border-radius: 10px; padding: 10px; font-size: 12px; color: #166534; margin-bottom: 8px; border: 1px solid #bbf7d0;">
+                <div style="font-weight: 700; font-size: 11px; color: #15803d; margin-bottom: 6px; display: flex; align-items: center; gap: 4px;">📊 الإحصاء العام للسكان والسكنى 2024 — HCP</div>
+                ${population ? `<div style="margin-bottom: 3px; font-size: 14px; font-weight: 700; color: #1e293b;">👥 السكان القانونيون: ${formatNum(population)}</div>` : ''}
+                ${populationMunicipale ? `<div style="margin-bottom: 2px; font-size: 11px; color: #64748b;">السكان البلديون: ${formatNum(populationMunicipale)}</div>` : ''}
+                ${populationCompteeAPart ? `<div style="margin-bottom: 2px; font-size: 11px; color: #64748b;">السكان المحسوبون على حدة: ${formatNum(populationCompteeAPart)}</div>` : ''}
+                ${menages ? `<div style="margin-bottom: 2px; font-size: 11px; color: #64748b;">🏠 الأسر: ${formatNum(menages)}</div>` : ''}
+                ${codeHCP ? `<div style="margin-top: 4px; font-size: 10px; color: #94a3b8;">كود HCP: ${codeHCP}</div>` : ''}
+              </div>
               <div style="background: #f8fafc; border-radius: 10px; padding: 10px; font-size: 12px; color: #64748b; margin-bottom: 8px;">
                 ${nameAr ? `<div style="margin-bottom: 4px;">🇲🇦 الاسم المألوف: ${nameAr}</div>` : ''}
                 <div style="margin-bottom: 4px;">🇫🇷 ${nameFr}</div>
                 <div style="margin-bottom: 4px;">🇬🇧 ${nameEn}</div>
-                ${population ? `<div style="margin-bottom: 4px;">👥 سكان: ${population}</div>` : ''}
               </div>
               <div style="font-size: 10px; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 6px;">
-                🗺️ حدود ترابية رسمية — ${source === 'الجريدة الرسمية' ? '🇲🇦 الجريدة الرسمية للمملكة المغربية' : source}
+                🗺️ حدود ترابية — ${source === 'الجريدة الرسمية' ? '🇲🇦 الجريدة الرسمية' : source}
+                ${sourcePopulation ? `<br>📊 سكان — ${sourcePopulation}` : ''}
               </div>
             </div>
           `)

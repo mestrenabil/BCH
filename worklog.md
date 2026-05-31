@@ -141,3 +141,34 @@ Stage Summary:
 - Bouknadel boundary is significantly larger than OSM (extends from 34.09°N to 34.17°N)
 - Official Arabic name: "جماعة سيدي أبي القنادل" with common name "بوقنادل"
 - Source attribution updated throughout to reference الجريدة الرسمية
+
+---
+Task ID: 6
+Agent: Main Agent
+Task: Update population data with official 2024 HCP (RGPH) census figures
+
+Work Log:
+- Searched for official RGPH 2024 data using web search (HCP, Wikipedia, Salé city website)
+- Found and verified official RGPH 2024 census data from HCP (Haut Commissariat au Plan)
+- Read Wikipedia RGPH 2024 page and confirmed exact figures for all 3 communes
+- Read official HCP Excel file data for Rabat-Salé-Kénitra region
+- Updated communes-data.ts with official RGPH 2024 population data:
+  - جماعة سلا: population légale 945,101 (was 890,403 from 2014)
+  - جماعة سيدي أبي القنادل: population légale 43,598 (was 25,255 from 2014)
+  - جماعة عامر: population légale 75,942 (was 25,255 - was incorrectly duplicated)
+- Added detailed census fields to communes-data.ts:
+  - populationMunicipale (السكان البلديون)
+  - populationCompteeAPart (السكان المحسوبون على حدة)
+  - menages (الأسر/الأسرة)
+  - codeHCP (كود HCP الإداري)
+  - sourcePopulation (المندوبية السامية للتخطيط — إحصاء 2024)
+- Enhanced map popup with detailed HCP 2024 census info (green box, formatted Arabic numbers)
+- Updated map legend to show population figures alongside commune names
+- Updated map legend subtitle to reference both الجريدة الرسمية and HCP إحصاء 2024
+- All lint checks pass, dev server running without errors
+
+Stage Summary:
+- Population data updated from 2014 census to official RGPH 2024 (HCP)
+- Key changes: Bouknadel 25,255→43,598 (+72.7%), Ameur 25,255→75,942 (corrected), Salé 890,403→945,101 (+6.1%)
+- Map now shows detailed census data: population légale, municipale, comptée à part, ménages, HCP code
+- Source attribution: "المندوبية السامية للتخطيط — إحصاء 2024" for population data

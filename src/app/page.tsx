@@ -619,26 +619,29 @@ function MapView({ interventions, quartiers }: { interventions: Intervention[]; 
     })
   }, [])
 
-  const COMMUNE_COLORS: Record<string, string> = {
-    'جماعة سلا': '#059669', 'جماعة سيدي أبي القنادل': '#7c3aed', 'جماعة عامر': '#d97706',
-  }
+  const COMMUNE_INFO: { name: string; color: string; population: string }[] = [
+    { name: 'جماعة سلا', color: '#059669', population: '945,101' },
+    { name: 'جماعة سيدي أبي القنادل', color: '#7c3aed', population: '43,598' },
+    { name: 'جماعة عامر', color: '#d97706', population: '75,942' },
+  ]
 
   return (
     <div className="h-[calc(100vh-8rem)] lg:h-[calc(100vh-6rem)] pb-16 lg:pb-0 relative">
       <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }}
         className="absolute top-4 right-4 z-10 bg-white/95 backdrop-blur-md rounded-2xl border border-slate-100 p-5 max-w-xs shadow-xl">
         <h3 className="font-bold text-slate-800 mb-1">الخريطة التفاعلية — SIG</h3>
-        <p className="text-[11px] text-slate-400 mb-3">الحدود الترابية الرسمية — 🇲🇦 الجريدة الرسمية</p>
+        <p className="text-[11px] text-slate-400 mb-3">الحدود الترابية — 🇲🇦 الجريدة الرسمية | السكان — HCP إحصاء 2024</p>
         {/* Commune Boundaries Legend */}
         <div className="space-y-1.5 mb-3">
-          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">الحدود الترابية</p>
-          {Object.entries(COMMUNE_COLORS).map(([name, color]) => (
-            <div key={name} className="flex items-center gap-2 text-xs">
-              <div className="w-4 h-4 rounded border-2 flex items-center justify-center" style={{ borderColor: color, backgroundColor: color + '20' }}>
-                <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: color }} />
+          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">الحدود الترابية • السكان القانونيون 2024</p>
+          {COMMUNE_INFO.map((info) => (
+            <div key={info.name} className="flex items-center gap-2 text-xs">
+              <div className="w-4 h-4 rounded border-2 flex items-center justify-center" style={{ borderColor: info.color, backgroundColor: info.color + '20' }}>
+                <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: info.color }} />
               </div>
-              <span className="text-slate-600 font-medium">{name}</span>
-              {name === 'جماعة سيدي أبي القنادل' && <span className="text-[9px] bg-violet-100 text-violet-700 px-1.5 py-0.5 rounded-full font-bold">مقر المكتب</span>}
+              <span className="text-slate-600 font-medium">{info.name}</span>
+              {info.name === 'جماعة سيدي أبي القنادل' && <span className="text-[9px] bg-violet-100 text-violet-700 px-1.5 py-0.5 rounded-full font-bold">مقر المكتب</span>}
+              <span className="text-[10px] text-slate-400 mr-auto font-mono">{info.population}</span>
             </div>
           ))}
         </div>
