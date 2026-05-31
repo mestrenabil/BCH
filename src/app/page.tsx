@@ -185,8 +185,8 @@ export default function HomePage() {
                   🏛️
                 </motion.div>
                 <div>
-                  <h1 className="text-lg font-bold leading-tight tracking-tight">نظام 3D — مكتب النظافة المشترك</h1>
-                  <p className="text-[11px] text-emerald-100/80 font-medium">جماعة بوقنادل سلا ⚡ الدراقلة • مكافحة الحشرات • التطهير</p>
+                  <h1 className="text-lg font-bold leading-tight tracking-tight">نظام 3D — مكتب محاربة الآفات</h1>
+                  <p className="text-[11px] text-emerald-100/80 font-medium">جماعة بوقنادل سلا ⚡ مكافحة الجرذان • مكافحة الحشرات • التطهير</p>
                 </div>
               </div>
             </div>
@@ -394,8 +394,8 @@ export default function HomePage() {
       {/* Footer */}
       <footer className="bg-white/80 backdrop-blur-sm border-t border-slate-200 py-3 px-4 mt-auto">
         <div className="max-w-[1800px] mx-auto flex flex-col sm:flex-row items-center justify-between gap-1">
-          <p className="text-xs text-slate-500">© 2025 مكتب النظافة المشترك — جماعة بوقنادل سلا</p>
-          <p className="text-xs text-emerald-600 font-medium">نظام تدبير عمليات 3D ⚡ الدراقلة • مكافحة الحشرات • التطهير</p>
+          <p className="text-xs text-slate-500">© 2025 مكتب محاربة الآفات — جماعة بوقنادل سلا</p>
+          <p className="text-xs text-emerald-600 font-medium">نظام تدبير عمليات 3D ⚡ مكافحة الجرذان • مكافحة الحشرات • التطهير</p>
         </div>
       </footer>
 
@@ -1333,10 +1333,10 @@ function SettingsView() {
         <div className="p-6">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {[
-              { label: 'اسم التطبيق', value: 'نظام 3D — مكتب النظافة المشترك' },
+              { label: 'اسم التطبيق', value: 'نظام 3D — مكتب محاربة الآفات' },
               { label: 'الإصدار', value: '2.0.0' },
               { label: 'الجماعة', value: 'بوقنادل سلا' },
-              { label: 'المصالح', value: 'الدراقلة • مكافحة الحشرات • التطهير' },
+              { label: 'المصالح', value: 'مكافحة الجرذان • مكافحة الحشرات • التطهير' },
               { label: 'الحدود الترابية', value: 'قرار رقم 1954.24 — الجريدة الرسمية عدد 7340' },
               { label: 'السكان', value: 'RGPH 2024 — HCP المندوبية السامية للتخطيط' },
               { label: 'التقنية', value: 'Next.js 16 • Leaflet SIG • Prisma ORM' },
