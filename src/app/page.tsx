@@ -186,7 +186,7 @@ export default function HomePage() {
                 </motion.div>
                 <div>
                   <h1 className="text-lg font-extrabold leading-tight tracking-tight">عمالة سلا</h1>
-                  <p className="text-[12px] text-emerald-100/90 font-semibold">قسم حفظ الصحة والبيئة ⚡ مكافحة الجرذان • مكافحة الحشرات • التطهير</p>
+                  <p className="text-[12px] text-emerald-100/90 font-semibold">قسم حفظ الصحة والبيئة ⚡ مكتب مكافحة الجرذان • مكافحة الحشرات • التطهير</p>
                 </div>
               </div>
             </div>
@@ -395,7 +395,7 @@ export default function HomePage() {
       <footer className="bg-white/80 backdrop-blur-sm border-t border-slate-200 py-3 px-4 mt-auto">
         <div className="max-w-[1800px] mx-auto flex flex-col sm:flex-row items-center justify-between gap-1">
           <p className="text-xs text-slate-500">© 2025 عمالة سلا — قسم حفظ الصحة والبيئة</p>
-          <p className="text-xs text-emerald-600 font-medium">نظام تدبير عمليات 3D ⚡ مكافحة الجرذان • مكافحة الحشرات • التطهير</p>
+          <p className="text-xs text-emerald-600 font-medium">نظام تدبير عمليات 3D ⚡ مكتب مكافحة الجرذان • مكافحة الحشرات • التطهير</p>
         </div>
       </footer>
 
@@ -1336,7 +1336,7 @@ function SettingsView() {
               { label: 'اسم التطبيق', value: 'عمالة سلا — قسم حفظ الصحة والبيئة' },
               { label: 'الإصدار', value: '2.0.0' },
               { label: 'الجماعة', value: 'بوقنادل سلا' },
-              { label: 'المصالح', value: 'مكافحة الجرذان • مكافحة الحشرات • التطهير' },
+              { label: 'المصالح', value: 'مكتب مكافحة الجرذان • مكافحة الحشرات • التطهير' },
               { label: 'الحدود الترابية', value: 'قرار رقم 1954.24 — الجريدة الرسمية عدد 7340' },
               { label: 'السكان', value: 'RGPH 2024 — HCP المندوبية السامية للتخطيط' },
               { label: 'التقنية', value: 'Next.js 16 • Leaflet SIG • Prisma ORM' },
