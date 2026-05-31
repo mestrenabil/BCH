@@ -123,7 +123,7 @@ export default function MapComponent({ interventions, quartiers }: { interventio
     COMMUNES_GEOJSON.features.forEach((feature) => {
       const props = feature.properties
       const color = props.color || '#059669'
-      const isBouknadel = props.nameFr?.includes('Bouknadel') || props.nameAr?.includes('بوقنادل')
+      const isBouknadel = props.nameFr?.includes('Kanadel') || props.nameAr?.includes('بوقنادل') || props.name?.includes('القنادل')
 
       const polygon = L.geoJSON(feature as GeoJSON.Feature, {
         style: {
@@ -166,9 +166,7 @@ export default function MapComponent({ interventions, quartiers }: { interventio
           const nameEn = feat.properties?.nameEn || ''
           const nameAr = feat.properties?.nameAr || ''
           const population = feat.properties?.population || ''
-          const osmId = feat.properties?.osmId || ''
-          const wikidata = feat.properties?.wikidata || ''
-          const adminLevel = feat.properties?.adminLevel || ''
+          const source = feat.properties?.source || ''
           layer.bindPopup(`
             <div style="direction: rtl; text-align: right; min-width: 260px; font-family: inherit;">
               <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px;">
@@ -177,14 +175,13 @@ export default function MapComponent({ interventions, quartiers }: { interventio
                 ${isBouknadel ? '<span style="background:#7c3aed18;color:#7c3aed;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;">مقر المكتب</span>' : ''}
               </div>
               <div style="background: #f8fafc; border-radius: 10px; padding: 10px; font-size: 12px; color: #64748b; margin-bottom: 8px;">
-                ${nameAr ? `<div style="margin-bottom: 4px;">🇲🇦 ${nameAr}</div>` : ''}
+                ${nameAr ? `<div style="margin-bottom: 4px;">🇲🇦 الاسم المألوف: ${nameAr}</div>` : ''}
                 <div style="margin-bottom: 4px;">🇫🇷 ${nameFr}</div>
                 <div style="margin-bottom: 4px;">🇬🇧 ${nameEn}</div>
                 ${population ? `<div style="margin-bottom: 4px;">👥 سكان: ${population}</div>` : ''}
-                ${adminLevel ? `<div style="margin-bottom: 4px;">🏛️ المستوى الإداري: ${adminLevel}</div>` : ''}
               </div>
               <div style="font-size: 10px; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 6px;">
-                🗺️ حدود ترابية — بيانات OpenStreetMap (OSM ID: ${osmId}${wikidata ? ` | Wikidata: ${wikidata}` : ''})
+                🗺️ حدود ترابية رسمية — ${source === 'الجريدة الرسمية' ? '🇲🇦 الجريدة الرسمية للمملكة المغربية' : source}
               </div>
             </div>
           `)

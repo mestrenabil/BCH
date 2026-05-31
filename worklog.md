@@ -111,3 +111,33 @@ Stage Summary:
 - Bouknadel boundary confirmed accurate (15 points from OSM relation 2498879)
 - Bouknadel commune visually highlighted as main office location on map
 - Commune legend updated with correct Arabic names
+
+---
+Task ID: 5
+Agent: Main Agent
+Task: Update commune boundaries with official data from الجريدة الرسمية (Official Gazette) and attached file
+
+Work Log:
+- Found attached GeoJSON file at `/home/z/my-project/public/communes-boundaries.geojson` containing official boundary data
+- Analyzed differences between OSM data and official Gazette data:
+  - Salé: Official 43 points vs OSM 140 points — official data is the authoritative source
+  - Bouknadel: Official 24 points covering larger area (34.09-34.17°N) vs OSM 15 points (small area 34.11-34.13°N)
+  - Ameur: Official 91 points vs OSM 80 points
+- Updated `communes-data.ts` with official Gazette boundary coordinates:
+  - جماعة سلا: 43 points from official data
+  - جماعة سيدي أبي القنادل: 24 points from official data (larger boundary than OSM)
+  - جماعة عامر: 91 points from official data
+- Updated header comments to reference "الجريدة الرسمية" as source
+- Added `source: "الجريدة الرسمية"` property to each commune feature
+- Added `nameAr: "بوقنادل"` for Bouknadel (common name in Arabic)
+- Fixed French name to match official: "Commune de Sidi Aby El Kanadel"
+- Updated map component popup to show "🇲🇦 الجريدة الرسمية للمملكة المغربية" as source
+- Updated map legend subtitle from "OSM 2025" to "الحدود الترابية الرسمية — 🇲🇦 الجريدة الرسمية"
+- Updated page.tsx commune names to match official Gazette naming
+- All lint checks pass, dev server running without errors
+
+Stage Summary:
+- Commune boundaries now use official الجريدة الرسمية data instead of OpenStreetMap
+- Bouknadel boundary is significantly larger than OSM (extends from 34.09°N to 34.17°N)
+- Official Arabic name: "جماعة سيدي أبي القنادل" with common name "بوقنادل"
+- Source attribution updated throughout to reference الجريدة الرسمية
