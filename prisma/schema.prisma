@@ -1,0 +1,36 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Intervention {
+  id                 String   @id @default(cuid())
+  type               String   // DERATISATION, DESINSECTISATION, DESINFECTION
+  date               DateTime
+  quartier           String
+  adresse            String
+  latitude           Float
+  longitude          Float
+  statut             String   // PLANIFIEE, EN_COURS, TERMINEE, ANNULEE
+  description        String   @default("")
+  agentNom           String
+  produitUtilise     String   @default("")
+  quantite           String   @default("")
+  superficie         String   @default("")
+  nombrePrestations  Int      @default(1)
+  observations       String   @default("")
+  reference          String   @unique
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+}
+
+model Quartier {
+  id        String @id @default(cuid())
+  nom       String @unique
+  latitude  Float
+  longitude Float
+}
