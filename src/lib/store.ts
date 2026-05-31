@@ -14,6 +14,12 @@ interface AppSettings {
   interventionsPerPage: number
 }
 
+export interface MapClickCoords {
+  latitude: number
+  longitude: number
+  commune: string | null
+}
+
 interface AppState {
   currentView: ViewType
   setCurrentView: (view: ViewType) => void
@@ -34,6 +40,8 @@ interface AppState {
   settings: AppSettings
   updateSettings: (partial: Partial<AppSettings>) => void
   resetSettings: () => void
+  mapClickCoords: MapClickCoords | null
+  setMapClickCoords: (coords: MapClickCoords | null) => void
 }
 
 export const CURRENT_YEAR = new Date().getFullYear().toString()
@@ -70,7 +78,7 @@ export const useAppStore = create<AppState>((set) => ({
   searchQuery: '',
   setSearchQuery: (query) => set({ searchQuery: query }),
   isFormOpen: false,
-  setIsFormOpen: (open) => set({ isFormOpen: open, ...(open ? {} : { editingInterventionId: null }) }),
+  setIsFormOpen: (open) => set({ isFormOpen: open, ...(open ? {} : { editingInterventionId: null, mapClickCoords: null }) }),
   editingInterventionId: null,
   setEditingInterventionId: (id) => set({ editingInterventionId: id, isFormOpen: !!id }),
   sidebarOpen: false,
@@ -78,4 +86,6 @@ export const useAppStore = create<AppState>((set) => ({
   settings: DEFAULT_SETTINGS,
   updateSettings: (partial) => set((state) => ({ settings: { ...state.settings, ...partial } })),
   resetSettings: () => set({ settings: DEFAULT_SETTINGS }),
+  mapClickCoords: null,
+  setMapClickCoords: (coords) => set({ mapClickCoords: coords }),
 }))

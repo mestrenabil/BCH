@@ -7,7 +7,7 @@ import {
   PieChart, Pie, Cell, AreaChart, Area, RadarChart, Radar, PolarGrid,
   PolarAngleAxis, PolarRadiusAxis,
 } from 'recharts'
-import { useAppStore, type ViewType, type InterventionType, type CommuneType, getYearOptions } from '@/lib/store'
+import { useAppStore, type ViewType, type InterventionType, type CommuneType, type MapClickCoords, getYearOptions } from '@/lib/store'
 import { toast } from 'sonner'
 
 // ===== TYPE DEFINITIONS =====
@@ -83,6 +83,7 @@ export default function HomePage() {
     searchQuery, setSearchQuery,
     isFormOpen, setIsFormOpen, editingInterventionId, setEditingInterventionId,
     sidebarOpen, setSidebarOpen,
+    mapClickCoords, setMapClickCoords,
   } = useAppStore()
 
   const [stats, setStats] = useState<Statistics | null>(null)
@@ -368,7 +369,11 @@ export default function HomePage() {
             ) : (
               <motion.div key={currentView} variants={pageVariants} initial="initial" animate="animate" exit="exit">
                 {currentView === 'dashboard' && <DashboardView stats={stats} onNavigate={setCurrentView} selectedCommune={selectedCommune} />}
-                {currentView === 'map' && <MapView interventions={interventions} quartiers={quartiers} selectedCommune={selectedCommune} />}
+                {currentView === 'map' && <MapView interventions={interventions} quartiers={quartiers} selectedCommune={selectedCommune} onMapClick={(lat, lng, commune) => {
+                  setMapClickCoords({ latitude: lat, longitude: lng, commune })
+                  setEditingInterventionId(null)
+                  setIsFormOpen(true)
+                }} />}
                 {currentView === 'interventions' && (
                   <InterventionsView interventions={interventions} total={interventionsTotal}
                     page={interventionsPage} setPage={setInterventionsPage}
@@ -386,7 +391,8 @@ export default function HomePage() {
       <AnimatePresence>
         {isFormOpen && (
           <InterventionFormDialog interventionId={editingInterventionId} quartiers={quartiers}
-            onClose={() => { setIsFormOpen(false); setEditingInterventionId(null) }}
+            mapClickCoords={mapClickCoords}
+            onClose={() => { setIsFormOpen(false); setEditingInterventionId(null); setMapClickCoords(null) }}
             onSave={async () => { await fetchStats(); await fetchInterventions() }} />
         )}
       </AnimatePresence>
@@ -677,9 +683,9 @@ function DashboardView({ stats, onNavigate, selectedCommune }: { stats: Statisti
 }
 
 // ===== MAP VIEW =====
-function MapView({ interventions, quartiers, selectedCommune }: { interventions: Intervention[]; quartiers: Quartier[]; selectedCommune: CommuneType | 'ALL' }) {
+function MapView({ interventions, quartiers, selectedCommune, onMapClick }: { interventions: Intervention[]; quartiers: Quartier[]; selectedCommune: CommuneType | 'ALL'; onMapClick: (lat: number, lng: number, commune: string | null) => void }) {
   const [mapLoaded, setMapLoaded] = useState(false)
-  const [MapComponent, setMapComponent] = useState<React.ComponentType<{ interventions: Intervention[]; quartiers: Quartier[]; selectedCommune: string }> | null>(null)
+  const [MapComponent, setMapComponent] = useState<React.ComponentType<{ interventions: Intervention[]; quartiers: Quartier[]; selectedCommune: string; onMapClick?: (lat: number, lng: number, commune: string | null) => void }> | null>(null)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [hoveredCommune, setHoveredCommune] = useState<string | null>(null)
   const { setSelectedCommune } = useAppStore()
@@ -926,7 +932,7 @@ function MapView({ interventions, quartiers, selectedCommune }: { interventions:
 
       {/* Map Container */}
       <div className="flex-1 relative">
-        {mapLoaded && MapComponent ? <MapComponent interventions={interventions} quartiers={quartiers} selectedCommune={selectedCommune} /> : (
+        {mapLoaded && MapComponent ? <MapComponent interventions={interventions} quartiers={quartiers} selectedCommune={selectedCommune} onMapClick={onMapClick} /> : (
           <div className="h-full flex items-center justify-center bg-slate-50">
             <div className="text-center space-y-4">
               <div className="w-14 h-14 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mx-auto" />
@@ -934,6 +940,21 @@ function MapView({ interventions, quartiers, selectedCommune }: { interventions:
             </div>
           </div>
         )}
+        {/* Map click instruction overlay */}
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 1.5, duration: 0.5 }}
+          className="absolute bottom-4 left-4 z-10"
+        >
+          <div className="bg-white/95 backdrop-blur-sm rounded-xl px-4 py-2.5 shadow-lg border border-emerald-100 flex items-center gap-2.5">
+            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-white text-sm shadow-md">📍</div>
+            <div>
+              <p className="text-[11px] font-bold text-emerald-700">انقر على الخريطة لإضافة تدخل</p>
+              <p className="text-[9px] text-slate-400">اضغط على أي موقع لإنشاء تدخل جديد</p>
+            </div>
+          </div>
+        </motion.div>
       </div>
     </div>
   )
@@ -1531,18 +1552,32 @@ function SettingsView() {
 }
 
 // ===== FORM DIALOG =====
-function InterventionFormDialog({ interventionId, quartiers, onClose, onSave }: {
+function InterventionFormDialog({ interventionId, quartiers, mapClickCoords, onClose, onSave }: {
   interventionId: string | null; quartiers: Quartier[]
+  mapClickCoords: MapClickCoords | null
   onClose: () => void; onSave: () => Promise<void>
 }) {
   const [formData, setFormData] = useState({
     type: 'DERATISATION', date: new Date().toISOString().split('T')[0],
-    quartier: '', adresse: '', latitude: '34.052', longitude: '-6.735',
+    quartier: '', adresse: '', 
+    latitude: mapClickCoords ? mapClickCoords.latitude.toString() : '34.052', 
+    longitude: mapClickCoords ? mapClickCoords.longitude.toString() : '-6.735',
     statut: 'PLANIFIEE', description: '', agentNom: '', produitUtilise: '',
     quantite: '', superficie: '', nombrePrestations: '1', observations: '',
   })
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isLoadingData, setIsLoadingData] = useState(false)
+
+  // When mapClickCoords changes, update the form's latitude/longitude
+  useEffect(() => {
+    if (mapClickCoords && !interventionId) {
+      setFormData(prev => ({
+        ...prev,
+        latitude: mapClickCoords.latitude.toString(),
+        longitude: mapClickCoords.longitude.toString(),
+      }))
+    }
+  }, [mapClickCoords, interventionId])
 
   useEffect(() => {
     if (interventionId) {
@@ -1590,7 +1625,12 @@ function InterventionFormDialog({ interventionId, quartiers, onClose, onSave }: 
         <div className="sticky top-0 bg-gradient-to-l from-emerald-700 to-teal-700 text-white p-5 flex items-center justify-between rounded-t-2xl z-10">
           <div>
             <h2 className="text-lg font-bold">{interventionId ? 'تعديل التدخل' : 'إضافة تدخل جديد'}</h2>
-            <p className="text-emerald-100/70 text-xs">أدخل معلومات التدخل</p>
+            <p className="text-emerald-100/70 text-xs">
+              {mapClickCoords && !interventionId 
+                ? `📍 من الخريطة — ${mapClickCoords.latitude.toFixed(4)}, ${mapClickCoords.longitude.toFixed(4)}`
+                : 'أدخل معلومات التدخل'
+              }
+            </p>
           </div>
           <button onClick={onClose} className="p-2 hover:bg-white/20 rounded-xl transition-colors">✕</button>
         </div>
@@ -1601,6 +1641,27 @@ function InterventionFormDialog({ interventionId, quartiers, onClose, onSave }: 
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="p-6 space-y-5">
+            {/* Map click indicator banner */}
+            {mapClickCoords && !interventionId && (
+              <motion.div 
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 flex items-center gap-3"
+              >
+                <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-white text-lg shrink-0 shadow-md">📍</div>
+                <div className="flex-1">
+                  <p className="text-sm font-bold text-emerald-700">موقع محدد من الخريطة</p>
+                  <p className="text-[11px] text-emerald-600">
+                    الإحداثيات: {mapClickCoords.latitude.toFixed(6)}, {mapClickCoords.longitude.toFixed(6)}
+                    {mapClickCoords.commune && (
+                      <span className="mr-2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 text-[10px] font-bold">
+                        🏛️ {mapClickCoords.commune}
+                      </span>
+                    )}
+                  </p>
+                </div>
+              </motion.div>
+            )}
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-semibold text-slate-700 mb-1.5">نوع التدخل *</label>
@@ -1650,14 +1711,20 @@ function InterventionFormDialog({ interventionId, quartiers, onClose, onSave }: 
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-1.5">خط العرض</label>
+                <label className="block text-sm font-semibold text-slate-700 mb-1.5">
+                  خط العرض
+                  {mapClickCoords && !interventionId && <span className="text-[10px] text-emerald-500 mr-1">📍 من الخريطة</span>}
+                </label>
                 <input type="text" value={formData.latitude} onChange={(e) => updateField('latitude', e.target.value)}
-                  className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-300" />
+                  className={`w-full px-3 py-2.5 rounded-xl border text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-300 ${mapClickCoords && !interventionId ? 'border-emerald-300 bg-emerald-50/50' : 'border-slate-200 bg-white'}`} />
               </div>
               <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-1.5">خط الطول</label>
+                <label className="block text-sm font-semibold text-slate-700 mb-1.5">
+                  خط الطول
+                  {mapClickCoords && !interventionId && <span className="text-[10px] text-emerald-500 mr-1">📍 من الخريطة</span>}
+                </label>
                 <input type="text" value={formData.longitude} onChange={(e) => updateField('longitude', e.target.value)}
-                  className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-300" />
+                  className={`w-full px-3 py-2.5 rounded-xl border text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-300 ${mapClickCoords && !interventionId ? 'border-emerald-300 bg-emerald-50/50' : 'border-slate-200 bg-white'}`} />
               </div>
             </div>
             <div className="grid grid-cols-3 gap-4">

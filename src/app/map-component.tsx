@@ -97,6 +97,29 @@ function createQuartierIcon(): L.DivIcon {
   })
 }
 
+function createNewInterventionMarkerIcon(): L.DivIcon {
+  return L.divIcon({
+    html: `<div style="position:relative;">
+      <div style="
+        background: linear-gradient(135deg, #059669, #10b981);
+        width: 40px; height: 40px; border-radius: 50%;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 20px; border: 3px solid white;
+        box-shadow: 0 4px 20px rgba(5,150,105,0.5);
+        animation: pulse-green 2s infinite;
+      ">➕</div>
+      <style>
+        @keyframes pulse-green {
+          0% { box-shadow: 0 0 0 0 rgba(5,150,105,0.5); }
+          70% { box-shadow: 0 0 0 15px rgba(5,150,105,0); }
+          100% { box-shadow: 0 0 0 0 rgba(5,150,105,0); }
+        }
+      </style>
+    </div>`,
+    className: '', iconSize: [40, 40], iconAnchor: [20, 20], popupAnchor: [0, -24],
+  })
+}
+
 function createMarkerClusterGroup(): L.LayerGroup {
   try {
     if (typeof L.markerClusterGroup === 'function') {
@@ -131,13 +154,23 @@ function createMarkerClusterGroup(): L.LayerGroup {
   return L.layerGroup()
 }
 
-export default function MapComponent({ interventions, quartiers, selectedCommune }: { interventions: Intervention[]; quartiers: Quartier[]; selectedCommune: string }) {
+export default function MapComponent({ interventions, quartiers, selectedCommune, onMapClick }: { 
+  interventions: Intervention[]; quartiers: Quartier[]; selectedCommune: string;
+  onMapClick?: (lat: number, lng: number, commune: string | null) => void 
+}) {
   const mapRef = useRef<L.Map | null>(null)
   const mapContainerRef = useRef<HTMLDivElement>(null)
   const markersLayerRef = useRef<L.LayerGroup | null>(null)
   const communeLayersRef = useRef<Record<string, L.GeoJSON>>({})
   const communeLabelsRef = useRef<L.Marker[]>([])
   const communeLayerGroupRef = useRef<L.LayerGroup | null>(null)
+  const clickMarkerRef = useRef<L.Marker | null>(null)
+  const onMapClickRef = useRef(onMapClick)
+
+  // Keep the callback ref up-to-date
+  useEffect(() => {
+    onMapClickRef.current = onMapClick
+  }, [onMapClick])
 
   useEffect(() => {
     if (!mapContainerRef.current || mapRef.current) return
@@ -265,10 +298,7 @@ export default function MapComponent({ interventions, quartiers, selectedCommune
             layer.setStyle({ fillOpacity: isBouknadel ? 0.22 : 0.15, weight: isBouknadel ? 5 : 3.5 })
           })
           layer.on('mouseout', () => {
-            const isHighlighted = selectedCommune !== 'ALL' && feat.properties?.name === COMMUNE_NAME_MAP[selectedCommune]
-            if (!isHighlighted) {
-              layer.setStyle({ fillOpacity: isBouknadel ? 0.12 : 0.06, weight: isBouknadel ? 4 : 2.5 })
-            }
+            layer.setStyle({ fillOpacity: isBouknadel ? 0.12 : 0.06, weight: isBouknadel ? 4 : 2.5 })
           })
         },
       })
@@ -289,6 +319,91 @@ export default function MapComponent({ interventions, quartiers, selectedCommune
     const markersLayer = createMarkerClusterGroup()
     markersLayerRef.current = markersLayer
     markersLayer.addTo(map)
+
+    // ===== MAP CLICK HANDLER - ADD NEW INTERVENTION =====
+    map.on('click', (e: L.LeafletMouseEvent) => {
+      const { lat, lng } = e.latlng
+      
+      // Detect commune for clicked point
+      const commune = getCommuneForPoint(lat, lng)
+      
+      // Remove previous click marker if exists
+      if (clickMarkerRef.current) {
+        map.removeLayer(clickMarkerRef.current)
+      }
+
+      // Create new temporary marker at click location
+      const newMarker = L.marker([lat, lng], { 
+        icon: createNewInterventionMarkerIcon(),
+        zIndexOffset: 1000 
+      })
+
+      const communeLabel = commune ? COMMUNE_NAME_MAP[commune] || commune : 'خارج حدود الجماعات'
+      const communeColor = commune === 'سيدي أبي القنادل' ? '#7c3aed' : commune === 'سلا' ? '#059669' : commune === 'عامر' ? '#d97706' : '#64748b'
+
+      // Create popup with "Add intervention" button
+      const popupContent = `
+        <div style="direction: rtl; text-align: right; min-width: 240px; font-family: inherit;">
+          <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
+            <div style="width: 32px; height: 32px; border-radius: 10px; background: linear-gradient(135deg, #059669, #10b981); display: flex; align-items: center; justify-content: center; color: white; font-size: 16px;">➕</div>
+            <div>
+              <strong style="font-size: 14px; color: #0f172a;">إضافة تدخل جديد</strong>
+              <div style="font-size: 11px; color: #64748b;">انقر على الزر لإنشاء تدخل في هذا الموقع</div>
+            </div>
+          </div>
+          <div style="background: #f0fdf4; border-radius: 10px; padding: 10px; margin-bottom: 12px; border: 1px solid #bbf7d0;">
+            <div style="font-size: 12px; color: #166534; margin-bottom: 4px;">
+              📍 <strong>الإحداثيات:</strong> ${lat.toFixed(6)}, ${lng.toFixed(6)}
+            </div>
+            <div style="font-size: 11px; color: #166534; display: flex; align-items: center; gap: 4px;">
+              🏛️ <strong>الجماعة:</strong> 
+              <span style="background: ${communeColor}18; color: ${communeColor}; padding: 2px 8px; border-radius: 8px; font-size: 10px; font-weight: 700;">${communeLabel}</span>
+            </div>
+          </div>
+          <button id="add-intervention-btn" style="
+            width: 100%;
+            background: linear-gradient(135deg, #059669, #10b981);
+            color: white;
+            border: none;
+            padding: 10px 16px;
+            border-radius: 12px;
+            font-size: 14px;
+            font-weight: 700;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            box-shadow: 0 4px 14px rgba(5,150,105,0.3);
+            transition: all 0.2s;
+            font-family: inherit;
+          " onmouseover="this.style.transform='scale(1.02)'; this.style.boxShadow='0 6px 20px rgba(5,150,105,0.4)'" onmouseout="this.style.transform='scale(1)'; this.style.boxShadow='0 4px 14px rgba(5,150,105,0.3)'">
+            ➕ إضافة تدخل في هذا الموقع
+          </button>
+        </div>
+      `
+
+      newMarker.bindPopup(popupContent, { maxWidth: 300, closeButton: true })
+      newMarker.addTo(map)
+      clickMarkerRef.current = newMarker
+
+      // Open popup immediately
+      newMarker.openPopup()
+
+      // Listen for popup open to attach click handler to the button
+      newMarker.on('popupopen', () => {
+        setTimeout(() => {
+          const btn = document.getElementById('add-intervention-btn')
+          if (btn) {
+            btn.onclick = () => {
+              if (onMapClickRef.current) {
+                onMapClickRef.current(lat, lng, commune)
+              }
+            }
+          }
+        }, 50)
+      })
+    })
 
     mapRef.current = map
 
