@@ -28,6 +28,40 @@ const TYPE_COLORS: Record<string, string> = {
 }
 const TYPE_ICONS: Record<string, string> = { DERATISATION: '🐀', DESINSECTISATION: '🦟', DESINFECTION: '🧴' }
 
+// Mapping from short commune name to GeoJSON feature name
+const COMMUNE_NAME_MAP: Record<string, string> = {
+  'سلا': 'جماعة سلا',
+  'سيدي أبي القنادل': 'جماعة سيدي أبي القنادل',
+  'عامر': 'جماعة عامر',
+}
+
+// Point-in-polygon (ray casting algorithm)
+function isPointInPolygon(lat: number, lng: number, polygon: number[][]): boolean {
+  let inside = false
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+    const xi = polygon[i][1], yi = polygon[i][0]
+    const xj = polygon[j][1], yj = polygon[j][0]
+    const intersect = ((yi > lat) !== (yj > lat)) && (lng < (xj - xi) * (lat - yi) / (yj - yi) + xi)
+    if (intersect) inside = !inside
+  }
+  return inside
+}
+
+// Determine which commune a point belongs to
+function getCommuneForPoint(lat: number, lng: number): string | null {
+  for (const feature of COMMUNES_GEOJSON.features) {
+    const coords = feature.geometry.coordinates[0]
+    if (isPointInPolygon(lat, lng, coords)) {
+      // Return the short name key
+      for (const [key, fullName] of Object.entries(COMMUNE_NAME_MAP)) {
+        if (feature.properties.name === fullName) return key
+      }
+      return feature.properties.name || null
+    }
+  }
+  return null
+}
+
 function createInterventionIcon(type: string): L.DivIcon {
   const color = TYPE_COLORS[type] || '#666'
   const icon = TYPE_ICONS[type] || '📍'
@@ -88,11 +122,15 @@ function createMarkerClusterGroup(): L.LayerGroup {
   return L.layerGroup()
 }
 
-export default function MapComponent({ interventions, quartiers }: { interventions: Intervention[]; quartiers: Quartier[] }) {
+export default function MapComponent({ interventions, quartiers, selectedCommune }: { interventions: Intervention[]; quartiers: Quartier[]; selectedCommune: string }) {
   const mapRef = useRef<L.Map | null>(null)
   const mapContainerRef = useRef<HTMLDivElement>(null)
   const markersLayerRef = useRef<L.LayerGroup | null>(null)
+  const communeLayersRef = useRef<Record<string, L.GeoJSON>>({})
+  const communeLabelsRef = useRef<L.Marker[]>([])
+  const communeLayerGroupRef = useRef<L.LayerGroup | null>(null)
 
+  // Initialize map
   useEffect(() => {
     if (!mapContainerRef.current || mapRef.current) return
 
@@ -116,8 +154,8 @@ export default function MapComponent({ interventions, quartiers }: { interventio
     lightLayer.addTo(map)
 
     // Layer control
-    const boundaryLayers: Record<string, L.Layer> = {}
     const communeLayerGroup = L.layerGroup().addTo(map)
+    communeLayerGroupRef.current = communeLayerGroup
 
     // ===== ADD COMMUNE BOUNDARIES =====
     COMMUNES_GEOJSON.features.forEach((feature) => {
@@ -160,6 +198,7 @@ export default function MapComponent({ interventions, quartiers }: { interventio
             interactive: false,
           })
           label.addTo(communeLayerGroup)
+          communeLabelsRef.current.push(label)
 
           // Popup with detailed info
           const nameFr = feat.properties?.nameFr || ''
@@ -176,7 +215,6 @@ export default function MapComponent({ interventions, quartiers }: { interventio
           const sourceGazette = feat.properties?.sourceGazette || ''
           const sourceProjection = feat.properties?.sourceProjection || ''
 
-          // Format number with Arabic locale
           const formatNum = (n: string) => Number(n).toLocaleString('ar-MA')
 
           layer.bindPopup(`
@@ -214,13 +252,18 @@ export default function MapComponent({ interventions, quartiers }: { interventio
             layer.setStyle({ fillOpacity: isBouknadel ? 0.22 : 0.15, weight: isBouknadel ? 5 : 3.5 })
           })
           layer.on('mouseout', () => {
-            layer.setStyle({ fillOpacity: isBouknadel ? 0.12 : 0.06, weight: isBouknadel ? 4 : 2.5 })
+            // Only reset if not highlighted by filter
+            const isHighlighted = selectedCommune !== 'ALL' && feat.properties?.name === COMMUNE_NAME_MAP[selectedCommune]
+            if (!isHighlighted) {
+              layer.setStyle({ fillOpacity: isBouknadel ? 0.12 : 0.06, weight: isBouknadel ? 4 : 2.5 })
+            }
           })
         },
       })
 
-      // Add individual commune toggle layer
-      boundaryLayers[props.name || ''] = polygon
+      // Store reference to the commune layer by its short key name
+      const shortKey = Object.entries(COMMUNE_NAME_MAP).find(([_, v]) => v === props.name)?.[0] || props.name || ''
+      communeLayersRef.current[shortKey] = polygon
       polygon.addTo(communeLayerGroup)
     })
 
@@ -245,14 +288,95 @@ export default function MapComponent({ interventions, quartiers }: { interventio
     return () => { map.remove(); mapRef.current = null }
   }, [])
 
+  // ===== HANDLE COMMUNE FILTER CHANGE =====
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map) return
+
+    const communeLayers = communeLayersRef.current
+    const labels = communeLabelsRef.current
+
+    if (selectedCommune === 'ALL') {
+      // Show all communes normally
+      Object.entries(communeLayers).forEach(([key, layer]) => {
+        const feature = COMMUNES_GEOJSON.features.find(f => f.properties.name === COMMUNE_NAME_MAP[key])
+        const color = feature?.properties.color || '#059669'
+        const isBouknadel = key === 'سيدي أبي القنادل'
+        layer.setStyle({
+          color: color,
+          weight: isBouknadel ? 4 : 2.5,
+          opacity: isBouknadel ? 1 : 0.7,
+          fillColor: color,
+          fillOpacity: isBouknadel ? 0.12 : 0.06,
+          dashArray: isBouknadel ? '0' : '6, 4',
+        })
+      })
+      // Show all labels
+      labels.forEach(label => { label.setOpacity(1) })
+
+      // Zoom to fit all boundaries
+      const allBounds = L.geoJSON(COMMUNES_GEOJSON as GeoJSON.GeoJsonObject).getBounds()
+      map.fitBounds(allBounds, { padding: [30, 30], maxZoom: 14 })
+    } else {
+      // Highlight selected commune, dim others
+      Object.entries(communeLayers).forEach(([key, layer]) => {
+        const isSelected = key === selectedCommune
+        const feature = COMMUNES_GEOJSON.features.find(f => f.properties.name === COMMUNE_NAME_MAP[key])
+        const color = feature?.properties.color || '#059669'
+
+        if (isSelected) {
+          layer.setStyle({
+            color: color,
+            weight: 5,
+            opacity: 1,
+            fillColor: color,
+            fillOpacity: 0.18,
+            dashArray: '0',
+          })
+          // Zoom to this commune
+          const bounds = layer.getBounds()
+          map.fitBounds(bounds, { padding: [50, 50], maxZoom: 15 })
+        } else {
+          layer.setStyle({
+            color: '#94a3b8',
+            weight: 1.5,
+            opacity: 0.3,
+            fillColor: '#94a3b8',
+            fillOpacity: 0.03,
+            dashArray: '4, 4',
+          })
+        }
+      })
+      // Dim labels of unselected communes
+      labels.forEach(label => { label.setOpacity(0.3) })
+      // The selected commune label should be visible
+      const selectedLayer = communeLayers[selectedCommune]
+      if (selectedLayer) {
+        const bounds = selectedLayer.getBounds()
+        const center = bounds.getCenter()
+        // Find and highlight the label near the center
+        labels.forEach(label => {
+          const pos = label.getLatLng()
+          const dist = pos.distanceTo(center)
+          if (dist < bounds.getNorthEast().distanceTo(bounds.getSouthWest()) / 2) {
+            label.setOpacity(1)
+          }
+        })
+      }
+    }
+  }, [selectedCommune])
+
   // Update markers
   useEffect(() => {
     if (!mapRef.current || !markersLayerRef.current) return
     const markersLayer = markersLayerRef.current
     markersLayer.clearLayers()
 
-    // Add quartier markers
+    // Add quartier markers (filtered by commune)
     quartiers.forEach((q) => {
+      const pointCommune = getCommuneForPoint(q.latitude, q.longitude)
+      if (selectedCommune !== 'ALL' && pointCommune !== selectedCommune) return
+
       const marker = L.marker([q.latitude, q.longitude], { icon: createQuartierIcon() })
       marker.bindPopup(`
         <div style="direction: rtl; text-align: right; min-width: 120px;">
@@ -264,8 +388,11 @@ export default function MapComponent({ interventions, quartiers }: { interventio
       markersLayer.addLayer(marker)
     })
 
-    // Add intervention markers
+    // Add intervention markers (filtered by commune)
     interventions.forEach((intervention) => {
+      const pointCommune = getCommuneForPoint(intervention.latitude, intervention.longitude)
+      if (selectedCommune !== 'ALL' && pointCommune !== selectedCommune) return
+
       const marker = L.marker([intervention.latitude, intervention.longitude], {
         icon: createInterventionIcon(intervention.type),
       })
@@ -296,7 +423,7 @@ export default function MapComponent({ interventions, quartiers }: { interventio
       `)
       markersLayer.addLayer(marker)
     })
-  }, [interventions, quartiers])
+  }, [interventions, quartiers, selectedCommune])
 
   return <div ref={mapContainerRef} className="w-full h-full" style={{ minHeight: '400px' }} />
 }

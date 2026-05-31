@@ -7,7 +7,7 @@ import {
   PieChart, Pie, Cell, AreaChart, Area, RadarChart, Radar, PolarGrid,
   PolarAngleAxis, PolarRadiusAxis,
 } from 'recharts'
-import { useAppStore, type ViewType, type InterventionType } from '@/lib/store'
+import { useAppStore, type ViewType, type InterventionType, type CommuneType } from '@/lib/store'
 import { toast } from 'sonner'
 
 // ===== TYPE DEFINITIONS =====
@@ -42,6 +42,16 @@ const TYPE_COLORS: Record<string, string> = {
 const STATUT_COLORS: Record<string, string> = {
   PLANIFIEE: '#3b82f6', EN_COURS: '#f59e0b', TERMINEE: '#10b981', ANNULEE: '#6b7280',
 }
+const COMMUNE_LABELS: Record<string, string> = {
+  'سلا': 'جماعة سلا',
+  'سيدي أبي القنادل': 'جماعة سيدي أبي القنادل',
+  'عامر': 'جماعة عامر',
+}
+const COMMUNE_COLORS: Record<string, string> = {
+  'سلا': '#059669',
+  'سيدي أبي القنادل': '#7c3aed',
+  'عامر': '#d97706',
+}
 const TYPE_ICONS: Record<string, string> = {
   DERATISATION: '🐀', DESINSECTISATION: '🦟', DESINFECTION: '🧴',
 }
@@ -69,7 +79,8 @@ const cardVariants = {
 export default function HomePage() {
   const {
     currentView, setCurrentView, selectedType, setSelectedType,
-    selectedYear, setSelectedYear, searchQuery, setSearchQuery,
+    selectedYear, setSelectedYear, selectedCommune, setSelectedCommune,
+    searchQuery, setSearchQuery,
     isFormOpen, setIsFormOpen, editingInterventionId, setEditingInterventionId,
     sidebarOpen, setSidebarOpen,
   } = useAppStore()
@@ -189,6 +200,16 @@ export default function HomePage() {
                 </select>
               </div>
               <div className="hidden sm:flex items-center gap-2 bg-white/10 backdrop-blur-sm rounded-xl px-3 py-2 border border-white/10">
+                <span className="text-xs text-emerald-100/70">🏛️ الجماعة:</span>
+                <select value={selectedCommune} onChange={(e) => setSelectedCommune(e.target.value as CommuneType | 'ALL')}
+                  className="bg-transparent text-sm font-bold outline-none cursor-pointer">
+                  <option value="ALL" className="text-black">كل الجماعات</option>
+                  <option value="سلا" className="text-black">جماعة سلا</option>
+                  <option value="سيدي أبي القنادل" className="text-black">جماعة سيدي أبي القنادل</option>
+                  <option value="عامر" className="text-black">جماعة عامر</option>
+                </select>
+              </div>
+              <div className="hidden sm:flex items-center gap-2 bg-white/10 backdrop-blur-sm rounded-xl px-3 py-2 border border-white/10">
                 <span className="text-xs text-emerald-100/70">🏷️ النوع:</span>
                 <select value={selectedType} onChange={(e) => setSelectedType(e.target.value as InterventionType | 'ALL')}
                   className="bg-transparent text-sm font-bold outline-none cursor-pointer">
@@ -202,6 +223,25 @@ export default function HomePage() {
           </div>
         </div>
       </header>
+
+      {/* Mobile Filters Bar */}
+      <div className="sm:hidden bg-white/90 backdrop-blur-sm border-b border-slate-100 px-3 py-2">
+        <div className="flex items-center gap-2 overflow-x-auto">
+          <span className="text-[10px] text-slate-400 font-bold whitespace-nowrap">🏛️</span>
+          <button onClick={() => setSelectedCommune('ALL')}
+            className={`px-2.5 py-1 rounded-lg text-[11px] font-bold whitespace-nowrap transition-all ${selectedCommune === 'ALL' ? 'bg-slate-800 text-white shadow-md' : 'bg-slate-100 text-slate-600'}`}>
+            الكل
+          </button>
+          {Object.entries(COMMUNE_LABELS).map(([key, label]) => (
+            <button key={key} onClick={() => setSelectedCommune(selectedCommune === key ? 'ALL' : key as CommuneType)}
+              className={`px-2.5 py-1 rounded-lg text-[11px] font-bold whitespace-nowrap transition-all flex items-center gap-1 ${selectedCommune === key ? 'text-white shadow-md' : 'bg-slate-100 text-slate-600'}`}
+              style={selectedCommune === key ? { backgroundColor: COMMUNE_COLORS[key] } : {}}>
+              <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: selectedCommune === key ? 'white' : COMMUNE_COLORS[key] }} />
+              {label.replace('جماعة ', '')}
+            </button>
+          ))}
+        </div>
+      </div>
 
       <div className="flex-1 flex">
         {/* Sidebar Desktop */}
@@ -309,14 +349,14 @@ export default function HomePage() {
               </motion.div>
             ) : (
               <motion.div key={currentView} variants={pageVariants} initial="initial" animate="animate" exit="exit">
-                {currentView === 'dashboard' && <DashboardView stats={stats} onNavigate={setCurrentView} />}
-                {currentView === 'map' && <MapView interventions={interventions} quartiers={quartiers} />}
+                {currentView === 'dashboard' && <DashboardView stats={stats} onNavigate={setCurrentView} selectedCommune={selectedCommune} />}
+                {currentView === 'map' && <MapView interventions={interventions} quartiers={quartiers} selectedCommune={selectedCommune} />}
                 {currentView === 'interventions' && (
                   <InterventionsView interventions={interventions} total={interventionsTotal}
                     page={interventionsPage} setPage={setInterventionsPage}
-                    onEdit={setEditingInterventionId} onRefresh={fetchInterventions} />
+                    onEdit={setEditingInterventionId} onRefresh={fetchInterventions} selectedCommune={selectedCommune} />
                 )}
-                {currentView === 'reports' && <ReportsView stats={stats} />}
+                {currentView === 'reports' && <ReportsView stats={stats} selectedCommune={selectedCommune} />}
               </motion.div>
             )}
           </AnimatePresence>
@@ -364,7 +404,7 @@ export default function HomePage() {
 }
 
 // ===== DASHBOARD =====
-function DashboardView({ stats, onNavigate }: { stats: Statistics | null; onNavigate: (v: ViewType) => void }) {
+function DashboardView({ stats, onNavigate, selectedCommune }: { stats: Statistics | null; onNavigate: (v: ViewType) => void; selectedCommune: CommuneType | 'ALL' }) {
   if (!stats) return null
   const completionRate = stats.total > 0 ? Math.round(((stats.byStatut.TERMINEE || 0) / stats.total) * 100) : 0
   const inProgressRate = stats.total > 0 ? Math.round(((stats.byStatut.EN_COURS || 0) / stats.total) * 100) : 0
@@ -389,9 +429,19 @@ function DashboardView({ stats, onNavigate }: { stats: Statistics | null; onNavi
   return (
     <div className="p-4 lg:p-6 space-y-6 pb-24 lg:pb-6">
       {/* Title */}
-      <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}>
-        <h2 className="text-2xl font-bold text-slate-800">لوحة القيادة</h2>
-        <p className="text-slate-500 text-sm mt-1">نظرة عامة على عمليات 3D — جماعة بوقنادل سلا</p>
+      <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col sm:flex-row sm:items-center gap-2">
+        <div>
+          <h2 className="text-2xl font-bold text-slate-800">لوحة القيادة</h2>
+          <p className="text-slate-500 text-sm mt-1">نظرة عامة على عمليات 3D — جماعة بوقنادل سلا</p>
+        </div>
+        {selectedCommune !== 'ALL' && (
+          <motion.span initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold self-start"
+            style={{ backgroundColor: COMMUNE_COLORS[selectedCommune] + '18', color: COMMUNE_COLORS[selectedCommune] }}>
+            <div className="w-2 h-2 rounded-full" style={{ backgroundColor: COMMUNE_COLORS[selectedCommune] }} />
+            {COMMUNE_LABELS[selectedCommune]}
+          </motion.span>
+        )}
       </motion.div>
 
       {/* KPI Cards */}
@@ -608,9 +658,10 @@ function DashboardView({ stats, onNavigate }: { stats: Statistics | null; onNavi
 }
 
 // ===== MAP VIEW =====
-function MapView({ interventions, quartiers }: { interventions: Intervention[]; quartiers: Quartier[] }) {
+function MapView({ interventions, quartiers, selectedCommune }: { interventions: Intervention[]; quartiers: Quartier[]; selectedCommune: CommuneType | 'ALL' }) {
   const [mapLoaded, setMapLoaded] = useState(false)
-  const [MapComponent, setMapComponent] = useState<React.ComponentType<{ interventions: Intervention[]; quartiers: Quartier[] }> | null>(null)
+  const [MapComponent, setMapComponent] = useState<React.ComponentType<{ interventions: Intervention[]; quartiers: Quartier[]; selectedCommune: string }> | null>(null)
+  const { setSelectedCommune } = useAppStore()
 
   useEffect(() => {
     import('./map-component').then((mod) => {
@@ -619,10 +670,10 @@ function MapView({ interventions, quartiers }: { interventions: Intervention[]; 
     })
   }, [])
 
-  const COMMUNE_INFO: { name: string; color: string; population: string }[] = [
-    { name: 'جماعة سلا', color: '#059669', population: '945,101' },
-    { name: 'جماعة سيدي أبي القنادل', color: '#7c3aed', population: '43,598' },
-    { name: 'جماعة عامر', color: '#d97706', population: '75,942' },
+  const COMMUNE_INFO: { name: string; key: string; color: string; population: string }[] = [
+    { name: 'جماعة سلا', key: 'سلا', color: '#059669', population: '945,101' },
+    { name: 'جماعة سيدي أبي القنادل', key: 'سيدي أبي القنادل', color: '#7c3aed', population: '43,598' },
+    { name: 'جماعة عامر', key: 'عامر', color: '#d97706', population: '75,942' },
   ]
 
   return (
@@ -631,16 +682,34 @@ function MapView({ interventions, quartiers }: { interventions: Intervention[]; 
         className="absolute top-4 right-4 z-10 bg-white/95 backdrop-blur-md rounded-2xl border border-slate-100 p-5 max-w-xs shadow-xl">
         <h3 className="font-bold text-slate-800 mb-1">الخريطة التفاعلية — SIG</h3>
         <p className="text-[11px] text-slate-400 mb-3">حدود سلا — قرار رقم 1954.24 (الجريدة الرسمية عدد 7340) | السكان — HCP إحصاء 2024</p>
+        {/* Commune Filter */}
+        <div className="mb-3 p-2.5 bg-slate-50 rounded-xl border border-slate-100">
+          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">🏛️ فلترة الجماعات</p>
+          <div className="flex flex-wrap gap-1.5">
+            <button onClick={() => setSelectedCommune('ALL')}
+              className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all ${selectedCommune === 'ALL' ? 'bg-slate-800 text-white shadow-md' : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'}`}>
+              الكل
+            </button>
+            {COMMUNE_INFO.map((info) => (
+              <button key={info.key} onClick={() => setSelectedCommune(selectedCommune === info.key ? 'ALL' : info.key as CommuneType)}
+                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all flex items-center gap-1 ${selectedCommune === info.key ? 'text-white shadow-md' : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'}`}
+                style={selectedCommune === info.key ? { backgroundColor: info.color } : {}}>
+                <div className={`w-1.5 h-1.5 rounded-full ${selectedCommune === info.key ? 'bg-white' : ''}`} style={selectedCommune !== info.key ? { backgroundColor: info.color } : {}} />
+                {info.name.replace('جماعة ', '')}
+              </button>
+            ))}
+          </div>
+        </div>
         {/* Commune Boundaries Legend */}
         <div className="space-y-1.5 mb-3">
           <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">الحدود الترابية • السكان القانونيون 2024</p>
           {COMMUNE_INFO.map((info) => (
-            <div key={info.name} className="flex items-center gap-2 text-xs">
+            <div key={info.name} className={`flex items-center gap-2 text-xs transition-all ${selectedCommune !== 'ALL' && selectedCommune !== info.key ? 'opacity-40' : ''}`}>
               <div className="w-4 h-4 rounded border-2 flex items-center justify-center" style={{ borderColor: info.color, backgroundColor: info.color + '20' }}>
                 <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: info.color }} />
               </div>
               <span className="text-slate-600 font-medium">{info.name}</span>
-              {info.name === 'جماعة سيدي أبي القنادل' && <span className="text-[9px] bg-violet-100 text-violet-700 px-1.5 py-0.5 rounded-full font-bold">مقر المكتب</span>}
+              {info.key === 'سيدي أبي القنادل' && <span className="text-[9px] bg-violet-100 text-violet-700 px-1.5 py-0.5 rounded-full font-bold">مقر المكتب</span>}
               <span className="text-[10px] text-slate-400 mr-auto font-mono">{info.population}</span>
             </div>
           ))}
@@ -663,7 +732,7 @@ function MapView({ interventions, quartiers }: { interventions: Intervention[]; 
           </div>
         </div>
       </motion.div>
-      {mapLoaded && MapComponent ? <MapComponent interventions={interventions} quartiers={quartiers} /> : (
+      {mapLoaded && MapComponent ? <MapComponent interventions={interventions} quartiers={quartiers} selectedCommune={selectedCommune} /> : (
         <div className="h-full flex items-center justify-center bg-slate-50">
           <div className="text-center space-y-4">
             <div className="w-14 h-14 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mx-auto" />
@@ -676,9 +745,9 @@ function MapView({ interventions, quartiers }: { interventions: Intervention[]; 
 }
 
 // ===== INTERVENTIONS VIEW =====
-function InterventionsView({ interventions, total, page, setPage, onEdit, onRefresh }: {
+function InterventionsView({ interventions, total, page, setPage, onEdit, onRefresh, selectedCommune }: {
   interventions: Intervention[]; total: number; page: number; setPage: (p: number) => void
-  onEdit: (id: string) => void; onRefresh: () => void
+  onEdit: (id: string) => void; onRefresh: () => void; selectedCommune: CommuneType | 'ALL'
 }) {
   const [localSearch, setLocalSearch] = useState('')
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
@@ -701,7 +770,16 @@ function InterventionsView({ interventions, total, page, setPage, onEdit, onRefr
         className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
           <h2 className="text-2xl font-bold text-slate-800">إدارة التدخلات</h2>
-          <p className="text-slate-400 text-sm">{total} تدخل مسجل</p>
+          <div className="flex items-center gap-2 mt-1">
+            <p className="text-slate-400 text-sm">{total} تدخل مسجل</p>
+            {selectedCommune !== 'ALL' && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold"
+                style={{ backgroundColor: COMMUNE_COLORS[selectedCommune] + '18', color: COMMUNE_COLORS[selectedCommune] }}>
+                <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: COMMUNE_COLORS[selectedCommune] }} />
+                {COMMUNE_LABELS[selectedCommune]}
+              </span>
+            )}
+          </div>
         </div>
         <div className="flex gap-2 w-full sm:w-auto">
           <div className="relative flex-1 sm:w-64">
@@ -819,7 +897,7 @@ function InterventionsView({ interventions, total, page, setPage, onEdit, onRefr
 }
 
 // ===== REPORTS VIEW =====
-function ReportsView({ stats }: { stats: Statistics | null }) {
+function ReportsView({ stats, selectedCommune }: { stats: Statistics | null; selectedCommune: CommuneType | 'ALL' }) {
   if (!stats) return null
 
   const monthlyChartData = Object.entries(stats.monthly).sort(([a], [b]) => a.localeCompare(b)).map(([month, data]) => ({
@@ -842,9 +920,19 @@ function ReportsView({ stats }: { stats: Statistics | null }) {
 
   return (
     <div className="p-4 lg:p-6 space-y-6 pb-24 lg:pb-6">
-      <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}>
-        <h2 className="text-2xl font-bold text-slate-800">الإحصائيات والتقارير</h2>
-        <p className="text-slate-400 text-sm mt-1">تحليل مفصل لبيانات التدخلات</p>
+      <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col sm:flex-row sm:items-center gap-2">
+        <div>
+          <h2 className="text-2xl font-bold text-slate-800">الإحصائيات والتقارير</h2>
+          <p className="text-slate-400 text-sm mt-1">تحليل مفصل لبيانات التدخلات</p>
+        </div>
+        {selectedCommune !== 'ALL' && (
+          <motion.span initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold self-start"
+            style={{ backgroundColor: COMMUNE_COLORS[selectedCommune] + '18', color: COMMUNE_COLORS[selectedCommune] }}>
+            <div className="w-2 h-2 rounded-full" style={{ backgroundColor: COMMUNE_COLORS[selectedCommune] }} />
+            {COMMUNE_LABELS[selectedCommune]}
+          </motion.span>
+        )}
       </motion.div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

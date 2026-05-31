@@ -3,6 +3,7 @@ import { create } from 'zustand'
 export type ViewType = 'dashboard' | 'map' | 'interventions' | 'reports'
 export type InterventionType = 'DERATISATION' | 'DESINSECTISATION' | 'DESINFECTION'
 export type StatutType = 'PLANIFIEE' | 'EN_COURS' | 'TERMINEE' | 'ANNULEE'
+export type CommuneType = 'سلا' | 'سيدي أبي القنادل' | 'عامر'
 
 interface AppState {
   currentView: ViewType
@@ -11,6 +12,8 @@ interface AppState {
   setSelectedType: (type: InterventionType | 'ALL') => void
   selectedYear: string
   setSelectedYear: (year: string) => void
+  selectedCommune: CommuneType | 'ALL'
+  setSelectedCommune: (commune: CommuneType | 'ALL') => void
   searchQuery: string
   setSearchQuery: (query: string) => void
   isFormOpen: boolean
@@ -28,6 +31,8 @@ export const useAppStore = create<AppState>((set) => ({
   setSelectedType: (type) => set({ selectedType: type }),
   selectedYear: '2025',
   setSelectedYear: (year) => set({ selectedYear: year }),
+  selectedCommune: 'ALL',
+  setSelectedCommune: (commune) => set({ selectedCommune: commune }),
   searchQuery: '',
   setSearchQuery: (query) => set({ searchQuery: query }),
   isFormOpen: false,

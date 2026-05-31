@@ -143,13 +143,7 @@ Work Log:
 - Verified conversion: Point 1 (X=372535, Y=389485) → lat=34.096834, lon=-6.780095 matches existing data exactly
 - Discovered existing data was INCOMPLETE: only 42 points vs official 58 points
 - Missing section: Points 43-58 (entire western boundary along Bou Regreg river + Atlantic coast)
-- Updated communes-data.ts with complete 58-point boundary from the official decree:
-  - النقطة 5-6: طريق سيدي ابراهيم بولعجول (الإقليمية 4004)
-  - النقطة 13-24: سور القاعدة الجوية
-  - النقطة 27-30: سور معهد موالي رشيد للرياضات
-  - النقطة 32-34: الطريق الوطنية رقم 6
-  - النقطة 49-54: الضفة اليمنى لنهر أبي الرقراق
-  - النقطة 57-58-1: ساحل المحيط الأطلسي
+- Updated communes-data.ts with complete 58-point boundary from the official decree
 - Added decree-specific source fields: sourceDecree, sourceGazette, sourceProjection
 - Updated source: "قرار وزير الداخلية رقم 1954.24 — الجريدة الرسمية عدد 7340"
 - Updated map popup to display decree number, gazette number, and projection system
@@ -163,3 +157,36 @@ Stage Summary:
 - Coordinate conversion: Lambert Maroc Nord (EPSG:26191) → WGS84 (EPSG:4326)
 - New boundary includes western coast (Bou Regreg river + Atlantic) that was previously missing
 - Other communes (بوقنادل, عامر) left unchanged per user instruction
+
+---
+Task ID: 8
+Agent: Main Agent
+Task: Add commune filter (فلترة الجماعات) for selecting each commune individually
+
+Work Log:
+- Added CommuneType and selectedCommune/setSelectedCommune to Zustand store
+- Added COMMUNE_LABELS and COMMUNE_COLORS constants for consistent commune display
+- Added commune filter dropdown (🏛️ الجماعة) in header alongside year and type filters
+- Added mobile-friendly horizontal scrollable commune filter bar (visible on sm:hidden)
+- Updated DashboardView to accept selectedCommune and show colored badge when filtered
+- Updated InterventionsView to accept selectedCommune and show colored badge in header
+- Updated ReportsView to accept selectedCommune and show colored badge in header
+- Rewrote MapComponent to accept selectedCommune prop with full filtering support:
+  - Added COMMUNE_NAME_MAP for short→full name mapping
+  - Added isPointInPolygon (ray casting algorithm) for point-in-polygon testing
+  - Added getCommuneForPoint to determine which commune a lat/lng belongs to
+  - Added communeLayersRef to store references to each commune GeoJSON layer
+  - Added communeLabelsRef to store references to commune name labels
+  - Added useEffect for selectedCommune changes:
+    - When 'ALL': show all boundaries normally, zoom to fit all, show all labels
+    - When specific: highlight selected commune (thicker border, more fill), dim others (thin gray), zoom to selected, dim unselected labels
+  - Marker filtering: quartier and intervention markers filtered by point-in-polygon test
+  - Added interactive commune filter chips in map legend panel
+- All lint checks pass with 0 errors, dev server running without errors
+
+Stage Summary:
+- Commune filter available in 3 places: header dropdown (desktop), mobile filter bar, map legend chips
+- Selecting a commune: highlights its boundary on map, dims others, zooms to it, filters markers
+- Colored badges appear on Dashboard, Interventions, and Reports views when filtered
+- Point-in-polygon algorithm accurately determines which commune each marker belongs to
+- Toggle behavior: clicking an already-selected commune returns to 'ALL'
