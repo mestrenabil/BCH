@@ -154,9 +154,386 @@ function createMarkerClusterGroup(): L.LayerGroup {
   return L.layerGroup()
 }
 
-export default function MapComponent({ interventions, quartiers, selectedCommune, onMapClick }: { 
+// ===== PROFESSIONAL POPUP STYLING HELPERS =====
+const popupBase = `
+  direction: rtl;
+  text-align: right;
+  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  line-height: 1.6;
+  color: #1e293b;
+  -webkit-font-smoothing: antialiased;
+`
+
+const popupCardShadow = `
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08), 0 4px 12px rgba(0,0,0,0.04);
+  border-radius: 14px;
+  overflow: hidden;
+  border: 1px solid rgba(0,0,0,0.06);
+`
+
+function gradientHeader(color1: string, color2: string, content: string): string {
+  return `
+    <div style="
+      background: linear-gradient(135deg, ${color1}, ${color2});
+      padding: 14px 16px;
+      color: white;
+      position: relative;
+      overflow: hidden;
+    ">
+      <div style="position:absolute;top:-20px;left:-20px;width:80px;height:80px;border-radius:50%;background:rgba(255,255,255,0.08);"></div>
+      <div style="position:absolute;bottom:-30px;right:-10px;width:60px;height:60px;border-radius:50%;background:rgba(255,255,255,0.05);"></div>
+      ${content}
+    </div>
+  `
+}
+
+function sectionCard(bgColor: string, borderColor: string, content: string, extraStyle: string = ''): string {
+  return `
+    <div style="
+      background: ${bgColor};
+      border: 1px solid ${borderColor};
+      border-radius: 10px;
+      padding: 10px 12px;
+      ${extraStyle}
+    ">${content}</div>
+  `
+}
+
+// ===== COMMUNE POPUP =====
+function buildCommunePopup(feat: GeoJSON.Feature, color: string, isBouknadel: boolean): string {
+  const props = feat.properties || {}
+  const nameFr = props.nameFr || ''
+  const nameEn = props.nameEn || ''
+  const nameAr = props.nameAr || ''
+  const population = props.population || ''
+  const populationMunicipale = props.populationMunicipale || ''
+  const populationCompteeAPart = props.populationCompteeAPart || ''
+  const menages = props.menages || ''
+  const codeHCP = props.codeHCP || ''
+  const sourcePopulation = props.sourcePopulation || ''
+  const source = props.source || ''
+  const sourceDecree = props.sourceDecree || ''
+  const sourceGazette = props.sourceGazette || ''
+
+  const formatNum = (n: string) => Number(n).toLocaleString('ar-MA')
+
+  const headerContent = `
+    <div style="display:flex;align-items:center;gap:10px;position:relative;z-index:1;">
+      <div style="width:36px;height:36px;border-radius:10px;background:rgba(255,255,255,0.2);display:flex;align-items:center;justify-content:center;font-size:18px;backdrop-filter:blur(4px);">🏛️</div>
+      <div style="flex:1;">
+        <div style="font-size:15px;font-weight:800;letter-spacing:0.2px;">${feat.properties?.name || ''}</div>
+        <div style="font-size:10px;opacity:0.8;margin-top:1px;">الحدود الإدارية الترابية</div>
+      </div>
+      ${isBouknadel ? '<div style="background:rgba(255,255,255,0.25);padding:3px 10px;border-radius:20px;font-size:10px;font-weight:700;backdrop-filter:blur(4px);">مقر المكتب</div>' : ''}
+    </div>
+  `
+
+  const censusSection = sectionCard(
+    'linear-gradient(135deg, #f0fdf4, #ecfdf5)', '#bbf7d0',
+    `
+      <div style="display:flex;align-items:center;gap:5px;margin-bottom:8px;">
+        <div style="width:22px;height:22px;border-radius:6px;background:#15803d;display:flex;align-items:center;justify-content:center;font-size:11px;color:white;">📊</div>
+        <span style="font-weight:700;font-size:11px;color:#15803d;">الإحصاء العام للسكان والسكنى 2024 — HCP</span>
+      </div>
+      ${population ? `
+        <div style="font-size:22px;font-weight:900;color:#0f172a;margin-bottom:6px;letter-spacing:-0.5px;">
+          👥 ${formatNum(population)}
+          <span style="font-size:11px;font-weight:600;color:#64748b;margin-right:4px;">نسمة</span>
+        </div>
+      ` : ''}
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:6px;">
+        ${populationMunicipale ? `
+          <div style="background:rgba(255,255,255,0.7);border-radius:8px;padding:6px 8px;border:1px solid #d1fae5;">
+            <div style="font-size:9px;color:#6b7280;font-weight:600;">🇲🇦 المغاربة</div>
+            <div style="font-size:13px;font-weight:800;color:#166534;">${formatNum(populationMunicipale)}</div>
+          </div>
+        ` : ''}
+        ${populationCompteeAPart ? `
+          <div style="background:rgba(255,255,255,0.7);border-radius:8px;padding:6px 8px;border:1px solid #d1fae5;">
+            <div style="font-size:9px;color:#6b7280;font-weight:600;">🌍 الأجانب</div>
+            <div style="font-size:13px;font-weight:800;color:#166534;">${formatNum(populationCompteeAPart)}</div>
+          </div>
+        ` : ''}
+        ${menages ? `
+          <div style="background:rgba(255,255,255,0.7);border-radius:8px;padding:6px 8px;border:1px solid #d1fae5;">
+            <div style="font-size:9px;color:#6b7280;font-weight:600;">🏠 الأسر</div>
+            <div style="font-size:13px;font-weight:800;color:#166534;">${formatNum(menages)}</div>
+          </div>
+        ` : ''}
+        ${codeHCP ? `
+          <div style="background:rgba(255,255,255,0.7);border-radius:8px;padding:6px 8px;border:1px solid #d1fae5;">
+            <div style="font-size:9px;color:#6b7280;font-weight:600;">🔑 كود HCP</div>
+            <div style="font-size:13px;font-weight:800;color:#166534;">${codeHCP}</div>
+          </div>
+        ` : ''}
+      </div>
+    `,
+    'margin-bottom:10px;'
+  )
+
+  const namesSection = sectionCard(
+    '#f8fafc', '#e2e8f0',
+    `
+      <div style="display:flex;align-items:center;gap:5px;margin-bottom:6px;">
+        <div style="width:18px;height:18px;border-radius:5px;background:#475569;display:flex;align-items:center;justify-content:center;font-size:9px;color:white;">🌐</div>
+        <span style="font-weight:700;font-size:10px;color:#475569;">التسميات</span>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:3px;font-size:12px;color:#64748b;">
+        ${nameAr ? `<div style="display:flex;align-items:center;gap:6px;"><span style="font-size:13px;">🇲🇦</span> <span style="color:#334155;font-weight:600;">${nameAr}</span></div>` : ''}
+        <div style="display:flex;align-items:center;gap:6px;"><span style="font-size:13px;">🇫🇷</span> ${nameFr}</div>
+        <div style="display:flex;align-items:center;gap:6px;"><span style="font-size:13px;">🇬🇧</span> ${nameEn}</div>
+      </div>
+    `,
+    'margin-bottom:10px;'
+  )
+
+  const sourceLines: string[] = []
+  const srcText = source.includes('قرار') ? `🇲🇦 ${source}` : source === 'الجريدة الرسمية' ? '🇲🇦 الجريدة الرسمية' : source
+  sourceLines.push(`🗺️ حدود ترابية — ${srcText}`)
+  if (sourceDecree) sourceLines.push(`📜 ${sourceDecree}`)
+  if (sourceGazette) sourceLines.push(`📰 ${sourceGazette}`)
+  if (sourcePopulation) sourceLines.push(`📊 سكان — ${sourcePopulation}`)
+
+  const footerSection = `
+    <div style="font-size:10px;color:#94a3b8;border-top:1px solid #f1f5f9;padding-top:8px;line-height:1.8;">
+      ${sourceLines.join('<br>')}
+    </div>
+  `
+
+  return `
+    <div style="${popupBase} min-width:300px;">
+      <div style="${popupCardShadow}">
+        ${gradientHeader(color, color + 'cc', headerContent)}
+        <div style="padding:12px;">
+          ${censusSection}
+          ${namesSection}
+          ${footerSection}
+        </div>
+      </div>
+    </div>
+  `
+}
+
+// ===== QUARTIER POPUP =====
+function buildQuartierPopup(q: Quartier): string {
+  const headerContent = `
+    <div style="display:flex;align-items:center;gap:10px;position:relative;z-index:1;">
+      <div style="width:34px;height:34px;border-radius:10px;background:rgba(255,255,255,0.2);display:flex;align-items:center;justify-content:center;font-size:17px;backdrop-filter:blur(4px);">🏘️</div>
+      <div style="flex:1;">
+        <div style="font-size:15px;font-weight:800;letter-spacing:0.2px;">${q.nom}</div>
+        <div style="font-size:10px;opacity:0.8;margin-top:1px;">حي سكني</div>
+      </div>
+    </div>
+  `
+
+  const coordsSection = sectionCard(
+    '#f0fdfa', '#99f6e4',
+    `
+      <div style="display:flex;align-items:center;gap:5px;margin-bottom:4px;">
+        <div style="width:18px;height:18px;border-radius:5px;background:#0d9488;display:flex;align-items:center;justify-content:center;font-size:9px;color:white;">📍</div>
+        <span style="font-weight:600;font-size:10px;color:#0d9488;">الإحداثيات الجغرافية</span>
+      </div>
+      <div style="font-size:12px;color:#115e59;font-weight:600;direction:ltr;text-align:right;">
+        ${q.latitude.toFixed(6)}, ${q.longitude.toFixed(6)}
+      </div>
+    `
+  )
+
+  const locationInfo = sectionCard(
+    '#f8fafc', '#e2e8f0',
+    `
+      <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:#64748b;">
+        <span style="font-size:14px;">🏛️</span>
+        <span>بوقنادل سلا — <span style="color:#475569;font-weight:600;">عمالة سلا</span></span>
+      </div>
+    `,
+    'margin-top:8px;'
+  )
+
+  return `
+    <div style="${popupBase} min-width:220px;">
+      <div style="${popupCardShadow}">
+        ${gradientHeader('#0d9488', '#14b8a6', headerContent)}
+        <div style="padding:12px;">
+          ${coordsSection}
+          ${locationInfo}
+        </div>
+      </div>
+    </div>
+  `
+}
+
+// ===== INTERVENTION POPUP =====
+function buildInterventionPopup(intervention: Intervention): string {
+  const dateStr = new Date(intervention.date).toLocaleDateString('ar-MA')
+  const color = TYPE_COLORS[intervention.type]
+  const statutColor = STATUT_COLORS[intervention.statut]
+  const statutLabel = STATUT_LABELS[intervention.statut]
+  const typeLabel = TYPE_LABELS[intervention.type]
+  const typeIcon = TYPE_ICONS[intervention.type]
+
+  const headerContent = `
+    <div style="display:flex;align-items:center;gap:10px;position:relative;z-index:1;">
+      <div style="width:36px;height:36px;border-radius:10px;background:rgba(255,255,255,0.2);display:flex;align-items:center;justify-content:center;font-size:18px;backdrop-filter:blur(4px);">${typeIcon}</div>
+      <div style="flex:1;">
+        <div style="font-size:14px;font-weight:800;letter-spacing:0.2px;">${typeLabel}</div>
+        <div style="font-size:10px;opacity:0.8;margin-top:1px;">${intervention.reference}</div>
+      </div>
+      <div style="background:rgba(255,255,255,0.25);padding:4px 12px;border-radius:20px;font-size:11px;font-weight:700;backdrop-filter:blur(4px);border:1px solid rgba(255,255,255,0.3);">${statutLabel}</div>
+    </div>
+  `
+
+  const locationSection = sectionCard(
+    '#f8fafc', '#e2e8f0',
+    `
+      <div style="display:flex;align-items:flex-start;gap:8px;">
+        <div style="width:24px;height:24px;border-radius:7px;background:${color}15;display:flex;align-items:center;justify-content:center;font-size:12px;flex-shrink:0;margin-top:1px;">📍</div>
+        <div>
+          <div style="font-weight:800;color:#0f172a;font-size:14px;margin-bottom:2px;">${intervention.quartier}</div>
+          ${intervention.adresse ? `<div style="color:#64748b;font-size:12px;">🏠 ${intervention.adresse}</div>` : ''}
+          <div style="color:#64748b;font-size:12px;margin-top:2px;">📅 ${dateStr}</div>
+        </div>
+      </div>
+    `,
+    'margin-bottom:10px;'
+  )
+
+  const detailsGrid = `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:10px;">
+      <div style="background:#f8fafc;border-radius:8px;padding:8px 10px;border:1px solid #f1f5f9;">
+        <div style="font-size:9px;color:#94a3b8;font-weight:600;margin-bottom:2px;">👤 الوكيل</div>
+        <div style="font-size:12px;color:#334155;font-weight:700;">${intervention.agentNom || '—'}</div>
+      </div>
+      <div style="background:#f8fafc;border-radius:8px;padding:8px 10px;border:1px solid #f1f5f9;">
+        <div style="font-size:9px;color:#94a3b8;font-weight:600;margin-bottom:2px;">💊 المنتج</div>
+        <div style="font-size:12px;color:#334155;font-weight:700;">${intervention.produitUtilise || '—'}</div>
+      </div>
+      <div style="background:#f8fafc;border-radius:8px;padding:8px 10px;border:1px solid #f1f5f9;">
+        <div style="font-size:9px;color:#94a3b8;font-weight:600;margin-bottom:2px;">📐 المساحة</div>
+        <div style="font-size:12px;color:#334155;font-weight:700;">${intervention.superficie || '—'}</div>
+      </div>
+      <div style="background:#f8fafc;border-radius:8px;padding:8px 10px;border:1px solid #f1f5f9;">
+        <div style="font-size:9px;color:#94a3b8;font-weight:600;margin-bottom:2px;">🔢 الكمية</div>
+        <div style="font-size:12px;color:#334155;font-weight:700;">${intervention.quantite || '—'}</div>
+      </div>
+    </div>
+  `
+
+  const observationsSection = intervention.observations ? `
+    <div style="background:#fffbeb;border-radius:8px;padding:8px 10px;border:1px solid #fef3c7;margin-bottom:8px;">
+      <div style="font-size:9px;color:#b45309;font-weight:600;margin-bottom:3px;">💬 الملاحظات</div>
+      <div style="font-size:11px;color:#92400e;line-height:1.5;">${intervention.observations}</div>
+    </div>
+  ` : ''
+
+  const statusAndTypeBadges = `
+    <div style="display:flex;align-items:center;gap:6px;margin-bottom:10px;">
+      <div style="background:${color}12;color:${color};padding:5px 12px;border-radius:20px;font-size:11px;font-weight:700;border:1px solid ${color}25;display:flex;align-items:center;gap:4px;">
+        ${typeIcon} ${typeLabel}
+      </div>
+      <div style="background:${statutColor}12;color:${statutColor};padding:5px 12px;border-radius:20px;font-size:11px;font-weight:700;border:1px solid ${statutColor}25;">
+        ${statutLabel}
+      </div>
+    </div>
+  `
+
+  const footerRef = `
+    <div style="font-size:9px;color:#cbd5e1;text-align:left;border-top:1px solid #f1f5f9;padding-top:6px;margin-top:2px;">
+      ${intervention.reference}
+    </div>
+  `
+
+  return `
+    <div style="${popupBase} min-width:280px;">
+      <div style="${popupCardShadow}">
+        ${gradientHeader(color, color + 'cc', headerContent)}
+        <div style="padding:12px;">
+          ${statusAndTypeBadges}
+          ${locationSection}
+          ${detailsGrid}
+          ${observationsSection}
+          ${footerRef}
+        </div>
+      </div>
+    </div>
+  `
+}
+
+// ===== NEW INTERVENTION POPUP =====
+function buildNewInterventionPopup(lat: number, lng: number, commune: string | null): string {
+  const communeLabel = commune ? COMMUNE_NAME_MAP[commune] || commune : 'خارج حدود الجماعات'
+  const communeColor = commune === 'سيدي أبي القنادل' ? '#7c3aed' : commune === 'سلا' ? '#059669' : commune === 'عامر' ? '#d97706' : '#64748b'
+
+  const headerContent = `
+    <div style="display:flex;align-items:center;gap:10px;position:relative;z-index:1;">
+      <div style="width:34px;height:34px;border-radius:10px;background:rgba(255,255,255,0.2);display:flex;align-items:center;justify-content:center;font-size:17px;backdrop-filter:blur(4px);">➕</div>
+      <div style="flex:1;">
+        <div style="font-size:14px;font-weight:800;letter-spacing:0.2px;">إضافة تدخل جديد</div>
+        <div style="font-size:10px;opacity:0.8;margin-top:1px;">انقر على الزر لإنشاء تدخل في هذا الموقع</div>
+      </div>
+    </div>
+  `
+
+  const coordsSection = sectionCard(
+    '#f0fdf4', '#bbf7d0',
+    `
+      <div style="display:flex;align-items:center;gap:5px;margin-bottom:6px;">
+        <div style="width:18px;height:18px;border-radius:5px;background:#059669;display:flex;align-items:center;justify-content:center;font-size:9px;color:white;">📍</div>
+        <span style="font-weight:700;font-size:10px;color:#059669;">موقع التدخل</span>
+      </div>
+      <div style="font-size:13px;color:#115e59;font-weight:700;direction:ltr;text-align:right;margin-bottom:6px;">
+        ${lat.toFixed(6)}, ${lng.toFixed(6)}
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;">
+        <span style="font-size:13px;">🏛️</span>
+        <span style="font-size:11px;color:#166534;font-weight:600;">الجماعة:</span>
+        <span style="background:${communeColor}15;color:${communeColor};padding:3px 10px;border-radius:20px;font-size:10px;font-weight:700;border:1px solid ${communeColor}25;">${communeLabel}</span>
+      </div>
+    `,
+    'margin-bottom:12px;'
+  )
+
+  const addButton = `
+    <button id="add-intervention-btn" style="
+      width: 100%;
+      background: linear-gradient(135deg, #059669, #10b981);
+      color: white;
+      border: none;
+      padding: 11px 16px;
+      border-radius: 12px;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      box-shadow: 0 4px 14px rgba(5,150,105,0.3);
+      transition: all 0.2s;
+      font-family: inherit;
+      letter-spacing: 0.3px;
+    " onmouseover="this.style.transform='scale(1.02)'; this.style.boxShadow='0 6px 20px rgba(5,150,105,0.4)'" onmouseout="this.style.transform='scale(1)'; this.style.boxShadow='0 4px 14px rgba(5,150,105,0.3)'">
+      ➕ إضافة تدخل في هذا الموقع
+    </button>
+  `
+
+  return `
+    <div style="${popupBase} min-width:260px;">
+      <div style="${popupCardShadow}">
+        ${gradientHeader('#059669', '#10b981', headerContent)}
+        <div style="padding:12px;">
+          ${coordsSection}
+          ${addButton}
+        </div>
+      </div>
+    </div>
+  `
+}
+
+export default function MapComponent({ interventions, quartiers, selectedCommune, onMapClick, mapClickEnabled }: { 
   interventions: Intervention[]; quartiers: Quartier[]; selectedCommune: string;
-  onMapClick?: (lat: number, lng: number, commune: string | null) => void 
+  onMapClick?: (lat: number, lng: number, commune: string | null) => void;
+  mapClickEnabled?: boolean;
 }) {
   const mapRef = useRef<L.Map | null>(null)
   const mapContainerRef = useRef<HTMLDivElement>(null)
@@ -166,11 +543,17 @@ export default function MapComponent({ interventions, quartiers, selectedCommune
   const communeLayerGroupRef = useRef<L.LayerGroup | null>(null)
   const clickMarkerRef = useRef<L.Marker | null>(null)
   const onMapClickRef = useRef(onMapClick)
+  const mapClickEnabledRef = useRef(mapClickEnabled ?? true)
 
   // Keep the callback ref up-to-date
   useEffect(() => {
     onMapClickRef.current = onMapClick
   }, [onMapClick])
+
+  // Keep the mapClickEnabled ref up-to-date
+  useEffect(() => {
+    mapClickEnabledRef.current = mapClickEnabled ?? true
+  }, [mapClickEnabled])
 
   useEffect(() => {
     if (!mapContainerRef.current || mapRef.current) return
@@ -249,49 +632,7 @@ export default function MapComponent({ interventions, quartiers, selectedCommune
           communeLabelsRef.current.push(label)
 
           // Professional popup
-          const nameFr = feat.properties?.nameFr || ''
-          const nameEn = feat.properties?.nameEn || ''
-          const nameAr = feat.properties?.nameAr || ''
-          const population = feat.properties?.population || ''
-          const populationMunicipale = feat.properties?.populationMunicipale || ''
-          const populationCompteeAPart = feat.properties?.populationCompteeAPart || ''
-          const menages = feat.properties?.menages || ''
-          const codeHCP = feat.properties?.codeHCP || ''
-          const sourcePopulation = feat.properties?.sourcePopulation || ''
-          const source = feat.properties?.source || ''
-          const sourceDecree = feat.properties?.sourceDecree || ''
-          const sourceGazette = feat.properties?.sourceGazette || ''
-
-          const formatNum = (n: string) => Number(n).toLocaleString('ar-MA')
-
-          layer.bindPopup(`
-            <div style="direction: rtl; text-align: right; min-width: 300px; font-family: inherit;">
-              <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
-                <div style="width: 16px; height: 16px; border-radius: 50%; background: ${color}; box-shadow: 0 2px 8px ${color}44;"></div>
-                <strong style="font-size: 16px; color: #1e293b;">${feat.properties?.name || ''}</strong>
-                ${isBouknadel ? '<span style="background:#7c3aed18;color:#7c3aed;padding:3px 10px;border-radius:12px;font-size:10px;font-weight:700;">مقر المكتب</span>' : ''}
-              </div>
-              <div style="background: linear-gradient(135deg, #f0fdf4, #ecfdf5); border-radius: 12px; padding: 12px; font-size: 12px; color: #166534; margin-bottom: 10px; border: 1px solid #bbf7d0;">
-                <div style="font-weight: 700; font-size: 11px; color: #15803d; margin-bottom: 8px; display: flex; align-items: center; gap: 4px;">📊 الإحصاء العام للسكان والسكنى 2024 — HCP</div>
-                ${population ? `<div style="margin-bottom: 4px; font-size: 16px; font-weight: 800; color: #1e293b;">👥 السكان القانونيون: ${formatNum(population)}</div>` : ''}
-                ${populationMunicipale ? `<div style="margin-bottom: 3px; font-size: 11px; color: #64748b;">المغاربة: ${formatNum(populationMunicipale)}</div>` : ''}
-                ${populationCompteeAPart ? `<div style="margin-bottom: 3px; font-size: 11px; color: #64748b;">🌍 الأجانب: ${formatNum(populationCompteeAPart)}</div>` : ''}
-                ${menages ? `<div style="margin-bottom: 3px; font-size: 11px; color: #64748b;">🏠 الأسر: ${formatNum(menages)}</div>` : ''}
-                ${codeHCP ? `<div style="margin-top: 6px; font-size: 10px; color: #94a3b8;">كود HCP: ${codeHCP}</div>` : ''}
-              </div>
-              <div style="background: #f8fafc; border-radius: 12px; padding: 10px; font-size: 12px; color: #64748b; margin-bottom: 10px; border: 1px solid #e2e8f0;">
-                ${nameAr ? `<div style="margin-bottom: 4px;">🇲🇦 الاسم المألوف: ${nameAr}</div>` : ''}
-                <div style="margin-bottom: 4px;">🇫🇷 ${nameFr}</div>
-                <div style="margin-bottom: 4px;">🇬🇧 ${nameEn}</div>
-              </div>
-              <div style="font-size: 10px; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 8px;">
-                🗺️ حدود ترابية — ${source.includes('قرار') ? `🇲🇦 ${source}` : source === 'الجريدة الرسمية' ? '🇲🇦 الجريدة الرسمية' : source}
-                ${sourceDecree ? `<br>📜 ${sourceDecree}` : ''}
-                ${sourceGazette ? `<br>📰 ${sourceGazette}` : ''}
-                ${sourcePopulation ? `<br>📊 سكان — ${sourcePopulation}` : ''}
-              </div>
-            </div>
-          `)
+          layer.bindPopup(buildCommunePopup(feat, color, isBouknadel), { maxWidth: 360, minWidth: 300 })
 
           // Hover effects
           layer.on('mouseover', () => {
@@ -322,6 +663,9 @@ export default function MapComponent({ interventions, quartiers, selectedCommune
 
     // ===== MAP CLICK HANDLER - ADD NEW INTERVENTION =====
     map.on('click', (e: L.LeafletMouseEvent) => {
+      // Check if map click is enabled via ref
+      if (!mapClickEnabledRef.current) return
+
       const { lat, lng } = e.latlng
       
       // Detect commune for clicked point
@@ -338,52 +682,10 @@ export default function MapComponent({ interventions, quartiers, selectedCommune
         zIndexOffset: 1000 
       })
 
-      const communeLabel = commune ? COMMUNE_NAME_MAP[commune] || commune : 'خارج حدود الجماعات'
-      const communeColor = commune === 'سيدي أبي القنادل' ? '#7c3aed' : commune === 'سلا' ? '#059669' : commune === 'عامر' ? '#d97706' : '#64748b'
+      // Build professional popup
+      const popupContent = buildNewInterventionPopup(lat, lng, commune)
 
-      // Create popup with "Add intervention" button
-      const popupContent = `
-        <div style="direction: rtl; text-align: right; min-width: 240px; font-family: inherit;">
-          <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
-            <div style="width: 32px; height: 32px; border-radius: 10px; background: linear-gradient(135deg, #059669, #10b981); display: flex; align-items: center; justify-content: center; color: white; font-size: 16px;">➕</div>
-            <div>
-              <strong style="font-size: 14px; color: #0f172a;">إضافة تدخل جديد</strong>
-              <div style="font-size: 11px; color: #64748b;">انقر على الزر لإنشاء تدخل في هذا الموقع</div>
-            </div>
-          </div>
-          <div style="background: #f0fdf4; border-radius: 10px; padding: 10px; margin-bottom: 12px; border: 1px solid #bbf7d0;">
-            <div style="font-size: 12px; color: #166534; margin-bottom: 4px;">
-              📍 <strong>الإحداثيات:</strong> ${lat.toFixed(6)}, ${lng.toFixed(6)}
-            </div>
-            <div style="font-size: 11px; color: #166534; display: flex; align-items: center; gap: 4px;">
-              🏛️ <strong>الجماعة:</strong> 
-              <span style="background: ${communeColor}18; color: ${communeColor}; padding: 2px 8px; border-radius: 8px; font-size: 10px; font-weight: 700;">${communeLabel}</span>
-            </div>
-          </div>
-          <button id="add-intervention-btn" style="
-            width: 100%;
-            background: linear-gradient(135deg, #059669, #10b981);
-            color: white;
-            border: none;
-            padding: 10px 16px;
-            border-radius: 12px;
-            font-size: 14px;
-            font-weight: 700;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 6px;
-            box-shadow: 0 4px 14px rgba(5,150,105,0.3);
-            transition: all 0.2s;
-            font-family: inherit;
-          " onmouseover="this.style.transform='scale(1.02)'; this.style.boxShadow='0 6px 20px rgba(5,150,105,0.4)'" onmouseout="this.style.transform='scale(1)'; this.style.boxShadow='0 4px 14px rgba(5,150,105,0.3)'">
-            ➕ إضافة تدخل في هذا الموقع
-          </button>
-        </div>
-      `
-
-      newMarker.bindPopup(popupContent, { maxWidth: 300, closeButton: true })
+      newMarker.bindPopup(popupContent, { maxWidth: 320, closeButton: true })
       newMarker.addTo(map)
       clickMarkerRef.current = newMarker
 
@@ -476,17 +778,7 @@ export default function MapComponent({ interventions, quartiers, selectedCommune
       if (selectedCommune !== 'ALL' && pointCommune !== selectedCommune) return
 
       const marker = L.marker([q.latitude, q.longitude], { icon: createQuartierIcon() })
-      marker.bindPopup(`
-        <div style="direction: rtl; text-align: right; min-width: 160px; font-family: inherit;">
-          <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
-            <div style="width:32px;height:32px;border-radius:10px;background:linear-gradient(135deg,#0d9488,#14b8a6);display:flex;align-items:center;justify-content:center;color:white;font-size:16px;">🏘️</div>
-            <div>
-              <strong style="font-size: 14px; color: #0f172a;">${q.nom}</strong>
-              <div style="font-size:11px;color:#64748b;">حي سكني — بوقنادل سلا</div>
-            </div>
-          </div>
-        </div>
-      `)
+      marker.bindPopup(buildQuartierPopup(q), { maxWidth: 280, minWidth: 220 })
       markersLayer.addLayer(marker)
     })
 
@@ -498,36 +790,8 @@ export default function MapComponent({ interventions, quartiers, selectedCommune
       const marker = L.marker([intervention.latitude, intervention.longitude], {
         icon: createInterventionIcon(intervention.type, intervention.statut),
       })
-      const dateStr = new Date(intervention.date).toLocaleDateString('ar-MA')
-      const color = TYPE_COLORS[intervention.type]
-      const statutColor = STATUT_COLORS[intervention.statut]
-      const statutLabel = STATUT_LABELS[intervention.statut]
 
-      marker.bindPopup(`
-        <div style="direction: rtl; text-align: right; min-width: 260px; font-family: inherit;">
-          <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
-            <div style="background: ${color}18; color: ${color}; padding: 4px 12px; border-radius: 14px; font-size: 12px; font-weight: 700;">
-              ${TYPE_ICONS[intervention.type]} ${TYPE_LABELS[intervention.type]}
-            </div>
-            <div style="background: ${statutColor}18; color: ${statutColor}; padding: 4px 10px; border-radius: 14px; font-size: 10px; font-weight: 700;">
-              ${statutLabel}
-            </div>
-          </div>
-          <div style="background: linear-gradient(135deg, #f8fafc, #f1f5f9); border-radius: 12px; padding: 12px; margin-bottom: 10px; border: 1px solid #e2e8f0;">
-            <div style="margin-bottom: 4px; font-weight: 700; color: #0f172a; font-size: 14px;">📍 ${intervention.quartier}</div>
-            <div style="margin-bottom: 4px; color: #64748b; font-size: 12px;">🏠 ${intervention.adresse}</div>
-            <div style="color: #64748b; font-size: 12px;">📅 ${dateStr}</div>
-          </div>
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; font-size: 12px;">
-            <div style="background:#f8fafc;border-radius:8px;padding:6px 8px;border:1px solid #f1f5f9;">👤 ${intervention.agentNom}</div>
-            <div style="background:#f8fafc;border-radius:8px;padding:6px 8px;border:1px solid #f1f5f9;">💊 ${intervention.produitUtilise || '—'}</div>
-            <div style="background:#f8fafc;border-radius:8px;padding:6px 8px;border:1px solid #f1f5f9;">📐 ${intervention.superficie || '—'}</div>
-            <div style="background:#f8fafc;border-radius:8px;padding:6px 8px;border:1px solid #f1f5f9;">🔢 ${intervention.quantite || '—'}</div>
-          </div>
-          ${intervention.observations ? `<div style="margin-top: 10px; padding: 8px 10px; background: #fffbeb; border-radius: 10px; font-size: 11px; color: #92400e; border: 1px solid #fef3c7;">💬 ${intervention.observations}</div>` : ''}
-          <div style="margin-top:8px;font-size:10px;color:#94a3b8;text-align:left;">${intervention.reference}</div>
-        </div>
-      `)
+      marker.bindPopup(buildInterventionPopup(intervention), { maxWidth: 340, minWidth: 280 })
       markersLayer.addLayer(marker)
     })
   }, [interventions, quartiers, selectedCommune])

@@ -370,6 +370,8 @@ export default function HomePage() {
               <motion.div key={currentView} variants={pageVariants} initial="initial" animate="animate" exit="exit">
                 {currentView === 'dashboard' && <DashboardView stats={stats} onNavigate={setCurrentView} selectedCommune={selectedCommune} />}
                 {currentView === 'map' && <MapView interventions={interventions} quartiers={quartiers} selectedCommune={selectedCommune} onMapClick={(lat, lng, commune) => {
+                  const { settings: currentSettings } = useAppStore.getState()
+                  if (!currentSettings.mapClickEnabled) return
                   setMapClickCoords({ latitude: lat, longitude: lng, commune })
                   setEditingInterventionId(null)
                   setIsFormOpen(true)
@@ -685,10 +687,10 @@ function DashboardView({ stats, onNavigate, selectedCommune }: { stats: Statisti
 // ===== MAP VIEW =====
 function MapView({ interventions, quartiers, selectedCommune, onMapClick }: { interventions: Intervention[]; quartiers: Quartier[]; selectedCommune: CommuneType | 'ALL'; onMapClick: (lat: number, lng: number, commune: string | null) => void }) {
   const [mapLoaded, setMapLoaded] = useState(false)
-  const [MapComponent, setMapComponent] = useState<React.ComponentType<{ interventions: Intervention[]; quartiers: Quartier[]; selectedCommune: string; onMapClick?: (lat: number, lng: number, commune: string | null) => void }> | null>(null)
+  const [MapComponent, setMapComponent] = useState<React.ComponentType<{ interventions: Intervention[]; quartiers: Quartier[]; selectedCommune: string; onMapClick?: (lat: number, lng: number, commune: string | null) => void; mapClickEnabled?: boolean }> | null>(null)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [hoveredCommune, setHoveredCommune] = useState<string | null>(null)
-  const { setSelectedCommune } = useAppStore()
+  const { setSelectedCommune, settings } = useAppStore()
 
   useEffect(() => {
     import('./map-component').then((mod) => {
@@ -932,7 +934,7 @@ function MapView({ interventions, quartiers, selectedCommune, onMapClick }: { in
 
       {/* Map Container */}
       <div className="flex-1 relative">
-        {mapLoaded && MapComponent ? <MapComponent interventions={interventions} quartiers={quartiers} selectedCommune={selectedCommune} onMapClick={onMapClick} /> : (
+        {mapLoaded && MapComponent ? <MapComponent interventions={interventions} quartiers={quartiers} selectedCommune={selectedCommune} onMapClick={onMapClick} mapClickEnabled={settings.mapClickEnabled} /> : (
           <div className="h-full flex items-center justify-center bg-slate-50">
             <div className="text-center space-y-4">
               <div className="w-14 h-14 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mx-auto" />
@@ -941,6 +943,7 @@ function MapView({ interventions, quartiers, selectedCommune, onMapClick }: { in
           </div>
         )}
         {/* Map click instruction overlay */}
+        {settings.mapClickEnabled && (
         <motion.div 
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -955,6 +958,7 @@ function MapView({ interventions, quartiers, selectedCommune, onMapClick }: { in
             </div>
           </div>
         </motion.div>
+        )}
       </div>
     </div>
   )
@@ -1406,6 +1410,22 @@ function SettingsView() {
                 </button>
               ))}
             </div>
+          </div>
+
+          <div className="border-t border-slate-100" />
+
+          {/* Map Click to Add */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <label className="text-sm font-semibold text-slate-700">📍 إضافة تدخل بالنقر على الخريطة</label>
+              <p className="text-xs text-slate-400 mt-0.5">تفعيل أو تعطيل إمكانية إضافة تدخل جديد بالضغط على موقع في الخريطة</p>
+            </div>
+            <button onClick={() => updateSettings({ mapClickEnabled: !settings.mapClickEnabled })}
+              className={`relative w-14 h-8 rounded-full transition-colors duration-300 ${settings.mapClickEnabled ? 'bg-emerald-500' : 'bg-slate-300'}`}>
+              <motion.div className="absolute top-1 w-6 h-6 bg-white rounded-full shadow-md"
+                animate={{ left: settings.mapClickEnabled ? '2rem' : '0.25rem' }}
+                transition={{ type: 'spring', stiffness: 500, damping: 30 }} />
+            </button>
           </div>
 
           <div className="border-t border-slate-100" />

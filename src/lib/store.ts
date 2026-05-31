@@ -7,6 +7,7 @@ export type CommuneType = 'سلا' | 'سيدي أبي القنادل' | 'عام�
 
 interface AppSettings {
   animationsEnabled: boolean
+  mapClickEnabled: boolean
   mapDefaultTile: 'light' | 'satellite'
   mapClusterRadius: number
   defaultCommune: CommuneType | 'ALL'
@@ -59,6 +60,7 @@ export function getYearOptions(yearsBack: number = 10): { value: string; label: 
 
 const DEFAULT_SETTINGS: AppSettings = {
   animationsEnabled: true,
+  mapClickEnabled: true,
   mapDefaultTile: 'light',
   mapClusterRadius: 50,
   defaultCommune: 'ALL',

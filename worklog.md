@@ -190,3 +190,34 @@ Stage Summary:
 - Colored badges appear on Dashboard, Interventions, and Reports views when filtered
 - Point-in-polygon algorithm accurately determines which commune each marker belongs to
 - Toggle behavior: clicking an already-selected commune returns to 'ALL'
+
+---
+Task ID: 10
+Agent: Sub Agent
+Task: Professional popup redesign + map click-to-add toggle setting
+
+Work Log:
+- Redesigned all 4 popup types in map-component.tsx with professional card-based design:
+  - **Commune popup**: Gradient header with commune name/office badge, 2-column census grid (Moroccans, foreigners, households, HCP code) inside green card, names section with flag icons, source footer with decree/gazette attribution
+  - **Quartier popup**: Gradient teal header with quartier name, coordinates card with green accent, location info card
+  - **Intervention popup**: Gradient header with type icon + reference + status badge, status/type badge pills with borders, location section with icon, 2x2 detail grid (agent, product, area, quantity) with labels, observations card, reference footer
+  - **New intervention popup**: Gradient green header, coordinates section with location badge, commune badge with colored pill, polished add button
+- Created reusable inline CSS helper functions: popupBase, popupCardShadow, gradientHeader(), sectionCard()
+- All popups use consistent design language: gradient headers with decorative circles, rounded card sections, subtle shadows, proper spacing and typography
+- Added `mapClickEnabled: boolean` to AppSettings interface in store.ts (default: true)
+- Added to DEFAULT_SETTINGS in store.ts
+- Added toggle switch in Settings page "إعدادات الخريطة" section for "إضافة تدخل بالنقر على الخريطة" with same style as animations toggle
+- Updated MapView to get `settings` from useAppStore(), pass `mapClickEnabled` prop to MapComponent
+- Conditional rendering of map click instruction overlay (only when mapClickEnabled is true)
+- Added mapClickEnabled check in onMapClick callback using useAppStore.getState()
+- Updated MapComponent props to accept `mapClickEnabled?: boolean`
+- Added mapClickEnabledRef pattern to avoid re-initializing the map when the setting changes
+- Map click handler checks mapClickEnabledRef.current before creating new intervention marker/popup
+- Lint clean with 0 errors, dev server running without errors
+
+Stage Summary:
+- All 4 map popup types redesigned with professional gradient header + card sections design
+- Consistent visual hierarchy, better typography, proper status/type badges with borders
+- Map click-to-add feature can now be toggled from Settings page
+- Setting persists in Zustand store with default enabled
+- When disabled: no click marker created, no instruction overlay, onMapClick callback blocked
