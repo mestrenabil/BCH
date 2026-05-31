@@ -44,37 +44,37 @@
 }
 
 :root {
-  --radius: 0.625rem;
-  --background: oklch(0.98 0.005 250);
-  --foreground: oklch(0.18 0.02 250);
+  --radius: 0.75rem;
+  --background: oklch(0.985 0.002 250);
+  --foreground: oklch(0.15 0.02 250);
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.18 0.02 250);
+  --card-foreground: oklch(0.15 0.02 250);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.18 0.02 250);
+  --popover-foreground: oklch(0.15 0.02 250);
   --primary: oklch(0.45 0.15 160);
   --primary-foreground: oklch(0.99 0 0);
   --secondary: oklch(0.96 0.01 160);
   --secondary-foreground: oklch(0.25 0.03 160);
-  --muted: oklch(0.95 0.01 250);
+  --muted: oklch(0.96 0.005 250);
   --muted-foreground: oklch(0.50 0.02 250);
-  --accent: oklch(0.92 0.03 160);
+  --accent: oklch(0.94 0.02 160);
   --accent-foreground: oklch(0.25 0.03 160);
   --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.90 0.01 250);
-  --input: oklch(0.90 0.01 250);
+  --border: oklch(0.92 0.005 250);
+  --input: oklch(0.92 0.005 250);
   --ring: oklch(0.45 0.15 160);
   --chart-1: oklch(0.55 0.18 160);
   --chart-2: oklch(0.60 0.15 45);
   --chart-3: oklch(0.50 0.20 280);
   --chart-4: oklch(0.65 0.12 80);
   --chart-5: oklch(0.55 0.22 340);
-  --sidebar: oklch(0.97 0.005 160);
-  --sidebar-foreground: oklch(0.18 0.02 250);
+  --sidebar: oklch(0.98 0.003 160);
+  --sidebar-foreground: oklch(0.15 0.02 250);
   --sidebar-primary: oklch(0.45 0.15 160);
   --sidebar-primary-foreground: oklch(0.99 0 0);
-  --sidebar-accent: oklch(0.92 0.03 160);
+  --sidebar-accent: oklch(0.94 0.02 160);
   --sidebar-accent-foreground: oklch(0.25 0.03 160);
-  --sidebar-border: oklch(0.90 0.01 250);
+  --sidebar-border: oklch(0.92 0.005 250);
   --sidebar-ring: oklch(0.45 0.15 160);
 }
 
@@ -129,22 +129,21 @@
 
 /* Custom scrollbar */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
 }
 
 ::-webkit-scrollbar-track {
-  background: oklch(0.95 0 0);
-  border-radius: 3px;
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: oklch(0.75 0 0);
-  border-radius: 3px;
+  background: oklch(0.80 0 0);
+  border-radius: 10px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: oklch(0.60 0 0);
+  background: oklch(0.65 0 0);
 }
 
 /* Leaflet popup RTL */
@@ -152,10 +151,42 @@
   direction: rtl;
   text-align: right;
   font-family: inherit;
-  border-radius: 12px !important;
+  border-radius: 16px !important;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.12) !important;
+  border: 1px solid #f1f5f9 !important;
 }
 
 .leaflet-popup-content {
-  margin: 12px 16px !important;
-  line-height: 1.6 !important;
+  margin: 14px 18px !important;
+  line-height: 1.7 !important;
+}
+
+.leaflet-popup-tip {
+  box-shadow: none !important;
+}
+
+/* Marker cluster custom */
+.marker-cluster-small div,
+.marker-cluster-medium div,
+.marker-cluster-large div {
+  background: transparent !important;
+}
+
+/* Recharts tooltip */
+.recharts-default-tooltip {
+  direction: rtl !important;
+  border-radius: 12px !important;
+  border: none !important;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.1) !important;
+}
+
+/* Professional smooth scrolling */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Selection color */
+::selection {
+  background: oklch(0.55 0.18 160 / 0.2);
+  color: oklch(0.25 0.03 160);
 }
