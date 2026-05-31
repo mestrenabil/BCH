@@ -927,7 +927,7 @@ export default function MapComponent({ interventions, quartiers, selectedCommune
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(data),
               })
-              .then(res => {
+              .then(async (res) => {
                 if (res.ok) {
                   // Show success
                   const statusEl = document.getElementById('popup-form-status')
@@ -950,12 +950,9 @@ export default function MapComponent({ interventions, quartiers, selectedCommune
                     }
                   }, 1200)
                 } else {
-                  // Try to get error details
-                  return res.json().then(errData => {
-                    throw new Error(errData.error || 'Failed')
-                  }).catch(() => {
-                    throw new Error('Failed')
-                  })
+                  const errData = await res.json().catch(() => ({})) as { error?: string }
+                  const errMsg = errData?.error || `خطأ في الخادم (${res.status})`
+                  throw new Error(errMsg)
                 }
               })
               .catch((err) => {
@@ -966,13 +963,13 @@ export default function MapComponent({ interventions, quartiers, selectedCommune
                   statusEl.style.background = '#fef2f2'
                   statusEl.style.color = '#dc2626'
                   statusEl.style.border = '1px solid #fecaca'
-                  statusEl.textContent = '❌ حدث خطأ أثناء الحفظ'
+                  statusEl.textContent = '❌ ' + (err instanceof Error ? err.message : 'حدث خطأ أثناء الحفظ')
                 }
-                const btn = document.getElementById('save-intervention-btn') as HTMLButtonElement | null
-                if (btn) {
-                  btn.disabled = false
-                  btn.style.opacity = '1'
-                  btn.innerHTML = '💾 حفظ التدخل'
+                const saveBtn = document.getElementById('save-intervention-btn') as HTMLButtonElement | null
+                if (saveBtn) {
+                  saveBtn.disabled = false
+                  saveBtn.style.opacity = '1'
+                  saveBtn.innerHTML = '💾 حفظ التدخل'
                 }
               })
             }

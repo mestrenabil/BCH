@@ -65,21 +65,47 @@ export async function POST(request: NextRequest) {
       superficie, nombrePrestations, observations,
     } = body
 
-    // Generate reference
+    // Validate required fields
+    if (!type || !date || !quartier || !agentNom || !statut) {
+      return NextResponse.json({ error: 'يرجى ملء جميع الحقول المطلوبة' }, { status: 400 })
+    }
+
+    // Generate unique reference with retry logic
     const year = new Date(date).getFullYear()
     const prefix = type === 'DERATISATION' ? 'DR' : type === 'DESINSECTISATION' ? 'DI' : 'DF'
-    const count = await db.intervention.count({ where: { type } })
-    const reference = `${prefix}-${year}-${String(count + 1).padStart(4, '0')}`
+    
+    let reference = ''
+    let created = false
+    let attempts = 0
+    
+    while (!created && attempts < 5) {
+      attempts++
+      const count = await db.intervention.count({ where: { type } })
+      const seq = String(count + attempts).padStart(4, '0')
+      reference = `${prefix}-${year}-${seq}`
+      
+      // Check if this reference already exists
+      const existing = await db.intervention.findUnique({ where: { reference } })
+      if (!existing) {
+        created = true
+      }
+    }
+    
+    if (!created) {
+      // Fallback: use timestamp-based reference
+      const timestamp = Date.now().toString(36).toUpperCase()
+      reference = `${prefix}-${year}-${timestamp}`
+    }
 
     const intervention = await db.intervention.create({
       data: {
         type,
         date: new Date(date),
         quartier,
-        adresse,
+        adresse: adresse || '',
         commune: commune || '',
-        latitude: parseFloat(latitude),
-        longitude: parseFloat(longitude),
+        latitude: parseFloat(latitude) || 0,
+        longitude: parseFloat(longitude) || 0,
         statut,
         description: description || '',
         agentNom,
