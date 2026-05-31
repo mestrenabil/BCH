@@ -227,8 +227,8 @@ export default function MapComponent({ interventions, quartiers, selectedCommune
               <div style="background: #f0fdf4; border-radius: 10px; padding: 10px; font-size: 12px; color: #166534; margin-bottom: 8px; border: 1px solid #bbf7d0;">
                 <div style="font-weight: 700; font-size: 11px; color: #15803d; margin-bottom: 6px; display: flex; align-items: center; gap: 4px;">📊 الإحصاء العام للسكان والسكنى 2024 — HCP</div>
                 ${population ? `<div style="margin-bottom: 3px; font-size: 14px; font-weight: 700; color: #1e293b;">👥 السكان القانونيون: ${formatNum(population)}</div>` : ''}
-                ${populationMunicipale ? `<div style="margin-bottom: 2px; font-size: 11px; color: #64748b;">السكان البلديون: ${formatNum(populationMunicipale)}</div>` : ''}
-                ${populationCompteeAPart ? `<div style="margin-bottom: 2px; font-size: 11px; color: #64748b;">السكان المحسوبون على حدة: ${formatNum(populationCompteeAPart)}</div>` : ''}
+                ${populationMunicipale ? `<div style="margin-bottom: 2px; font-size: 11px; color: #64748b;">🇲🇦 المغاربة: ${formatNum(populationMunicipale)}</div>` : ''}
+                ${populationCompteeAPart ? `<div style="margin-bottom: 2px; font-size: 11px; color: #64748b;">🌍 الأجانب: ${formatNum(populationCompteeAPart)}</div>` : ''}
                 ${menages ? `<div style="margin-bottom: 2px; font-size: 11px; color: #64748b;">🏠 الأسر: ${formatNum(menages)}</div>` : ''}
                 ${codeHCP ? `<div style="margin-top: 4px; font-size: 10px; color: #94a3b8;">كود HCP: ${codeHCP}</div>` : ''}
               </div>
