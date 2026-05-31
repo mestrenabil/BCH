@@ -36,12 +36,25 @@ interface AppState {
   resetSettings: () => void
 }
 
+export const CURRENT_YEAR = new Date().getFullYear().toString()
+export const CURRENT_YEAR_NUM = new Date().getFullYear()
+
+/** Generate year options from current year back to N years */
+export function getYearOptions(yearsBack: number = 10): { value: string; label: string }[] {
+  const current = new Date().getFullYear()
+  const options: { value: string; label: string }[] = []
+  for (let y = current; y >= current - yearsBack; y--) {
+    options.push({ value: y.toString(), label: y.toString() })
+  }
+  return options
+}
+
 const DEFAULT_SETTINGS: AppSettings = {
   animationsEnabled: true,
   mapDefaultTile: 'light',
   mapClusterRadius: 50,
   defaultCommune: 'ALL',
-  defaultYear: '2025',
+  defaultYear: CURRENT_YEAR,
   interventionsPerPage: 50,
 }
 
@@ -50,7 +63,7 @@ export const useAppStore = create<AppState>((set) => ({
   setCurrentView: (view) => set({ currentView: view }),
   selectedType: 'ALL',
   setSelectedType: (type) => set({ selectedType: type }),
-  selectedYear: '2025',
+  selectedYear: CURRENT_YEAR,
   setSelectedYear: (year) => set({ selectedYear: year }),
   selectedCommune: 'ALL',
   setSelectedCommune: (commune) => set({ selectedCommune: commune }),

@@ -7,7 +7,7 @@ import {
   PieChart, Pie, Cell, AreaChart, Area, RadarChart, Radar, PolarGrid,
   PolarAngleAxis, PolarRadiusAxis,
 } from 'recharts'
-import { useAppStore, type ViewType, type InterventionType, type CommuneType } from '@/lib/store'
+import { useAppStore, type ViewType, type InterventionType, type CommuneType, getYearOptions } from '@/lib/store'
 import { toast } from 'sonner'
 
 // ===== TYPE DEFINITIONS =====
@@ -141,7 +141,7 @@ export default function HomePage() {
         const totalRes = await fetch('/api/statistics')
         const totalData = await totalRes.json()
         if (totalData.total === 0) await seedDatabase()
-        const yearRes = await fetch(`/api/statistics?year=2025`)
+        const yearRes = await fetch(`/api/statistics?year=${new Date().getFullYear()}`)
         const yearData = await yearRes.json()
         setStats(yearData)
         setQuartiers(yearData.quartiers || [])
@@ -196,8 +196,9 @@ export default function HomePage() {
                 <select value={selectedYear} onChange={(e) => setSelectedYear(e.target.value)}
                   className="bg-transparent text-sm font-bold outline-none cursor-pointer">
                   <option value="" className="text-black">الكل</option>
-                  <option value="2025" className="text-black">2025</option>
-                  <option value="2024" className="text-black">2024</option>
+                  {getYearOptions(10).map((y) => (
+                    <option key={y.value} value={y.value} className="text-black">{y.label}</option>
+                  ))}
                 </select>
               </div>
               <div className="hidden sm:flex items-center gap-2 bg-white/10 backdrop-blur-sm rounded-xl px-3 py-2 border border-white/10">
@@ -1126,8 +1127,9 @@ function SettingsView() {
             <select value={settings.defaultYear} onChange={(e) => updateSettings({ defaultYear: e.target.value })}
               className="px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-300 w-full sm:w-40">
               <option value="">الكل</option>
-              <option value="2025">2025</option>
-              <option value="2024">2024</option>
+              {getYearOptions(10).map((y) => (
+                <option key={y.value} value={y.value}>{y.label}</option>
+              ))}
             </select>
           </div>
 
