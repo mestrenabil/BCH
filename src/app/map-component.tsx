@@ -3,6 +3,9 @@
 import React, { useEffect, useRef } from 'react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
+import 'leaflet.markercluster/dist/MarkerCluster.css'
+import 'leaflet.markercluster/dist/MarkerCluster.Default.css'
+import 'leaflet.markercluster'
 import COMMUNES_GEOJSON from './communes-data'
 
 interface Intervention {
@@ -50,6 +53,41 @@ function createQuartierIcon(): L.DivIcon {
   })
 }
 
+// Safe marker cluster group creation with fallback to regular layer group
+function createMarkerClusterGroup(): L.LayerGroup {
+  try {
+    if (typeof L.markerClusterGroup === 'function') {
+      return L.markerClusterGroup({
+        maxClusterRadius: 50,
+        spiderfyOnMaxZoom: true,
+        showCoverageOnHover: false,
+        zoomToBoundsOnClick: true,
+        iconCreateFunction: (cluster: L.MarkerCluster) => {
+          const count = cluster.getChildCount()
+          const size = count < 10 ? 36 : count < 50 ? 44 : 52
+          const color = count < 10 ? '#10b981' : count < 50 ? '#f59e0b' : '#ef4444'
+          return L.divIcon({
+            html: `<div style="
+              background: ${color};
+              width: ${size}px; height: ${size}px; border-radius: 50%;
+              display: flex; align-items: center; justify-content: center;
+              color: white; font-weight: 700; font-size: 13px;
+              border: 3px solid white;
+              box-shadow: 0 3px 14px rgba(0,0,0,0.25);
+            ">${count}</div>`,
+            className: '',
+            iconSize: [size, size],
+            iconAnchor: [size / 2, size / 2],
+          })
+        },
+      })
+    }
+  } catch (e) {
+    console.warn('MarkerCluster not available, falling back to LayerGroup:', e)
+  }
+  return L.layerGroup()
+}
+
 export default function MapComponent({ interventions, quartiers }: { interventions: Intervention[]; quartiers: Quartier[] }) {
   const mapRef = useRef<L.Map | null>(null)
   const mapContainerRef = useRef<HTMLDivElement>(null)
@@ -85,15 +123,16 @@ export default function MapComponent({ interventions, quartiers }: { interventio
     COMMUNES_GEOJSON.features.forEach((feature) => {
       const props = feature.properties
       const color = props.color || '#059669'
+      const isBouknadel = props.nameFr?.includes('Bouknadel') || props.nameAr?.includes('بوقنادل')
 
       const polygon = L.geoJSON(feature as GeoJSON.Feature, {
         style: {
           color: color,
-          weight: 3,
-          opacity: 0.9,
+          weight: isBouknadel ? 4 : 2.5,
+          opacity: isBouknadel ? 1 : 0.7,
           fillColor: color,
-          fillOpacity: 0.08,
-          dashArray: props.nameFr?.includes('Bouknadel') ? '0' : '5, 5',
+          fillOpacity: isBouknadel ? 0.12 : 0.06,
+          dashArray: isBouknadel ? '0' : '6, 4',
         },
         onEachFeature: (feat, layer) => {
           // Add commune name label at center
@@ -105,9 +144,9 @@ export default function MapComponent({ interventions, quartiers }: { interventio
               html: `<div style="
                 background: ${color}ee;
                 color: white;
-                padding: 6px 14px;
+                padding: ${isBouknadel ? '8px 18px' : '6px 14px'};
                 border-radius: 20px;
-                font-size: 12px;
+                font-size: ${isBouknadel ? '13px' : '11px'};
                 font-weight: 700;
                 white-space: nowrap;
                 box-shadow: 0 2px 12px ${color}66;
@@ -125,31 +164,37 @@ export default function MapComponent({ interventions, quartiers }: { interventio
           // Popup with detailed info
           const nameFr = feat.properties?.nameFr || ''
           const nameEn = feat.properties?.nameEn || ''
+          const nameAr = feat.properties?.nameAr || ''
           const population = feat.properties?.population || ''
           const osmId = feat.properties?.osmId || ''
+          const wikidata = feat.properties?.wikidata || ''
+          const adminLevel = feat.properties?.adminLevel || ''
           layer.bindPopup(`
-            <div style="direction: rtl; text-align: right; min-width: 240px; font-family: inherit;">
+            <div style="direction: rtl; text-align: right; min-width: 260px; font-family: inherit;">
               <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px;">
                 <div style="width: 14px; height: 14px; border-radius: 50%; background: ${color};"></div>
                 <strong style="font-size: 15px; color: #1e293b;">${feat.properties?.name || ''}</strong>
+                ${isBouknadel ? '<span style="background:#7c3aed18;color:#7c3aed;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;">مقر المكتب</span>' : ''}
               </div>
               <div style="background: #f8fafc; border-radius: 10px; padding: 10px; font-size: 12px; color: #64748b; margin-bottom: 8px;">
+                ${nameAr ? `<div style="margin-bottom: 4px;">🇲🇦 ${nameAr}</div>` : ''}
                 <div style="margin-bottom: 4px;">🇫🇷 ${nameFr}</div>
                 <div style="margin-bottom: 4px;">🇬🇧 ${nameEn}</div>
                 ${population ? `<div style="margin-bottom: 4px;">👥 سكان: ${population}</div>` : ''}
+                ${adminLevel ? `<div style="margin-bottom: 4px;">🏛️ المستوى الإداري: ${adminLevel}</div>` : ''}
               </div>
               <div style="font-size: 10px; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 6px;">
-                🗺️ حدود ترابية — بيانات OpenStreetMap (OSM ID: ${osmId})
+                🗺️ حدود ترابية — بيانات OpenStreetMap (OSM ID: ${osmId}${wikidata ? ` | Wikidata: ${wikidata}` : ''})
               </div>
             </div>
           `)
 
           // Hover effects
           layer.on('mouseover', () => {
-            layer.setStyle({ fillOpacity: 0.2, weight: 4 })
+            layer.setStyle({ fillOpacity: isBouknadel ? 0.22 : 0.15, weight: isBouknadel ? 5 : 3.5 })
           })
           layer.on('mouseout', () => {
-            layer.setStyle({ fillOpacity: 0.08, weight: 3 })
+            layer.setStyle({ fillOpacity: isBouknadel ? 0.12 : 0.06, weight: isBouknadel ? 4 : 2.5 })
           })
         },
       })
@@ -166,8 +211,8 @@ export default function MapComponent({ interventions, quartiers }: { interventio
       { position: 'bottomleft' }
     ).addTo(map)
 
-    // ===== ADD MARKERS LAYER =====
-    const markersLayer = L.layerGroup()
+    // ===== ADD MARKERS LAYER (with clustering) =====
+    const markersLayer = createMarkerClusterGroup()
     markersLayerRef.current = markersLayer
     markersLayer.addTo(map)
 

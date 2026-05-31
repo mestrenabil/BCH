@@ -620,7 +620,7 @@ function MapView({ interventions, quartiers }: { interventions: Intervention[]; 
   }, [])
 
   const COMMUNE_COLORS: Record<string, string> = {
-    'جماعة سلا': '#059669', 'جماعة سيدي أبي القنادل': '#7c3aed', 'جماعة عامر': '#d97706',
+    'جماعة سلا': '#059669', 'جماعة سيدي بوقنادل': '#7c3aed', 'جماعة عامر': '#d97706',
   }
 
   return (
@@ -638,7 +638,7 @@ function MapView({ interventions, quartiers }: { interventions: Intervention[]; 
                 <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: color }} />
               </div>
               <span className="text-slate-600 font-medium">{name}</span>
-              {name === 'جماعة سيدي أبي القنادل' && <span className="text-[9px] bg-violet-100 text-violet-700 px-1.5 py-0.5 rounded-full font-bold">بوقنادل</span>}
+              {name === 'جماعة سيدي بوقنادل' && <span className="text-[9px] bg-violet-100 text-violet-700 px-1.5 py-0.5 rounded-full font-bold">مقر المكتب</span>}
             </div>
           ))}
         </div>
