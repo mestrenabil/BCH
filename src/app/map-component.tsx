@@ -855,10 +855,7 @@ export default function MapComponent({ interventions, quartiers, selectedCommune
       newMarker.addTo(map)
       clickMarkerRef.current = newMarker
 
-      // Open popup immediately
-      newMarker.openPopup()
-
-      // Listen for popup open to attach form submit handler
+      // Register popupopen handler BEFORE opening the popup
       newMarker.on('popupopen', () => {
         setTimeout(() => {
           const form = document.getElementById('new-intervention-form') as HTMLFormElement | null
@@ -866,13 +863,13 @@ export default function MapComponent({ interventions, quartiers, selectedCommune
             form.onsubmit = (e) => {
               e.preventDefault()
               const formData = new FormData(form)
-              const selectedCommune = formData.get('commune') as string || ''
+              const formCommune = formData.get('commune') as string || ''
               const data: Record<string, string> = {
                 type: formData.get('type') as string || 'DERATISATION',
                 date: formData.get('date') as string || new Date().toISOString().split('T')[0],
                 quartier: formData.get('quartier') as string || '',
                 adresse: formData.get('adresse') as string || '',
-                commune: selectedCommune,
+                commune: formCommune || commune || '',
                 latitude: lat.toString(),
                 longitude: lng.toString(),
                 statut: formData.get('statut') as string || 'PLANIFIEE',
@@ -899,7 +896,7 @@ export default function MapComponent({ interventions, quartiers, selectedCommune
               }
 
               // Validate commune when outside boundaries
-              if (!commune && !selectedCommune) {
+              if (!commune && !formCommune) {
                 const statusEl = document.getElementById('popup-form-status')
                 if (statusEl) {
                   statusEl.style.display = 'block'
@@ -953,10 +950,16 @@ export default function MapComponent({ interventions, quartiers, selectedCommune
                     }
                   }, 1200)
                 } else {
-                  throw new Error('Failed')
+                  // Try to get error details
+                  return res.json().then(errData => {
+                    throw new Error(errData.error || 'Failed')
+                  }).catch(() => {
+                    throw new Error('Failed')
+                  })
                 }
               })
-              .catch(() => {
+              .catch((err) => {
+                console.error('Save intervention error:', err)
                 const statusEl = document.getElementById('popup-form-status')
                 if (statusEl) {
                   statusEl.style.display = 'block'
@@ -965,6 +968,7 @@ export default function MapComponent({ interventions, quartiers, selectedCommune
                   statusEl.style.border = '1px solid #fecaca'
                   statusEl.textContent = '❌ حدث خطأ أثناء الحفظ'
                 }
+                const btn = document.getElementById('save-intervention-btn') as HTMLButtonElement | null
                 if (btn) {
                   btn.disabled = false
                   btn.style.opacity = '1'
@@ -975,6 +979,9 @@ export default function MapComponent({ interventions, quartiers, selectedCommune
           }
         }, 100)
       })
+
+      // Open popup AFTER registering the event handler
+      newMarker.openPopup()
     })
 
     mapRef.current = map
