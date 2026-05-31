@@ -530,10 +530,11 @@ function buildNewInterventionPopup(lat: number, lng: number, commune: string | n
   `
 }
 
-export default function MapComponent({ interventions, quartiers, selectedCommune, onMapClick, mapClickEnabled }: { 
+export default function MapComponent({ interventions, quartiers, selectedCommune, onMapClick, mapClickEnabled, showCommunePopups }: { 
   interventions: Intervention[]; quartiers: Quartier[]; selectedCommune: string;
   onMapClick?: (lat: number, lng: number, commune: string | null) => void;
   mapClickEnabled?: boolean;
+  showCommunePopups?: boolean;
 }) {
   const mapRef = useRef<L.Map | null>(null)
   const mapContainerRef = useRef<HTMLDivElement>(null)
@@ -544,6 +545,7 @@ export default function MapComponent({ interventions, quartiers, selectedCommune
   const clickMarkerRef = useRef<L.Marker | null>(null)
   const onMapClickRef = useRef(onMapClick)
   const mapClickEnabledRef = useRef(mapClickEnabled ?? true)
+  const showCommunePopupsRef = useRef(showCommunePopups ?? true)
 
   // Keep the callback ref up-to-date
   useEffect(() => {
@@ -554,6 +556,11 @@ export default function MapComponent({ interventions, quartiers, selectedCommune
   useEffect(() => {
     mapClickEnabledRef.current = mapClickEnabled ?? true
   }, [mapClickEnabled])
+
+  // Keep the showCommunePopups ref up-to-date
+  useEffect(() => {
+    showCommunePopupsRef.current = showCommunePopups ?? true
+  }, [showCommunePopups])
 
   useEffect(() => {
     if (!mapContainerRef.current || mapRef.current) return
@@ -631,8 +638,10 @@ export default function MapComponent({ interventions, quartiers, selectedCommune
           label.addTo(communeLayerGroup)
           communeLabelsRef.current.push(label)
 
-          // Professional popup
-          layer.bindPopup(buildCommunePopup(feat, color, isBouknadel), { maxWidth: 360, minWidth: 300 })
+          // Professional popup (conditional)
+          if (showCommunePopupsRef.current) {
+            layer.bindPopup(buildCommunePopup(feat, color, isBouknadel), { maxWidth: 360, minWidth: 300 })
+          }
 
           // Hover effects
           layer.on('mouseover', () => {
@@ -765,6 +774,30 @@ export default function MapComponent({ interventions, quartiers, selectedCommune
       }
     }
   }, [selectedCommune])
+
+  // Toggle commune popups when setting changes
+  useEffect(() => {
+    const communeLayers = communeLayersRef.current
+    const show = showCommunePopups ?? true
+
+    Object.entries(communeLayers).forEach(([key, geoJsonLayer]) => {
+      geoJsonLayer.eachLayer((layer) => {
+        const l = layer as L.GeoJSON
+        if (show) {
+          const feature = COMMUNES_GEOJSON.features.find(f => f.properties.name === COMMUNE_NAME_MAP[key])
+          const color = feature?.properties.color || '#059669'
+          const isBouknadel = key === 'سيدي أبي القنادل'
+          if (!l.getPopup()) {
+            l.bindPopup(buildCommunePopup(feature as GeoJSON.Feature, color, isBouknadel), { maxWidth: 360, minWidth: 300 })
+          }
+        } else {
+          if (l.getPopup()) {
+            l.unbindPopup()
+          }
+        }
+      })
+    })
+  }, [showCommunePopups])
 
   // Update markers
   useEffect(() => {
