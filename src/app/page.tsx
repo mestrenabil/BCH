@@ -1595,7 +1595,7 @@ function InterventionFormDialog({ interventionId, quartiers, mapClickCoords, onC
 }) {
   const [formData, setFormData] = useState({
     type: 'DERATISATION', date: new Date().toISOString().split('T')[0],
-    quartier: '', adresse: '', 
+    quartier: '', adresse: '', commune: mapClickCoords?.commune || '',
     latitude: mapClickCoords ? mapClickCoords.latitude.toString() : '34.052', 
     longitude: mapClickCoords ? mapClickCoords.longitude.toString() : '-6.735',
     statut: 'PLANIFIEE', description: '', agentNom: '', produitUtilise: '',
@@ -1604,13 +1604,14 @@ function InterventionFormDialog({ interventionId, quartiers, mapClickCoords, onC
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isLoadingData, setIsLoadingData] = useState(false)
 
-  // When mapClickCoords changes, update the form's latitude/longitude
+  // When mapClickCoords changes, update the form's latitude/longitude/commune
   useEffect(() => {
     if (mapClickCoords && !interventionId) {
       setFormData(prev => ({
         ...prev,
         latitude: mapClickCoords.latitude.toString(),
         longitude: mapClickCoords.longitude.toString(),
+        commune: mapClickCoords.commune || prev.commune,
       }))
     }
   }, [mapClickCoords, interventionId])
@@ -1621,7 +1622,7 @@ function InterventionFormDialog({ interventionId, quartiers, mapClickCoords, onC
       fetch(`/api/interventions/${interventionId}`).then(res => res.json()).then(data => {
         setFormData({
           type: data.type, date: new Date(data.date).toISOString().split('T')[0],
-          quartier: data.quartier, adresse: data.adresse,
+          quartier: data.quartier, adresse: data.adresse, commune: data.commune || '',
           latitude: data.latitude.toString(), longitude: data.longitude.toString(),
           statut: data.statut, description: data.description || '', agentNom: data.agentNom,
           produitUtilise: data.produitUtilise || '', quantite: data.quantite || '',
@@ -1718,18 +1719,31 @@ function InterventionFormDialog({ interventionId, quartiers, mapClickCoords, onC
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-1.5">
+                  🏛️ الجماعة
+                  {mapClickCoords && !mapClickCoords.commune && !interventionId && <span className="text-[10px] text-amber-500 mr-1">⚠️ مطلوبة</span>}
+                </label>
+                <select value={formData.commune} onChange={(e) => updateField('commune', e.target.value)}
+                  className={`w-full px-3 py-2.5 rounded-xl border text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-300 ${mapClickCoords && !mapClickCoords.commune && !interventionId ? 'border-amber-300 bg-amber-50/50' : 'border-slate-200 bg-white'}`}>
+                  <option value="">— اختر الجماعة —</option>
+                  <option value="سلا">جماعة سلا</option>
+                  <option value="سيدي أبي القنادل">جماعة سيدي أبي القنادل</option>
+                  <option value="عامر">جماعة عامر</option>
+                </select>
+              </div>
+              <div>
                 <label className="block text-sm font-semibold text-slate-700 mb-1.5">التاريخ *</label>
                 <input type="date" value={formData.date} onChange={(e) => updateField('date', e.target.value)} required
                   className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-300" />
               </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-semibold text-slate-700 mb-1.5">اسم العون *</label>
                 <input type="text" value={formData.agentNom} onChange={(e) => updateField('agentNom', e.target.value)} required
                   placeholder="اسم العون المكلف"
                   className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-300" />
               </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-semibold text-slate-700 mb-1.5">الحي *</label>
                 <select value={formData.quartier} onChange={(e) => updateField('quartier', e.target.value)} required

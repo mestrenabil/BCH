@@ -505,9 +505,18 @@ const requiredStar = `<span style="color:#ef4444;font-size:11px;margin-right:2px
 function buildNewInterventionPopup(lat: number, lng: number, commune: string | null, quartiers: Quartier[]): string {
   const communeLabel = commune ? COMMUNE_NAME_MAP[commune] || commune : 'خارج حدود الجماعات'
   const communeColor = commune === 'سيدي أبي القنادل' ? '#7c3aed' : commune === 'سلا' ? '#059669' : commune === 'عامر' ? '#d97706' : '#64748b'
+  const isOutsideCommune = !commune
   const today = new Date().toISOString().split('T')[0]
 
   const quartierOptions = quartiers.map(q => `<option value="${q.nom}">${q.nom}</option>`).join('')
+
+  // Commune select options - auto-select detected commune
+  const communeSelectOptions = [
+    `<option value="" ${!commune ? 'selected' : ''}>— اختر الجماعة —</option>`,
+    `<option value="سلا" ${commune === 'سلا' ? 'selected' : ''}>جماعة سلا</option>`,
+    `<option value="سيدي أبي القنادل" ${commune === 'سيدي أبي القنادل' ? 'selected' : ''}>جماعة سيدي أبي القنادل</option>`,
+    `<option value="عامر" ${commune === 'عامر' ? 'selected' : ''}>جماعة عامر</option>`,
+  ].join('')
 
   const headerContent = `
     <div style="display:flex;align-items:center;gap:10px;position:relative;z-index:1;">
@@ -519,15 +528,33 @@ function buildNewInterventionPopup(lat: number, lng: number, commune: string | n
     </div>
   `
 
+  // Warning banner when outside commune boundaries
+  const outsideWarning = isOutsideCommune ? `
+    <div style="display:flex;align-items:center;gap:6px;background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:8px 10px;margin-bottom:10px;">
+      <div style="width:24px;height:24px;border-radius:7px;background:#f59e0b;display:flex;align-items:center;justify-content:center;font-size:12px;color:white;flex-shrink:0;">⚠️</div>
+      <div style="flex:1;">
+        <div style="font-size:10px;font-weight:700;color:#92400e;">هذا الموقع خارج حدود الجماعات المعروفة</div>
+        <div style="font-size:9px;color:#b45309;margin-top:1px;">يرجى تحديد الجماعة يدوياً</div>
+      </div>
+    </div>
+  ` : ''
+
+  // Commune confirmation bar when inside a commune
+  const communeConfirmBar = !isOutsideCommune ? `
+    <div style="display:flex;align-items:center;gap:6px;background:${communeColor}08;border:1px solid ${communeColor}20;border-radius:10px;padding:8px 10px;margin-bottom:10px;">
+      <div style="width:24px;height:24px;border-radius:7px;background:${communeColor};display:flex;align-items:center;justify-content:center;font-size:12px;color:white;flex-shrink:0;">🏛️</div>
+      <div style="flex:1;">
+        <div style="font-size:10px;font-weight:700;color:${communeColor};">تم تحديد الجماعة تلقائياً</div>
+        <div style="font-size:9px;color:#64748b;margin-top:1px;">يمكنك تعديلها إذا لزم الأمر</div>
+      </div>
+    </div>
+  ` : ''
+
   const coordsBar = `
     <div style="display:flex;align-items:center;gap:6px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:8px 10px;margin-bottom:10px;">
       <div style="width:24px;height:24px;border-radius:7px;background:#059669;display:flex;align-items:center;justify-content:center;font-size:12px;color:white;flex-shrink:0;">📍</div>
       <div style="flex:1;min-width:0;">
         <div style="font-size:11px;color:#115e59;font-weight:700;direction:ltr;text-align:right;">${lat.toFixed(6)}, ${lng.toFixed(6)}</div>
-        <div style="display:flex;align-items:center;gap:4px;margin-top:2px;">
-          <span style="font-size:10px;">🏛️</span>
-          <span style="background:${communeColor}15;color:${communeColor};padding:1px 7px;border-radius:12px;font-size:9px;font-weight:700;border:1px solid ${communeColor}25;">${communeLabel}</span>
-        </div>
       </div>
     </div>
   `
@@ -535,6 +562,15 @@ function buildNewInterventionPopup(lat: number, lng: number, commune: string | n
   const formContent = `
     <form id="new-intervention-form" onsubmit="return false;" style="margin:0;">
       ${coordsBar}
+      ${outsideWarning}
+      ${communeConfirmBar}
+
+      <div style="margin-bottom:8px;">
+        <label style="${labelStyle}">${isOutsideCommune ? requiredStar : ''}🏛️ الجماعة</label>
+        <select name="commune" id="popup-commune-select" style="${selectStyle} ${isOutsideCommune ? 'border-color:#f59e0b;background:#fffbeb;' : `border-color:${communeColor}40;`}">
+          ${communeSelectOptions}
+        </select>
+      </div>
 
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
         <div>
@@ -635,8 +671,8 @@ function buildNewInterventionPopup(lat: number, lng: number, commune: string | n
   return `
     <div style="${popupBase} min-width:340px;max-width:400px;">
       <div style="${popupCardShadow}">
-        ${gradientHeader('#059669', '#10b981', headerContent)}
-        <div style="padding:12px;max-height:420px;overflow-y:auto;">
+        ${gradientHeader(isOutsideCommune ? '#d97706' : '#059669', isOutsideCommune ? '#f59e0b' : '#10b981', headerContent)}
+        <div style="padding:12px;max-height:450px;overflow-y:auto;">
           ${formContent}
         </div>
       </div>
@@ -830,11 +866,13 @@ export default function MapComponent({ interventions, quartiers, selectedCommune
             form.onsubmit = (e) => {
               e.preventDefault()
               const formData = new FormData(form)
+              const selectedCommune = formData.get('commune') as string || ''
               const data: Record<string, string> = {
                 type: formData.get('type') as string || 'DERATISATION',
                 date: formData.get('date') as string || new Date().toISOString().split('T')[0],
                 quartier: formData.get('quartier') as string || '',
                 adresse: formData.get('adresse') as string || '',
+                commune: selectedCommune,
                 latitude: lat.toString(),
                 longitude: lng.toString(),
                 statut: formData.get('statut') as string || 'PLANIFIEE',
@@ -856,6 +894,24 @@ export default function MapComponent({ interventions, quartiers, selectedCommune
                   statusEl.style.color = '#dc2626'
                   statusEl.style.border = '1px solid #fecaca'
                   statusEl.textContent = '⚠️ يرجى ملء جميع الحقول المطلوبة'
+                }
+                return
+              }
+
+              // Validate commune when outside boundaries
+              if (!commune && !selectedCommune) {
+                const statusEl = document.getElementById('popup-form-status')
+                if (statusEl) {
+                  statusEl.style.display = 'block'
+                  statusEl.style.background = '#fffbeb'
+                  statusEl.style.color = '#d97706'
+                  statusEl.style.border = '1px solid #fde68a'
+                  statusEl.textContent = '⚠️ يرجى تحديد الجماعة — الموقع خارج الحدود المعروفة'
+                }
+                const communeSelect = document.getElementById('popup-commune-select')
+                if (communeSelect) {
+                  (communeSelect as HTMLSelectElement).style.borderColor = '#f59e0b'
+                  ;(communeSelect as HTMLSelectElement).style.background = '#fffbeb'
                 }
                 return
               }

@@ -60,7 +60,7 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
     const {
-      type, date, quartier, adresse, latitude, longitude,
+      type, date, quartier, adresse, commune, latitude, longitude,
       statut, description, agentNom, produitUtilise, quantite,
       superficie, nombrePrestations, observations,
     } = body
@@ -77,6 +77,7 @@ export async function POST(request: NextRequest) {
         date: new Date(date),
         quartier,
         adresse,
+        commune: commune || '',
         latitude: parseFloat(latitude),
         longitude: parseFloat(longitude),
         statut,
