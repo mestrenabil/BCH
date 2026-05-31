@@ -1,19 +1,21 @@
 import { db } from '@/lib/db'
 import { NextResponse } from 'next/server'
 
+// Quartier coordinates verified against Bouknadel commune boundary (OSM Relation 2498879)
+// Boundary box: Lat 34.1101-34.1290, Lon -6.7501 to -6.7281
 const quartiers = [
-  { nom: 'بوقنادل القديمة', latitude: 34.0520, longitude: -6.7350 },
-  { nom: 'حي المواطنين', latitude: 34.0550, longitude: -6.7280 },
-  { nom: 'حي القدس', latitude: 34.0480, longitude: -6.7200 },
-  { nom: 'حي المسيرة', latitude: 34.0600, longitude: -6.7320 },
-  { nom: 'حي الأمل', latitude: 34.0450, longitude: -6.7400 },
-  { nom: 'حي النصر', latitude: 34.0580, longitude: -6.7180 },
-  { nom: 'حي السلام', latitude: 34.0430, longitude: -6.7250 },
-  { nom: 'حي الوفاء', latitude: 34.0620, longitude: -6.7380 },
-  { nom: 'حي الهناء', latitude: 34.0500, longitude: -6.7420 },
-  { nom: 'حي الزيتون', latitude: 34.0560, longitude: -6.7450 },
-  { nom: 'حي الورود', latitude: 34.0640, longitude: -6.7220 },
-  { nom: 'حي الخير', latitude: 34.0470, longitude: -6.7150 },
+  { nom: 'بوقنادل القديمة', latitude: 34.1235, longitude: -6.7335 },
+  { nom: 'حي المواطنين', latitude: 34.1210, longitude: -6.7310 },
+  { nom: 'حي القدس', latitude: 34.1190, longitude: -6.7350 },
+  { nom: 'حي المسيرة', latitude: 34.1250, longitude: -6.7380 },
+  { nom: 'حي الأمل', latitude: 34.1155, longitude: -6.7420 },
+  { nom: 'حي النصر', latitude: 34.1180, longitude: -6.7295 },
+  { nom: 'حي السلام', latitude: 34.1130, longitude: -6.7370 },
+  { nom: 'حي الوفاء', latitude: 34.1270, longitude: -6.7345 },
+  { nom: 'حي الهناء', latitude: 34.1160, longitude: -6.7450 },
+  { nom: 'حي الزيتون', latitude: 34.1240, longitude: -6.7410 },
+  { nom: 'حي الورود', latitude: 34.1260, longitude: -6.7305 },
+  { nom: 'حي الخير', latitude: 34.1115, longitude: -6.7390 },
 ]
 
 const agents = [
@@ -71,8 +73,8 @@ export async function POST() {
           const day = randomInt(1, 28)
           const date = new Date(year, month, day)
 
-          const latOffset = (Math.random() - 0.5) * 0.005
-          const lngOffset = (Math.random() - 0.5) * 0.005
+          const latOffset = (Math.random() - 0.5) * 0.003
+          const lngOffset = (Math.random() - 0.5) * 0.003
 
           interventions.push({
             type,

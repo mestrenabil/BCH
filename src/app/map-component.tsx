@@ -78,15 +78,10 @@ export default function MapComponent({ interventions, quartiers }: { interventio
     lightLayer.addTo(map)
 
     // Layer control
-    L.control.layers(
-      { 'خريطة عادية': lightLayer, 'صورة ساتلية': satelliteLayer },
-      {},
-      { position: 'bottomleft' }
-    ).addTo(map)
+    const boundaryLayers: Record<string, L.Layer> = {}
+    const communeLayerGroup = L.layerGroup().addTo(map)
 
     // ===== ADD COMMUNE BOUNDARIES =====
-    const boundariesLayer = L.layerGroup().addTo(map)
-
     COMMUNES_GEOJSON.features.forEach((feature) => {
       const props = feature.properties
       const color = props.color || '#059669'
@@ -98,6 +93,7 @@ export default function MapComponent({ interventions, quartiers }: { interventio
           opacity: 0.9,
           fillColor: color,
           fillOpacity: 0.08,
+          dashArray: props.nameFr?.includes('Bouknadel') ? '0' : '5, 5',
         },
         onEachFeature: (feat, layer) => {
           // Add commune name label at center
@@ -124,18 +120,26 @@ export default function MapComponent({ interventions, quartiers }: { interventio
             }),
             interactive: false,
           })
-          label.addTo(boundariesLayer)
+          label.addTo(communeLayerGroup)
 
-          // Popup
+          // Popup with detailed info
+          const nameFr = feat.properties?.nameFr || ''
+          const nameEn = feat.properties?.nameEn || ''
+          const population = feat.properties?.population || ''
+          const osmId = feat.properties?.osmId || ''
           layer.bindPopup(`
-            <div style="direction: rtl; text-align: right; min-width: 200px; font-family: inherit;">
+            <div style="direction: rtl; text-align: right; min-width: 240px; font-family: inherit;">
               <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px;">
                 <div style="width: 14px; height: 14px; border-radius: 50%; background: ${color};"></div>
                 <strong style="font-size: 15px; color: #1e293b;">${feat.properties?.name || ''}</strong>
               </div>
-              <div style="background: #f8fafc; border-radius: 10px; padding: 10px; font-size: 12px; color: #64748b;">
-                <div style="margin-bottom: 4px;">📍 ${feat.properties?.nameFr || ''}</div>
-                <div>🗺️ حدود ترابية رسمية — قرار وزير الداخلية 2024</div>
+              <div style="background: #f8fafc; border-radius: 10px; padding: 10px; font-size: 12px; color: #64748b; margin-bottom: 8px;">
+                <div style="margin-bottom: 4px;">🇫🇷 ${nameFr}</div>
+                <div style="margin-bottom: 4px;">🇬🇧 ${nameEn}</div>
+                ${population ? `<div style="margin-bottom: 4px;">👥 سكان: ${population}</div>` : ''}
+              </div>
+              <div style="font-size: 10px; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 6px;">
+                🗺️ حدود ترابية — بيانات OpenStreetMap (OSM ID: ${osmId})
               </div>
             </div>
           `)
@@ -149,8 +153,18 @@ export default function MapComponent({ interventions, quartiers }: { interventio
           })
         },
       })
-      polygon.addTo(boundariesLayer)
+
+      // Add individual commune toggle layer
+      boundaryLayers[props.name || ''] = polygon
+      polygon.addTo(communeLayerGroup)
     })
+
+    // Layer control with base maps + overlay
+    L.control.layers(
+      { 'خريطة عادية': lightLayer, 'صورة ساتلية': satelliteLayer },
+      { 'الحدود الترابية': communeLayerGroup },
+      { position: 'bottomleft' }
+    ).addTo(map)
 
     // ===== ADD MARKERS LAYER =====
     const markersLayer = L.layerGroup()

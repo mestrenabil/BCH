@@ -620,7 +620,7 @@ function MapView({ interventions, quartiers }: { interventions: Intervention[]; 
   }, [])
 
   const COMMUNE_COLORS: Record<string, string> = {
-    'جماعة سلا': '#059669', 'جماعة عامر': '#d97706', 'جماعة سيدي أبي القنادل': '#dc2626',
+    'جماعة سلا': '#059669', 'جماعة سيدي أبي القنادل': '#7c3aed', 'جماعة عامر': '#d97706',
   }
 
   return (
@@ -628,14 +628,17 @@ function MapView({ interventions, quartiers }: { interventions: Intervention[]; 
       <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }}
         className="absolute top-4 right-4 z-10 bg-white/95 backdrop-blur-md rounded-2xl border border-slate-100 p-5 max-w-xs shadow-xl">
         <h3 className="font-bold text-slate-800 mb-1">الخريطة التفاعلية — SIG</h3>
-        <p className="text-[11px] text-slate-400 mb-3">الحدود الترابية الرسمية — عمالة سلا</p>
+        <p className="text-[11px] text-slate-400 mb-3">الحدود الترابية — عمالة سلا (OSM 2025)</p>
         {/* Commune Boundaries Legend */}
         <div className="space-y-1.5 mb-3">
           <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">الحدود الترابية</p>
           {Object.entries(COMMUNE_COLORS).map(([name, color]) => (
             <div key={name} className="flex items-center gap-2 text-xs">
-              <div className="w-5 h-0.5 rounded-full" style={{ backgroundColor: color }} />
+              <div className="w-4 h-4 rounded border-2 flex items-center justify-center" style={{ borderColor: color, backgroundColor: color + '20' }}>
+                <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: color }} />
+              </div>
               <span className="text-slate-600 font-medium">{name}</span>
+              {name === 'جماعة سيدي أبي القنادل' && <span className="text-[9px] bg-violet-100 text-violet-700 px-1.5 py-0.5 rounded-full font-bold">بوقنادل</span>}
             </div>
           ))}
         </div>
