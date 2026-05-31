@@ -3,9 +3,7 @@
 import React, { useEffect, useRef } from 'react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
-import 'leaflet.markercluster/dist/MarkerCluster.css'
-import 'leaflet.markercluster/dist/MarkerCluster.Default.css'
-import 'leaflet.markercluster'
+import COMMUNES_GEOJSON from './communes-data'
 
 interface Intervention {
   id: string; type: string; date: string; quartier: string; adresse: string
@@ -55,62 +53,126 @@ function createQuartierIcon(): L.DivIcon {
 export default function MapComponent({ interventions, quartiers }: { interventions: Intervention[]; quartiers: Quartier[] }) {
   const mapRef = useRef<L.Map | null>(null)
   const mapContainerRef = useRef<HTMLDivElement>(null)
-  const clusterGroupRef = useRef<L.MarkerClusterGroup | null>(null)
+  const markersLayerRef = useRef<L.LayerGroup | null>(null)
 
   useEffect(() => {
     if (!mapContainerRef.current || mapRef.current) return
 
     const map = L.map(mapContainerRef.current, {
-      center: [34.052, -6.735], zoom: 14, zoomControl: false,
+      center: [34.052, -6.735], zoom: 13, zoomControl: false,
     })
 
     L.control.zoom({ position: 'topleft' }).addTo(map)
 
     // Professional tile layer
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+    const lightLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
       attribution: '© OpenStreetMap © CARTO',
       maxZoom: 19,
-    }).addTo(map)
-
-    // Create cluster group with custom styling
-    const clusterGroup = L.markerClusterGroup({
-      maxClusterRadius: 50,
-      spiderfyOnMaxZoom: true,
-      showCoverageOnHover: false,
-      iconCreateFunction: (cluster) => {
-        const count = cluster.getChildCount()
-        const size = count < 10 ? 40 : count < 50 ? 50 : 60
-        return L.divIcon({
-          html: `<div style="
-            background: linear-gradient(135deg, #0d9488, #059669);
-            width: ${size}px; height: ${size}px; border-radius: 50%;
-            display: flex; align-items: center; justify-content: center;
-            color: white; font-weight: bold; font-size: ${size < 50 ? 12 : 14}px;
-            border: 3px solid white;
-            box-shadow: 0 3px 15px rgba(13,148,136,0.4);
-          ">${count}</div>`,
-          className: '',
-          iconSize: [size, size],
-          iconAnchor: [size / 2, size / 2],
-        })
-      },
     })
 
-    clusterGroupRef.current = clusterGroup
-    map.addLayer(clusterGroup)
+    const satelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+      attribution: '© Esri',
+      maxZoom: 19,
+    })
+
+    lightLayer.addTo(map)
+
+    // Layer control
+    L.control.layers(
+      { 'خريطة عادية': lightLayer, 'صورة ساتلية': satelliteLayer },
+      {},
+      { position: 'bottomleft' }
+    ).addTo(map)
+
+    // ===== ADD COMMUNE BOUNDARIES =====
+    const boundariesLayer = L.layerGroup().addTo(map)
+
+    COMMUNES_GEOJSON.features.forEach((feature) => {
+      const props = feature.properties
+      const color = props.color || '#059669'
+
+      const polygon = L.geoJSON(feature as GeoJSON.Feature, {
+        style: {
+          color: color,
+          weight: 3,
+          opacity: 0.9,
+          fillColor: color,
+          fillOpacity: 0.08,
+        },
+        onEachFeature: (feat, layer) => {
+          // Add commune name label at center
+          const bounds = layer.getBounds()
+          const center = bounds.getCenter()
+
+          const label = L.marker(center, {
+            icon: L.divIcon({
+              html: `<div style="
+                background: ${color}ee;
+                color: white;
+                padding: 6px 14px;
+                border-radius: 20px;
+                font-size: 12px;
+                font-weight: 700;
+                white-space: nowrap;
+                box-shadow: 0 2px 12px ${color}66;
+                border: 2px solid white;
+                font-family: system-ui, -apple-system, sans-serif;
+                letter-spacing: 0.3px;
+              ">${feat.properties?.name || ''}</div>`,
+              className: '',
+              iconAnchor: [60, 15],
+            }),
+            interactive: false,
+          })
+          label.addTo(boundariesLayer)
+
+          // Popup
+          layer.bindPopup(`
+            <div style="direction: rtl; text-align: right; min-width: 200px; font-family: inherit;">
+              <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px;">
+                <div style="width: 14px; height: 14px; border-radius: 50%; background: ${color};"></div>
+                <strong style="font-size: 15px; color: #1e293b;">${feat.properties?.name || ''}</strong>
+              </div>
+              <div style="background: #f8fafc; border-radius: 10px; padding: 10px; font-size: 12px; color: #64748b;">
+                <div style="margin-bottom: 4px;">📍 ${feat.properties?.nameFr || ''}</div>
+                <div>🗺️ حدود ترابية رسمية — قرار وزير الداخلية 2024</div>
+              </div>
+            </div>
+          `)
+
+          // Hover effects
+          layer.on('mouseover', () => {
+            layer.setStyle({ fillOpacity: 0.2, weight: 4 })
+          })
+          layer.on('mouseout', () => {
+            layer.setStyle({ fillOpacity: 0.08, weight: 3 })
+          })
+        },
+      })
+      polygon.addTo(boundariesLayer)
+    })
+
+    // ===== ADD MARKERS LAYER =====
+    const markersLayer = L.layerGroup()
+    markersLayerRef.current = markersLayer
+    markersLayer.addTo(map)
+
     mapRef.current = map
+
+    // Fit bounds to show all boundaries
+    const allBounds = L.geoJSON(COMMUNES_GEOJSON as GeoJSON.GeoJsonObject).getBounds()
+    map.fitBounds(allBounds, { padding: [30, 30] })
 
     return () => { map.remove(); mapRef.current = null }
   }, [])
 
   // Update markers
   useEffect(() => {
-    if (!mapRef.current || !clusterGroupRef.current) return
-    const clusterGroup = clusterGroupRef.current
+    if (!mapRef.current || !markersLayerRef.current) return
+    const markersLayer = markersLayerRef.current
+    markersLayer.clearLayers()
 
-    clusterGroup.clearLayers()
-
-    // Add quartier markers directly to map (not clustered)
+    // Add quartier markers
     quartiers.forEach((q) => {
       const marker = L.marker([q.latitude, q.longitude], { icon: createQuartierIcon() })
       marker.bindPopup(`
@@ -120,7 +182,7 @@ export default function MapComponent({ interventions, quartiers }: { interventio
           <small style="color: #666;">حي سكني — بوقنادل سلا</small>
         </div>
       `)
-      clusterGroup.addLayer(marker)
+      markersLayer.addLayer(marker)
     })
 
     // Add intervention markers
@@ -153,14 +215,8 @@ export default function MapComponent({ interventions, quartiers }: { interventio
           ${intervention.observations ? `<div style="margin-top: 8px; padding: 6px 8px; background: #fffbeb; border-radius: 8px; font-size: 11px; color: #92400e; border: 1px solid #fef3c7;">💬 ${intervention.observations}</div>` : ''}
         </div>
       `)
-      clusterGroup.addLayer(marker)
+      markersLayer.addLayer(marker)
     })
-
-    // Fit bounds
-    if (interventions.length > 0) {
-      const bounds = L.latLngBounds(interventions.map(i => [i.latitude, i.longitude]))
-      mapRef.current.fitBounds(bounds, { padding: [60, 60], maxZoom: 15 })
-    }
   }, [interventions, quartiers])
 
   return <div ref={mapContainerRef} className="w-full h-full" style={{ minHeight: '400px' }} />
