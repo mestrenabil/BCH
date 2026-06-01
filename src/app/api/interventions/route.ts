@@ -40,6 +40,13 @@ export async function GET(request: NextRequest) {
         orderBy: { date: 'desc' },
         skip: (page - 1) * limit,
         take: limit,
+        include: {
+          materials: {
+            include: {
+              product: { select: { id: true, nom: true, unite: true, quantiteStock: true } }
+            }
+          }
+        }
       }),
       db.intervention.count({ where }),
     ])
@@ -63,11 +70,28 @@ export async function POST(request: NextRequest) {
       type, date, quartier, adresse, commune, latitude, longitude,
       statut, description, agentNom, produitUtilise, quantite,
       superficie, nombrePrestations, observations,
+      materials, // Array of { productId, quantity }
     } = body
 
     // Validate required fields
     if (!type || !date || !quartier || !agentNom || !statut) {
       return NextResponse.json({ error: 'يرجى ملء جميع الحقول المطلوبة' }, { status: 400 })
+    }
+
+    // Validate materials stock availability
+    if (materials && Array.isArray(materials) && materials.length > 0) {
+      for (const mat of materials) {
+        if (!mat.productId || !mat.quantity || mat.quantity <= 0) continue
+        const product = await db.product.findUnique({ where: { id: mat.productId } })
+        if (!product) {
+          return NextResponse.json({ error: `المنتج غير موجود` }, { status: 400 })
+        }
+        if (product.quantiteStock < mat.quantity) {
+          return NextResponse.json({ 
+            error: `الكمية المطلوبة (${mat.quantity} ${product.unite}) من "${product.nom}" تتجاوز المخزون المتوفر (${product.quantiteStock} ${product.unite})` 
+          }, { status: 400 })
+        }
+      }
     }
 
     // Generate unique reference with retry logic
@@ -97,6 +121,16 @@ export async function POST(request: NextRequest) {
       reference = `${prefix}-${year}-${timestamp}`
     }
 
+    // Build materials create data
+    const materialsCreate = (materials && Array.isArray(materials) && materials.length > 0)
+      ? materials
+          .filter((m: { productId: string; quantity: number }) => m.productId && m.quantity > 0)
+          .map((m: { productId: string; quantity: number }) => ({
+            productId: m.productId,
+            quantity: m.quantity,
+          }))
+      : []
+
     const intervention = await db.intervention.create({
       data: {
         type,
@@ -115,8 +149,26 @@ export async function POST(request: NextRequest) {
         nombrePrestations: parseInt(nombrePrestations) || 1,
         observations: observations || '',
         reference,
+        materials: {
+          create: materialsCreate,
+        },
       },
+      include: {
+        materials: {
+          include: {
+            product: { select: { id: true, nom: true, unite: true, quantiteStock: true } }
+          }
+        }
+      }
     })
+
+    // Deduct stock quantities for each material used
+    for (const mat of materialsCreate) {
+      await db.product.update({
+        where: { id: mat.productId },
+        data: { quantiteStock: { decrement: mat.quantity } }
+      })
+    }
 
     return NextResponse.json(intervention, { status: 201 })
   } catch (error) {

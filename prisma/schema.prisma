@@ -27,6 +27,7 @@ model Intervention {
   reference          String   @unique
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
+  materials          InterventionMaterial[]
 }
 
 model Quartier {
@@ -49,4 +50,18 @@ model Product {
   reference     String   @unique // مرجع المنتج
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
+  interventions InterventionMaterial[]
+}
+
+model InterventionMaterial {
+  id             String   @id @default(cuid())
+  interventionId String
+  productId      String
+  quantity       Int      @default(0) // الكمية المستعملة في التدخل
+  createdAt      DateTime @default(now())
+
+  intervention   Intervention @relation(fields: [interventionId], references: [id], onDelete: Cascade)
+  product        Product      @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  @@unique([interventionId, productId])
 }

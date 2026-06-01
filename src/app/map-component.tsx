@@ -8,11 +8,21 @@ import 'leaflet.markercluster/dist/MarkerCluster.Default.css'
 import 'leaflet.markercluster'
 import COMMUNES_GEOJSON from './communes-data'
 
+interface InterventionProduct {
+  id: string; nom: string; unite: string; quantiteStock: number
+}
+
+interface InterventionMaterialItem {
+  id: string; interventionId: string; productId: string; quantity: number; createdAt: string
+  product: InterventionProduct
+}
+
 interface Intervention {
   id: string; type: string; date: string; quartier: string; adresse: string
   latitude: number; longitude: number; statut: string; description: string
   agentNom: string; produitUtilise: string; quantite: string; superficie: string
   nombrePrestations: number; observations: string; reference: string
+  materials?: InterventionMaterialItem[]
 }
 
 interface Quartier { id: string; nom: string; latitude: number; longitude: number }
@@ -405,19 +415,38 @@ function buildInterventionPopup(intervention: Intervention): string {
         <div style="font-size:12px;color:#334155;font-weight:700;">${intervention.agentNom || '—'}</div>
       </div>
       <div style="background:#f8fafc;border-radius:8px;padding:8px 10px;border:1px solid #f1f5f9;">
-        <div style="font-size:9px;color:#94a3b8;font-weight:600;margin-bottom:2px;">💊 المنتج</div>
-        <div style="font-size:12px;color:#334155;font-weight:700;">${intervention.produitUtilise || '—'}</div>
-      </div>
-      <div style="background:#f8fafc;border-radius:8px;padding:8px 10px;border:1px solid #f1f5f9;">
         <div style="font-size:9px;color:#94a3b8;font-weight:600;margin-bottom:2px;">📐 المساحة</div>
         <div style="font-size:12px;color:#334155;font-weight:700;">${intervention.superficie || '—'}</div>
+      </div>
+    </div>
+  `
+
+  // Materials from inventory section
+  const materialsSection = (intervention.materials && intervention.materials.length > 0) ? `
+    <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:8px 10px;margin-bottom:10px;">
+      <div style="display:flex;align-items:center;gap:4px;margin-bottom:6px;">
+        <span style="font-size:11px;">📦</span>
+        <span style="font-size:9px;font-weight:700;color:#166534;">المواد المستعملة من المخزون</span>
+      </div>
+      ${intervention.materials.map(m => `
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:3px 0;border-bottom:1px solid #dcfce7;">
+          <span style="font-size:11px;color:#334155;font-weight:600;">${m.product.nom}</span>
+          <span style="font-size:11px;color:#166534;font-weight:700;">${m.quantity} ${m.product.unite}</span>
+        </div>
+      `).join('')}
+    </div>
+  ` : (intervention.produitUtilise ? `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:10px;">
+      <div style="background:#f8fafc;border-radius:8px;padding:8px 10px;border:1px solid #f1f5f9;">
+        <div style="font-size:9px;color:#94a3b8;font-weight:600;margin-bottom:2px;">💊 المنتج</div>
+        <div style="font-size:12px;color:#334155;font-weight:700;">${intervention.produitUtilise}</div>
       </div>
       <div style="background:#f8fafc;border-radius:8px;padding:8px 10px;border:1px solid #f1f5f9;">
         <div style="font-size:9px;color:#94a3b8;font-weight:600;margin-bottom:2px;">🔢 الكمية</div>
         <div style="font-size:12px;color:#334155;font-weight:700;">${intervention.quantite || '—'}</div>
       </div>
     </div>
-  `
+  ` : '')
 
   const observationsSection = intervention.observations ? `
     <div style="background:#fffbeb;border-radius:8px;padding:8px 10px;border:1px solid #fef3c7;margin-bottom:8px;">
@@ -451,6 +480,7 @@ function buildInterventionPopup(intervention: Intervention): string {
           ${statusAndTypeBadges}
           ${locationSection}
           ${detailsGrid}
+          ${materialsSection}
           ${observationsSection}
           ${footerRef}
         </div>
@@ -575,7 +605,7 @@ function buildNewInterventionPopup(lat: number, lng: number, commune: string | n
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
         <div>
           <label style="${labelStyle}">${requiredStar}نوع التدخل</label>
-          <select name="type" style="${selectStyle}" required>
+          <select name="type" id="popup-type-select" style="${selectStyle}" required>
             <option value="DERATISATION">🐀 مكافحة القوارض</option>
             <option value="DESINSECTISATION">🦟 مكافحة الحشرات</option>
             <option value="DESINFECTION">🧴 التطهير والتعقيم</option>
@@ -617,18 +647,31 @@ function buildNewInterventionPopup(lat: number, lng: number, commune: string | n
         </div>
       </div>
 
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px;">
-        <div>
-          <label style="${labelStyle}">المادة المستعملة</label>
-          <input type="text" name="produitUtilise" placeholder="اسم المادة" style="${inputStyle}" />
+      <!-- Materials from Inventory Section -->
+      <div style="border:1.5px solid #e2e8f0;border-radius:10px;padding:8px 10px;margin-bottom:8px;background:#f8fafc;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+          <div style="display:flex;align-items:center;gap:4px;">
+            <span style="font-size:13px;">📦</span>
+            <span style="font-size:10px;font-weight:700;color:#475569;">المواد المستعملة من المخزون</span>
+          </div>
+          <button type="button" id="popup-add-material-btn" style="font-size:10px;padding:3px 8px;border-radius:6px;background:#d1fae5;color:#065f46;font-weight:700;border:none;cursor:pointer;font-family:inherit;">+ إضافة مادة</button>
         </div>
-        <div>
-          <label style="${labelStyle}">الكمية</label>
-          <input type="text" name="quantite" placeholder="الكمية والوحدة" style="${inputStyle}" />
+        <div id="popup-materials-list">
+          <div style="text-align:center;padding:4px 0;">
+            <div style="font-size:10px;color:#94a3b8;">اضغط "إضافة مادة" لاختيار المواد من المخزون</div>
+            <div style="font-size:9px;color:#cbd5e1;margin-top:2px;">سيتم خصم الكميات من المخزون تلقائياً</div>
+          </div>
         </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
         <div>
           <label style="${labelStyle}">المساحة</label>
           <input type="text" name="superficie" placeholder="م²" style="${inputStyle}" />
+        </div>
+        <div>
+          <label style="${labelStyle}">مادة أخرى (نص حر)</label>
+          <input type="text" name="produitUtilise" placeholder="اسم المادة إن لم تكن في المخزون" style="${inputStyle}" />
         </div>
       </div>
 
@@ -858,13 +901,103 @@ export default function MapComponent({ interventions, quartiers, selectedCommune
       // Register popupopen handler BEFORE opening the popup
       newMarker.on('popupopen', () => {
         setTimeout(() => {
+          // --- Materials management ---
+          let popupProducts: { id: string; nom: string; categorie: string; unite: string; quantiteStock: number }[] = []
+          let materialRowCounter = 0
+
+          // Fetch products for dropdown
+          fetch('/api/products/for-dropdown').then(r => r.json()).then(data => {
+            popupProducts = data.products || []
+          }).catch(() => {})
+
+          // Helper: build product options for current type
+          function getProductOptions(selectedId: string): string {
+            const typeSelect = document.getElementById('popup-type-select') as HTMLSelectElement | null
+            const currentType = typeSelect?.value || 'DERATISATION'
+            const filtered = popupProducts.filter(p => {
+              if (currentType === 'DERATISATION') return p.categorie === 'DERATISATION' || p.categorie === 'GENERAL'
+              if (currentType === 'DESINSECTISATION') return p.categorie === 'DESINSECTISATION' || p.categorie === 'GENERAL'
+              if (currentType === 'DESINFECTION') return p.categorie === 'DESINFECTION' || p.categorie === 'GENERAL'
+              return true
+            })
+            let opts = '<option value="">— اختر المادة —</option>'
+            for (const p of filtered) {
+              opts += `<option value="${p.id}" ${p.id === selectedId ? 'selected' : ''}>${p.nom} (المخزون: ${p.quantiteStock} ${p.unite})</option>`
+            }
+            return opts
+          }
+
+          // Add material row
+          function addMaterialRow() {
+            const list = document.getElementById('popup-materials-list')
+            if (!list) return
+            // Remove empty placeholder if present
+            const placeholder = list.querySelector('div[style*="text-align:center"]')
+            if (placeholder) placeholder.remove()
+
+            const rowId = materialRowCounter++
+            const row = document.createElement('div')
+            row.id = `popup-material-row-${rowId}`
+            row.style.cssText = 'display:flex;align-items:center;gap:4px;margin-bottom:4px;background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:4px 6px;'
+            row.innerHTML = `
+              <select class="popup-product-select" data-row="${rowId}" style="flex:1;padding:4px 6px;border:1px solid #e2e8f0;border-radius:6px;font-size:10px;font-family:inherit;outline:none;background:#fff;color:#1e293b;direction:rtl;text-align:right;cursor:pointer;">
+                ${getProductOptions('')}
+              </select>
+              <input type="number" min="1" class="popup-product-qty" data-row="${rowId}" placeholder="الكمية" style="width:55px;padding:4px 6px;border:1px solid #e2e8f0;border-radius:6px;font-size:10px;font-family:inherit;outline:none;background:#fff;color:#1e293b;text-align:center;" />
+              <button type="button" class="popup-remove-material-btn" data-row="${rowId}" style="width:20px;height:20px;border-radius:4px;background:#fef2f2;color:#dc2626;font-size:10px;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;">✕</button>
+            `
+            list.appendChild(row)
+
+            // Attach remove handler
+            row.querySelector('.popup-remove-material-btn')?.addEventListener('click', () => {
+              row.remove()
+              // Show placeholder if no rows left
+              if (list.children.length === 0) {
+                list.innerHTML = `<div style="text-align:center;padding:4px 0;"><div style="font-size:10px;color:#94a3b8;">اضغط "إضافة مادة" لاختيار المواد من المخزون</div><div style="font-size:9px;color:#cbd5e1;margin-top:2px;">سيتم خصم الكميات من المخزون تلقائياً</div></div>`
+              }
+            })
+          }
+
+          // Add material button handler
+          const addBtn = document.getElementById('popup-add-material-btn')
+          if (addBtn) {
+            addBtn.onclick = () => addMaterialRow()
+          }
+
+          // Update product dropdowns when type changes
+          const typeSelect = document.getElementById('popup-type-select')
+          if (typeSelect) {
+            typeSelect.addEventListener('change', () => {
+              document.querySelectorAll('.popup-product-select').forEach((sel) => {
+                const selectEl = sel as HTMLSelectElement
+                const currentVal = selectEl.value
+                selectEl.innerHTML = getProductOptions(currentVal)
+              })
+            })
+          }
+
+          // --- Form submit handler ---
           const form = document.getElementById('new-intervention-form') as HTMLFormElement | null
           if (form) {
             form.onsubmit = (e) => {
               e.preventDefault()
               const formData = new FormData(form)
               const formCommune = formData.get('commune') as string || ''
-              const data: Record<string, string> = {
+
+              // Collect materials
+              const materials: { productId: string; quantity: number }[] = []
+              document.querySelectorAll('.popup-product-select').forEach((sel) => {
+                const selectEl = sel as HTMLSelectElement
+                const rowId = selectEl.getAttribute('data-row')
+                const qtyInput = document.querySelector(`.popup-product-qty[data-row="${rowId}"]`) as HTMLInputElement | null
+                const productId = selectEl.value
+                const quantity = parseInt(qtyInput?.value || '0') || 0
+                if (productId && quantity > 0) {
+                  materials.push({ productId, quantity })
+                }
+              })
+
+              const data: Record<string, unknown> = {
                 type: formData.get('type') as string || 'DERATISATION',
                 date: formData.get('date') as string || new Date().toISOString().split('T')[0],
                 quartier: formData.get('quartier') as string || '',
@@ -880,6 +1013,7 @@ export default function MapComponent({ interventions, quartiers, selectedCommune
                 superficie: formData.get('superficie') as string || '',
                 nombrePrestations: '1',
                 observations: formData.get('observations') as string || '',
+                materials,
               }
 
               // Validate required fields

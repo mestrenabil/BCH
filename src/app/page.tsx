@@ -11,12 +11,18 @@ import { useAppStore, type ViewType, type InterventionType, type CommuneType, ty
 import { toast } from 'sonner'
 
 // ===== TYPE DEFINITIONS =====
+interface InterventionMaterial {
+  id: string; interventionId: string; productId: string; quantity: number; createdAt: string
+  product: { id: string; nom: string; unite: string; quantiteStock: number }
+}
+
 interface Intervention {
   id: string; type: string; date: string; quartier: string; adresse: string
   latitude: number; longitude: number; statut: string; description: string
   agentNom: string; produitUtilise: string; quantite: string; superficie: string
   nombrePrestations: number; observations: string; reference: string
   createdAt: string; updatedAt: string
+  materials?: InterventionMaterial[]
 }
 
 interface Statistics {
@@ -1069,7 +1075,11 @@ function InterventionsView({ interventions, total, page, setPage, onEdit, onRefr
                       <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-xs text-slate-400">
                         <span className="flex items-center gap-1">📅 {new Date(intervention.date).toLocaleDateString('ar-MA')}</span>
                         <span className="flex items-center gap-1">👤 {intervention.agentNom}</span>
-                        {intervention.produitUtilise && <span className="flex items-center gap-1">💊 {intervention.produitUtilise}</span>}
+                        {intervention.materials && intervention.materials.length > 0 ? (
+                          <span className="flex items-center gap-1">📦 {intervention.materials.map(m => `${m.product.nom} (${m.quantity} ${m.product.unite})`).join('، ')}</span>
+                        ) : intervention.produitUtilise ? (
+                          <span className="flex items-center gap-1">💊 {intervention.produitUtilise}</span>
+                        ) : null}
                         {intervention.superficie && <span className="flex items-center gap-1">📐 {intervention.superficie}</span>}
                       </div>
                       {intervention.observations && (
@@ -1955,6 +1965,10 @@ function SettingsView() {
 }
 
 // ===== FORM DIALOG =====
+interface DropdownProduct {
+  id: string; nom: string; categorie: string; unite: string; quantiteStock: number; prixUnitaire: number; reference: string
+}
+
 function InterventionFormDialog({ interventionId, quartiers, mapClickCoords, onClose, onSave }: {
   interventionId: string | null; quartiers: Quartier[]
   mapClickCoords: MapClickCoords | null
@@ -1968,8 +1982,17 @@ function InterventionFormDialog({ interventionId, quartiers, mapClickCoords, onC
     statut: 'PLANIFIEE', description: '', agentNom: '', produitUtilise: '',
     quantite: '', superficie: '', nombrePrestations: '1', observations: '',
   })
+  const [materials, setMaterials] = useState<{ productId: string; quantity: number }[]>([])
+  const [dropdownProducts, setDropdownProducts] = useState<DropdownProduct[]>([])
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isLoadingData, setIsLoadingData] = useState(false)
+
+  // Load products for dropdown
+  useEffect(() => {
+    fetch('/api/products/for-dropdown').then(res => res.json()).then(data => {
+      setDropdownProducts(data.products || [])
+    }).catch(console.error)
+  }, [])
 
   // When mapClickCoords changes, update the form's latitude/longitude/commune
   useEffect(() => {
@@ -1996,6 +2019,13 @@ function InterventionFormDialog({ interventionId, quartiers, mapClickCoords, onC
           superficie: data.superficie || '', nombrePrestations: data.nombrePrestations?.toString() || '1',
           observations: data.observations || '',
         })
+        // Load existing materials
+        if (data.materials && Array.isArray(data.materials)) {
+          setMaterials(data.materials.map((m: InterventionMaterial) => ({
+            productId: m.productId,
+            quantity: m.quantity,
+          })))
+        }
       }).catch(console.error).finally(() => setIsLoadingData(false))
     }
   }, [interventionId])
@@ -2005,19 +2035,50 @@ function InterventionFormDialog({ interventionId, quartiers, mapClickCoords, onC
     if (q) setFormData(prev => ({ ...prev, latitude: q.latitude.toString(), longitude: q.longitude.toString() }))
   }, [formData.quartier, quartiers])
 
+  const addMaterial = () => {
+    setMaterials(prev => [...prev, { productId: '', quantity: 0 }])
+  }
+
+  const removeMaterial = (index: number) => {
+    setMaterials(prev => prev.filter((_, i) => i !== index))
+  }
+
+  const updateMaterial = (index: number, field: 'productId' | 'quantity', value: string | number) => {
+    setMaterials(prev => prev.map((m, i) => i === index ? { ...m, [field]: field === 'quantity' ? Number(value) || 0 : value } : m))
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsSubmitting(true)
     try {
       const url = interventionId ? `/api/interventions/${interventionId}` : '/api/interventions'
-      const res = await fetch(url, { method: interventionId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(formData) })
+      const payload = {
+        ...formData,
+        materials: materials.filter(m => m.productId && m.quantity > 0),
+      }
+      const res = await fetch(url, { method: interventionId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
       if (res.ok) { toast.success(interventionId ? 'تم تحديث التدخل بنجاح' : 'تم إضافة التدخل بنجاح'); await onSave(); onClose() }
-      else toast.error('حدث خطأ أثناء الحفظ')
+      else {
+        const errData = await res.json().catch(() => ({}))
+        toast.error(errData.error || 'حدث خطأ أثناء الحفظ')
+      }
     } catch { toast.error('حدث خطأ أثناء الحفظ') }
     finally { setIsSubmitting(false) }
   }
 
   const updateField = (field: string, value: string) => setFormData(prev => ({ ...prev, [field]: value }))
+
+  const PRODUCT_CATEGORIES: Record<string, string> = {
+    DERATISATION: 'مكافحة القوارض', DESINSECTISATION: 'مكافحة الحشرات', DESINFECTION: 'التطهير والتعقيم', GENERAL: 'مواد عامة',
+  }
+
+  // Filter products based on intervention type
+  const filteredProducts = dropdownProducts.filter(p => {
+    if (formData.type === 'DERATISATION') return p.categorie === 'DERATISATION' || p.categorie === 'GENERAL'
+    if (formData.type === 'DESINSECTISATION') return p.categorie === 'DESINSECTISATION' || p.categorie === 'GENERAL'
+    if (formData.type === 'DESINFECTION') return p.categorie === 'DESINFECTION' || p.categorie === 'GENERAL'
+    return true
+  })
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
@@ -2144,23 +2205,70 @@ function InterventionFormDialog({ interventionId, quartiers, mapClickCoords, onC
                   className={`w-full px-3 py-2.5 rounded-xl border text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-300 ${mapClickCoords && !interventionId ? 'border-emerald-300 bg-emerald-50/50' : 'border-slate-200 bg-white'}`} />
               </div>
             </div>
-            <div className="grid grid-cols-3 gap-4">
-              <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-1.5">المادة المستعملة</label>
-                <input type="text" value={formData.produitUtilise} onChange={(e) => updateField('produitUtilise', e.target.value)}
-                  placeholder="اسم المادة"
-                  className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-300" />
+
+            {/* Materials from Inventory Section */}
+            <div className="border border-slate-200 rounded-xl p-4 bg-slate-50/50">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-lg">📦</span>
+                  <label className="text-sm font-semibold text-slate-700">المواد المستعملة من المخزون</label>
+                </div>
+                <button type="button" onClick={addMaterial}
+                  className="text-xs px-3 py-1.5 rounded-lg bg-emerald-100 text-emerald-700 font-bold hover:bg-emerald-200 transition-colors flex items-center gap-1">
+                  <span>+</span> إضافة مادة
+                </button>
               </div>
-              <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-1.5">الكمية</label>
-                <input type="text" value={formData.quantite} onChange={(e) => updateField('quantite', e.target.value)}
-                  placeholder="الكمية والوحدة"
-                  className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-300" />
-              </div>
+              {materials.length === 0 ? (
+                <div className="text-center py-3">
+                  <p className="text-xs text-slate-400">لم يتم إضافة مواد بعد. اضغط &quot;إضافة مادة&quot; لاختيار المواد من المخزون</p>
+                  <p className="text-[10px] text-slate-300 mt-1">سيتم خصم الكميات من المخزون تلقائياً</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {materials.map((mat, index) => {
+                    const selectedProduct = dropdownProducts.find(p => p.id === mat.productId)
+                    const maxQty = selectedProduct?.quantiteStock || 0
+                    return (
+                      <div key={index} className="flex items-center gap-2 bg-white rounded-lg p-2 border border-slate-100">
+                        <select value={mat.productId} onChange={(e) => updateMaterial(index, 'productId', e.target.value)}
+                          className="flex-1 px-2 py-1.5 rounded-lg border border-slate-200 bg-white text-xs outline-none focus:ring-1 focus:ring-emerald-500/20">
+                          <option value="">— اختر المادة —</option>
+                          {filteredProducts.map(p => (
+                            <option key={p.id} value={p.id}>
+                              {p.nom} (المخزون: {p.quantiteStock} {p.unite})
+                            </option>
+                          ))}
+                        </select>
+                        <div className="flex items-center gap-1">
+                          <input type="number" min="1" max={maxQty} value={mat.quantity || ''} 
+                            onChange={(e) => updateMaterial(index, 'quantity', e.target.value)}
+                            placeholder="الكمية"
+                            className="w-20 px-2 py-1.5 rounded-lg border border-slate-200 bg-white text-xs outline-none focus:ring-1 focus:ring-emerald-500/20 text-center" />
+                          {selectedProduct && <span className="text-[10px] text-slate-400 whitespace-nowrap">{selectedProduct.unite}</span>}
+                        </div>
+                        {maxQty > 0 && mat.quantity > maxQty && (
+                          <span className="text-[9px] text-red-500 font-bold whitespace-nowrap">⚠️ يتجاوز المخزون</span>
+                        )}
+                        <button type="button" onClick={() => removeMaterial(index)}
+                          className="w-6 h-6 rounded-md bg-red-50 text-red-500 text-xs hover:bg-red-100 transition-colors flex items-center justify-center flex-shrink-0">✕</button>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-semibold text-slate-700 mb-1.5">المساحة</label>
                 <input type="text" value={formData.superficie} onChange={(e) => updateField('superficie', e.target.value)}
                   placeholder="بالمتر المربع"
+                  className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-300" />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-1.5">المادة (نص حر)</label>
+                <input type="text" value={formData.produitUtilise} onChange={(e) => updateField('produitUtilise', e.target.value)}
+                  placeholder="اسم المادة إن لم تكن في المخزون"
                   className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-300" />
               </div>
             </div>
