@@ -61,7 +61,7 @@ export function getYearOptions(yearsBack: number = 10): { value: string; label: 
 
 const DEFAULT_SETTINGS: AppSettings = {
   animationsEnabled: true,
-  mapClickEnabled: false,
+  mapClickEnabled: true,
   showCommunePopups: false,
   mapDefaultTile: 'light',
   mapClusterRadius: 50,
