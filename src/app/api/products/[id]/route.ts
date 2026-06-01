@@ -17,13 +17,14 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
   try {
     const { id } = await params
     const body = await request.json()
-    const { nom, categorie, unite, quantiteStock, seuilAlerte, prixUnitaire, fournisseur, description } = body
+    const { nom, categorie, commune, unite, quantiteStock, seuilAlerte, prixUnitaire, fournisseur, description } = body
 
     const product = await db.product.update({
       where: { id },
       data: {
         ...(nom !== undefined && { nom }),
         ...(categorie !== undefined && { categorie }),
+        ...(commune !== undefined && { commune }),
         ...(unite !== undefined && { unite }),
         ...(quantiteStock !== undefined && { quantiteStock: parseInt(quantiteStock) || 0 }),
         ...(seuilAlerte !== undefined && { seuilAlerte: parseInt(seuilAlerte) || 10 }),

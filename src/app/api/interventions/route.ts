@@ -7,6 +7,7 @@ export async function GET(request: NextRequest) {
     const type = searchParams.get('type')
     const statut = searchParams.get('statut')
     const quartier = searchParams.get('quartier')
+    const commune = searchParams.get('commune')
     const from = searchParams.get('from')
     const to = searchParams.get('to')
     const search = searchParams.get('search')
@@ -18,6 +19,7 @@ export async function GET(request: NextRequest) {
     if (type) where.type = type
     if (statut) where.statut = statut
     if (quartier) where.quartier = quartier
+    if (commune) where.commune = commune
     if (from || to) {
       where.date = {
         ...(from ? { gte: new Date(from) } : {}),

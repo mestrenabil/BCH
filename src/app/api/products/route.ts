@@ -5,35 +5,56 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
     const categorie = searchParams.get('categorie')
+    const commune = searchParams.get('commune')
     const search = searchParams.get('search')
     const alerteOnly = searchParams.get('alerte') === 'true'
 
-    const where: Record<string, unknown> = {}
-    if (categorie) where.categorie = categorie
+    // Build where clause with proper AND/OR combinations
+    const andConditions: Record<string, unknown>[] = []
+
+    if (categorie) andConditions.push({ categorie })
+    if (commune) {
+      // Show products for selected commune OR shared products (empty commune / ALL)
+      andConditions.push({
+        OR: [
+          { commune: commune },
+          { commune: '' },
+          { commune: 'ALL' },
+        ]
+      })
+    }
     if (search) {
-      where.OR = [
-        { nom: { contains: search } },
-        { reference: { contains: search } },
-        { fournisseur: { contains: search } },
-        { description: { contains: search } },
-      ]
+      andConditions.push({
+        OR: [
+          { nom: { contains: search } },
+          { reference: { contains: search } },
+          { fournisseur: { contains: search } },
+          { description: { contains: search } },
+        ]
+      })
     }
-    if (alerteOnly) {
-      // Products where stock is at or below alert threshold
-      where.quantiteStock = { lte: 10 } // Will be refined with raw query
-    }
+
+    const where: Record<string, unknown> = andConditions.length > 0 ? { AND: andConditions } : {}
 
     const products = await db.product.findMany({
       where,
       orderBy: { nom: 'asc' },
     })
 
-    // Compute inventory stats
-    const allProducts = await db.product.findMany()
-    const totalProducts = allProducts.length
-    const totalStockValue = allProducts.reduce((sum, p) => sum + (p.quantiteStock * p.prixUnitaire), 0)
-    const lowStockCount = allProducts.filter(p => p.quantiteStock <= p.seuilAlerte).length
-    const outOfStockCount = allProducts.filter(p => p.quantiteStock === 0).length
+    // Compute inventory stats (also respect commune filter for stats)
+    const statsWhere: Record<string, unknown> = {}
+    if (commune) {
+      statsWhere.OR = [
+        { commune: commune },
+        { commune: '' },
+        { commune: 'ALL' },
+      ]
+    }
+    const statsProducts = await db.product.findMany({ where: statsWhere })
+    const totalProducts = statsProducts.length
+    const totalStockValue = statsProducts.reduce((sum, p) => sum + (p.quantiteStock * p.prixUnitaire), 0)
+    const lowStockCount = statsProducts.filter(p => p.quantiteStock <= p.seuilAlerte && p.quantiteStock > 0).length
+    const outOfStockCount = statsProducts.filter(p => p.quantiteStock === 0).length
 
     // Filter for alerteOnly after fetching (SQLite doesn't support column comparison in where easily)
     const filteredProducts = alerteOnly
@@ -53,7 +74,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { nom, categorie, unite, quantiteStock, seuilAlerte, prixUnitaire, fournisseur, description } = body
+    const { nom, categorie, commune, unite, quantiteStock, seuilAlerte, prixUnitaire, fournisseur, description } = body
 
     if (!nom || !categorie) {
       return NextResponse.json({ error: 'يرجى ملء جميع الحقول المطلوبة' }, { status: 400 })
@@ -67,7 +88,6 @@ export async function POST(request: NextRequest) {
     // Check uniqueness
     const existing = await db.product.findUnique({ where: { reference } })
     if (existing) {
-      const timestamp = Date.now().toString(36).toUpperCase()
       return NextResponse.json({ error: 'مرجع المنتج موجود مسبقاً' }, { status: 409 })
     }
 
@@ -75,6 +95,7 @@ export async function POST(request: NextRequest) {
       data: {
         nom,
         categorie,
+        commune: commune || '',
         unite: unite || 'لتر',
         quantiteStock: parseInt(quantiteStock) || 0,
         seuilAlerte: parseInt(seuilAlerte) || 10,

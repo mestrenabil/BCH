@@ -21,7 +21,7 @@ interface Intervention {
   latitude: number; longitude: number; statut: string; description: string
   agentNom: string; produitUtilise: string; quantite: string; superficie: string
   nombrePrestations: number; observations: string; reference: string
-  createdAt: string; updatedAt: string
+  commune: string; createdAt: string; updatedAt: string
   materials?: InterventionMaterial[]
 }
 
@@ -103,13 +103,16 @@ export default function HomePage() {
 
   const fetchStats = useCallback(async () => {
     try {
-      const url = selectedYear ? `/api/statistics?year=${selectedYear}` : '/api/statistics'
+      const params = new URLSearchParams()
+      if (selectedYear) params.set('year', selectedYear)
+      if (selectedCommune !== 'ALL') params.set('commune', selectedCommune)
+      const url = `/api/statistics?${params.toString()}`
       const res = await fetch(url)
       const data = await res.json()
       setStats(data)
       setQuartiers(data.quartiers || [])
     } catch (err) { console.error('Failed to fetch stats:', err) }
-  }, [selectedYear])
+  }, [selectedYear, selectedCommune])
 
   const fetchInterventions = useCallback(async () => {
     try {
@@ -118,13 +121,14 @@ export default function HomePage() {
         ...(selectedType !== 'ALL' ? { type: selectedType } : {}),
         ...(searchQuery ? { search: searchQuery } : {}),
         ...(selectedYear ? { from: `${selectedYear}-01-01`, to: `${selectedYear}-12-31` } : {}),
+        ...(selectedCommune !== 'ALL' ? { commune: selectedCommune } : {}),
       })
       const res = await fetch(`/api/interventions?${params}`)
       const data = await res.json()
       setInterventions(data.interventions || [])
       setInterventionsTotal(data.total || 0)
     } catch (err) { console.error('Failed to fetch interventions:', err) }
-  }, [interventionsPage, selectedType, searchQuery, selectedYear])
+  }, [interventionsPage, selectedType, searchQuery, selectedYear, selectedCommune])
 
   const seedDatabase = useCallback(async () => {
     if (isSeeding || isSeeded) return
@@ -162,7 +166,7 @@ export default function HomePage() {
   const initialLoadDone = useRef(false)
   useEffect(() => {
     if (initialLoadDone.current) { fetchStats(); fetchInterventions() }
-  }, [selectedYear, selectedType, fetchStats, fetchInterventions])
+  }, [selectedYear, selectedType, selectedCommune, fetchStats, fetchInterventions])
   useEffect(() => { if (!isLoading) initialLoadDone.current = true }, [isLoading])
 
   const navItems: { id: ViewType; label: string; icon: string; desc: string }[] = [
@@ -980,6 +984,7 @@ function InterventionsView({ interventions, total, page, setPage, onEdit, onRefr
   const [localSearch, setLocalSearch] = useState('')
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
   const [filterStatut, setFilterStatut] = useState('ALL')
+  const [localCommuneFilter, setLocalCommuneFilter] = useState('ALL')
 
   const handleDelete = async (id: string) => {
     try {
@@ -990,7 +995,10 @@ function InterventionsView({ interventions, total, page, setPage, onEdit, onRefr
     } catch (err) { console.error('Delete failed:', err); toast.error('حدث خطأ أثناء الحذف') }
   }
 
-  const filteredInterventions = interventions.filter(i => filterStatut === 'ALL' || i.statut === filterStatut)
+  const filteredInterventions = interventions.filter(i => 
+    (filterStatut === 'ALL' || i.statut === filterStatut) && 
+    (localCommuneFilter === 'ALL' || i.commune === localCommuneFilter)
+  )
 
   return (
     <div className="p-4 lg:p-6 space-y-4 pb-24 lg:pb-6">
@@ -1019,6 +1027,13 @@ function InterventionsView({ interventions, total, page, setPage, onEdit, onRefr
             className="px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-emerald-500/20">
             <option value="ALL">كل الحالات</option>
             {Object.entries(STATUT_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+          </select>
+          <select value={localCommuneFilter} onChange={(e) => setLocalCommuneFilter(e.target.value)}
+            className="px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-emerald-500/20">
+            <option value="ALL">كل الجماعات</option>
+            <option value="سلا">جماعة سلا</option>
+            <option value="سيدي أبي القنادل">جماعة سيدي أبي القنادل</option>
+            <option value="عامر">جماعة عامر</option>
           </select>
         </div>
       </motion.div>
@@ -1070,6 +1085,12 @@ function InterventionsView({ interventions, total, page, setPage, onEdit, onRefr
                           style={{ backgroundColor: TYPE_COLORS[intervention.type] + '15', color: TYPE_COLORS[intervention.type] }}>
                           {TYPE_LABELS[intervention.type]}
                         </span>
+                        {intervention.commune && (
+                          <span className="text-[10px] px-2 py-0.5 rounded-full font-bold"
+                            style={{ backgroundColor: COMMUNE_COLORS[intervention.commune as keyof typeof COMMUNE_COLORS] + '15', color: COMMUNE_COLORS[intervention.commune as keyof typeof COMMUNE_COLORS] }}>
+                            {COMMUNE_LABELS[intervention.commune as keyof typeof COMMUNE_LABELS]}
+                          </span>
+                        )}
                       </div>
                       <p className="text-sm text-slate-500 mt-1">{intervention.quartier} — {intervention.adresse}</p>
                       <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-xs text-slate-400">
@@ -1132,7 +1153,7 @@ function InterventionsView({ interventions, total, page, setPage, onEdit, onRefr
 interface Product {
   id: string; nom: string; categorie: string; unite: string; quantiteStock: number
   seuilAlerte: number; prixUnitaire: number; fournisseur: string; description: string
-  reference: string; createdAt: string; updatedAt: string
+  reference: string; commune: string; createdAt: string; updatedAt: string
 }
 
 function InventoryView() {
@@ -1141,6 +1162,7 @@ function InventoryView() {
   const [isLoading, setIsLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
   const [filterCategorie, setFilterCategorie] = useState('ALL')
+  const [filterCommune, setFilterCommune] = useState('ALL')
   const [showForm, setShowForm] = useState(false)
   const [editingProduct, setEditingProduct] = useState<Product | null>(null)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null)
@@ -1162,6 +1184,7 @@ function InventoryView() {
         const params = new URLSearchParams()
         if (filterCategorie !== 'ALL') params.set('categorie', filterCategorie)
         if (searchQuery) params.set('search', searchQuery)
+        if (filterCommune !== 'ALL') params.set('commune', filterCommune)
         const res = await fetch(`/api/products?${params}`)
         const data = await res.json()
         if (!cancelled) {
@@ -1173,12 +1196,13 @@ function InventoryView() {
     }
     load()
     return () => { cancelled = true }
-  }, [filterCategorie, searchQuery, refreshKey])
+  }, [filterCategorie, searchQuery, filterCommune, refreshKey])
 
   const handleSave = async (formData: FormData, isEdit: boolean, productId?: string) => {
     const data = {
       nom: formData.get('nom') as string,
       categorie: formData.get('categorie') as string,
+      commune: formData.get('commune') as string,
       unite: formData.get('unite') as string,
       quantiteStock: formData.get('quantiteStock') as string,
       seuilAlerte: formData.get('seuilAlerte') as string,
@@ -1273,6 +1297,13 @@ function InventoryView() {
               <span>{PRODUCT_ICONS[key]}</span> {label}
             </button>
           ))}
+          <select value={filterCommune} onChange={(e) => setFilterCommune(e.target.value)}
+            className="px-3 py-2 rounded-xl border border-slate-200 text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 bg-white">
+            <option value="ALL">كل الجماعات</option>
+            <option value="سلا">جماعة سلا</option>
+            <option value="سيدي أبي القنادل">جماعة سيدي أبي القنادل</option>
+            <option value="عامر">جماعة عامر</option>
+          </select>
         </div>
       </div>
 
@@ -1295,6 +1326,7 @@ function InventoryView() {
                 <tr className="bg-slate-50 border-b border-slate-100">
                   <th className="text-right px-4 py-3 font-bold text-slate-500 text-xs">المنتج</th>
                   <th className="text-right px-4 py-3 font-bold text-slate-500 text-xs">الفئة</th>
+                  <th className="text-right px-4 py-3 font-bold text-slate-500 text-xs">الجماعة</th>
                   <th className="text-center px-4 py-3 font-bold text-slate-500 text-xs">الكمية</th>
                   <th className="text-center px-4 py-3 font-bold text-slate-500 text-xs">الوحدة</th>
                   <th className="text-center px-4 py-3 font-bold text-slate-500 text-xs">السعر</th>
@@ -1328,6 +1360,16 @@ function InventoryView() {
                           style={{ backgroundColor: PRODUCT_COLORS[product.categorie] + '15', color: PRODUCT_COLORS[product.categorie] }}>
                           {PRODUCT_CATEGORIES[product.categorie] || product.categorie}
                         </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        {product.commune ? (
+                          <span className="px-2 py-1 rounded-full text-[10px] font-bold"
+                            style={{ backgroundColor: COMMUNE_COLORS[product.commune as keyof typeof COMMUNE_COLORS] + '15', color: COMMUNE_COLORS[product.commune as keyof typeof COMMUNE_COLORS] || '#64748b' }}>
+                            {COMMUNE_LABELS[product.commune as keyof typeof COMMUNE_LABELS] || product.commune}
+                          </span>
+                        ) : (
+                          <span className="px-2 py-1 rounded-full text-[10px] font-bold bg-slate-100 text-slate-500">مشترك</span>
+                        )}
                       </td>
                       <td className="px-4 py-3 text-center">
                         <div className="flex items-center justify-center gap-1">
@@ -1444,6 +1486,16 @@ function ProductFormDialog({ product, categories, units, onSave, onClose }: {
                 className="w-full px-3 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none text-sm">
                 <option value="">اختر الفئة</option>
                 {Object.entries(categories).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-slate-500 mb-1.5">الجماعة</label>
+              <select name="commune" defaultValue={product?.commune || ''}
+                className="w-full px-3 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none text-sm">
+                <option value="">مشترك (كل الجماعات)</option>
+                <option value="سلا">جماعة سلا</option>
+                <option value="سيدي أبي القنادل">جماعة سيدي أبي القنادل</option>
+                <option value="عامر">جماعة عامر</option>
               </select>
             </div>
             <div>

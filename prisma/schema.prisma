@@ -41,6 +41,7 @@ model Product {
   id            String   @id @default(cuid())
   nom           String   // اسم المنتج
   categorie     String   // DERATISATION, DESINSECTISATION, DESINFECTION, GENERAL
+  commune       String   @default("") // الجماعة الترابية: سلا، سيدي أبي القنادل، عامر، أو فارغ للمواد المشتركة
   unite         String   @default("لتر") // وحدة القياس: لتر، كيلوغرام، علبة، وحدة
   quantiteStock Int      @default(0) // الكمية المتوفرة في المخزون
   seuilAlerte   Int      @default(10) // عتبة التنبيه عند انخفاض المخزون

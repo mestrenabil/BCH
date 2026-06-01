@@ -5,6 +5,7 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
     const year = searchParams.get('year')
+    const commune = searchParams.get('commune')
 
     const where: Record<string, unknown> = {}
     if (year) {
@@ -12,6 +13,7 @@ export async function GET(request: NextRequest) {
       const end = new Date(parseInt(year), 11, 31)
       where.date = { gte: start, lte: end }
     }
+    if (commune) where.commune = commune
 
     const [total, byType, byStatut, byQuartier, monthly, recent] = await Promise.all([
       // Total count
