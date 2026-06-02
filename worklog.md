@@ -1,245 +1,35 @@
+# Worklog
+
 ---
 Task ID: 1
-Agent: Main
-Task: Link intervention materials with inventory stock - deduction and dropdown
+Agent: Main Agent
+Task: Implement User Management - Authorized accounts per commune
 
 Work Log:
-- Cleared .next cache to fix ChunkLoadError
-- Added InterventionMaterial junction model to Prisma schema (interventionId, productId, quantity)
-- Updated Product model to include interventions relation
-- Updated Intervention model to include materials relation
-- Ran prisma db push and prisma generate
-- Created /api/products/for-dropdown API endpoint (returns only products with stock > 0)
-- Updated /api/interventions POST route to accept materials array, validate stock, deduct quantities
-- Updated /api/interventions/[id] PUT route to handle materials update (restore old stock, deduct new)
-- Updated /api/interventions/[id] DELETE route to restore stock when deleting intervention
-- Updated /api/interventions GET route to include materials with product info
-- Updated InterventionFormDialog with dynamic materials list (product dropdown + quantity input)
-- Updated map popup form with materials section (dynamic add/remove rows)
-- Updated intervention popup display to show linked materials
-- Updated InterventionsView to show materials info in list items
-- Added product filtering by intervention type (DERATISATION, DESINSECTISATION, etc.)
-- Tested full flow: create intervention with materials, verified stock deduction from 45→43 for رودينال
+- Read existing project structure: Prisma schema (User, Session, CommuneSettings models already exist), auth system (login, logout, session, me APIs), store with auth state
+- Created `/api/auth/users/route.ts` — GET (list users filtered by commune for non-admin) and POST (create user with commune enforcement)
+- Created `/api/auth/users/[id]/route.ts` — GET, PUT (edit user), DELETE (with access control per commune)
+- Added `users` to `ViewType` in store.ts for navigation
+- Created `UsersView` component — dedicated full-page view for user management with current user card and management section
+- Upgraded `UserManagementSection` to full CRUD with:
+  - Add User modal (with commune assignment, admin can choose commune, non-admin auto-assigned to their commune)
+  - Edit User modal (name, commune, role, active status)
+  - Change Password modal
+  - Delete User confirmation modal (prevents self-deletion)
+  - Toggle Active/Inactive status
+  - Search by name/username
+  - Filter by commune (admin sees all communes + "المسؤولون العامون")
+  - Users grouped by commune for admin view
+  - UserRow component with dropdown action menu
+- Added "👥 المستخدمون إدارة الحسابات" navigation item in sidebar
+- Added User Management section in Settings view (prominent position)
+- Verified with Agent Browser: login as commune user (sla), admin user, user CRUD operations
+- All API routes enforce commune-based access control: non-admin users can only see/manage users from their own commune
 
 Stage Summary:
-- Feature complete: Materials from inventory appear in dropdown when creating/editing interventions
-- Stock is automatically deducted when intervention is created
-- Stock is restored when intervention is deleted
-- Stock is properly managed when intervention is updated (old quantities restored, new quantities deducted)
-- Server-side validation prevents using more stock than available
-- Backward compatible: old interventions without materials still work fine
-- "Free text" material field kept for materials not in inventory
-
----
-Task ID: 6-9
-Agent: main
-Task: Update frontend for commune filtering across map, inventory, and reports
-
-Work Log:
-- Read and analyzed the full page.tsx structure (~1500+ lines) to identify exact line numbers for all changes
-- Updated `fetchStats` to include commune param via URLSearchParams (selectedCommune !== 'ALL' → params.set('commune', selectedCommune))
-- Updated `fetchInterventions` to include commune param in the URLSearchParams spread
-- Added `selectedCommune` to the useEffect dependency array that triggers fetchStats/fetchInterventions on filter changes
-- Added `commune: string` field to Intervention interface
-- Added `localCommuneFilter` state to InterventionsView component
-- Updated `filteredInterventions` to filter by both statut and commune client-side
-- Added commune dropdown select after the status filter in InterventionsView
-- Added commune badge in each intervention card (after TYPE_LABELS badge) using COMMUNE_COLORS and COMMUNE_LABELS
-- Added `commune: string` field to Product interface
-- Added `filterCommune` state to InventoryView component
-- Updated products fetch useEffect to include commune param and added filterCommune to dependency array
-- Added commune dropdown select in InventoryView filter bar (after category buttons)
-- Added الجماعة column header in products table
-- Added الجماعة cell in products table body with commune badge (using COMMUNE_COLORS/COMMUNE_LABELS) or "مشترك" for empty
-- Added commune select field in ProductFormDialog (after الفئة select) with "مشترك (كل الجماعات)" default option
-- Updated handleSave in InventoryView to include commune in the data object sent to API
-- ReportsView already shows commune badge and stats are now filtered by the global selectedCommune via fetchStats - no changes needed
-- Map view interventions are already filtered by the global selectedCommune via fetchInterventions - no changes needed
-- Ran lint: all checks passed with no errors
-- Checked dev.log: API requests properly include commune parameter, no errors
-
-Stage Summary:
-- All 3 sections (map/interventions, inventory, reports) now support commune filtering
-- Global header commune selector drives API-level filtering for stats and interventions
-- Local commune dropdowns added in InterventionsView and InventoryView for additional client-side filtering
-- Product form includes commune selection field
-- Products table includes الجماعة column with visual badges
-- Intervention cards display commune badges
----
-Task ID: 1-9
-Agent: main
-Task: Add commune filtering across map interventions, inventory, and reports
-
-Work Log:
-- Added `commune` field to Product model in Prisma schema with default empty string
-- Pushed schema changes to database with `prisma db push`
-- Updated interventions API (GET) to accept `commune` query parameter
-- Updated statistics API to accept `commune` query parameter  
-- Updated products API (GET) to accept `commune` query parameter with OR logic (commune-specific + shared products)
-- Updated products API (POST) to accept `commune` field
-- Updated products API (PUT) to accept `commune` field
-- Updated fetchStats to pass commune parameter
-- Updated fetchInterventions to pass commune parameter
-- Added selectedCommune to useEffect dependency array for auto-refresh
-- Added localCommuneFilter to InterventionsView with dropdown
-- Added commune badge in intervention cards
-- Added filterCommune state to InventoryView with dropdown
-- Added "الجماعة" column to products table header and body
-- Added commune select field to ProductFormDialog
-- Updated handleSave to include commune in product data
-- Added commune to Intervention and Product interfaces
-- Reports and Map views already filtered via API params
-
-Stage Summary:
-- Commune filtering works across all three sections: map, inventory, reports
-- API-level filtering ensures efficient database queries
-- Inventory shows both commune-specific and shared products when a commune is selected
-- Product form includes commune selector
-- All existing functionality preserved
----
-Task ID: quartier-management
-Agent: main
-Task: Add quartier (neighborhood) CRUD management
-
-Work Log:
-- Added `commune` field to Quartier model in Prisma schema
-- Pushed schema changes to database
-- Created `/api/quartiers` API route with GET (with commune filter) and POST
-- Created `/api/quartiers/[id]` API route with GET, PUT, DELETE
-- Added `QuartierManagementSection` component in Settings view
-  - List quartiers grouped by commune with colored badges
-  - Search and filter by commune
-  - Add/edit quartier dialog with name, commune, latitude, longitude
-  - Delete confirmation dialog
-- Updated Quartier interface to include `commune` field
-- Updated intervention form quartier dropdown to show commune name next to quartier name
-- Fixed lint error (setState in effect) by using proper useEffect pattern
-- Cleared .next cache and restarted server for Prisma Client update
-
-Stage Summary:
-- Full CRUD for quartiers available in Settings page
-- Quartiers can be filtered by commune
-- Intervention form shows commune alongside quartier name for clarity
-- All existing functionality preserved
-
----
-Task ID: auth-system
-Agent: main
-Task: Add commune-based login system where each commune has its own responsible person who controls only their commune
-
-Work Log:
-- Added User and Session models to Prisma schema
-- Created /lib/auth.ts with auth utilities
-- Created auth API routes (login, logout, me, seed-users)
-- Updated Zustand store with auth state
-- Created LoginPage component with commune selection and login form
-- Updated HomePage with auth flow (check auth, show login, load data only when authenticated)
-- Updated header with user info and logout, locked commune selector for non-admin
-- Updated mobile filters and sidebar with user info
-- Added UserManagementSection in Settings
-- Updated seed route to create default users
-- Tested all auth APIs successfully
-
-Stage Summary:
-- Full commune-based authentication system implemented
-- 4 default users: admin (all communes), sla (سلا), bouknadel (سيدي أبي القنادل), ameur (عامر)
-- Commune responsable users can only see data for their own commune
-- Admin user has access to all communes
-- Session management with HTTP-only cookies (24h expiry)
-- Beautiful RTL Arabic login page with commune selection
-- User info displayed in header, sidebar, and footer
-- Settings page includes user management section
-
----
-Task ID: commune-data-isolation
-Agent: main
-Task: Enforce strict commune-based data isolation — each commune responsible sees and manages ONLY their own commune's data
-
-Work Log:
-- Added `requireAuth()` and `getCommuneFilter()` helper functions to /lib/auth.ts
-- Updated ALL API routes to require authentication and enforce commune filtering:
-  - /api/interventions (GET/POST) — filters by user's commune; non-admin users can only create for their commune
-  - /api/interventions/[id] (GET/PUT/DELETE) — checks commune ownership before any operation
-  - /api/statistics — automatically filters all queries by user's commune
-  - /api/products (GET/POST) — filters by user's commune or shared products; enforces commune on create
-  - /api/products/[id] (GET/PUT/DELETE) — checks commune ownership before any operation
-  - /api/products/for-dropdown — filters by user's commune
-  - /api/quartiers (GET/POST) — filters by user's commune; enforces commune on create
-  - /api/quartiers/[id] (GET/PUT/DELETE) — checks commune ownership before any operation
-  - /api/agents (GET/POST) — filters by user's commune; enforces commune on create
-  - /api/agents/[id] (GET/PUT/DELETE) — checks commune ownership before any operation
-  - /api/export — filters by user's commune
-- Changed Quartier unique constraint from `@unique nom` to `@@unique([nom, commune])` to allow same quartier name in different communes
-- Updated seed data to include quartiers for ALL 3 communes (سلا, سيدي أبي القنادل, عامر)
-- Updated seed data to create interventions and agents for ALL 3 communes
-- Updated seed data to create products assigned to specific communes
-- Updated seed-users route to only create users if they don't exist (no destructive deletion)
-- Added user seeding on LoginPage mount (ensures users exist before first login)
-- Updated frontend to pass `canSeeAllCommunes` to DashboardView, MapView, ReportsView
-- DashboardView: hides "التوزيع حسب الجماعة" section for non-admin users
-- MapView: shows read-only commune indicator for non-admin users instead of filter buttons
-- MapView: only shows user's commune in boundaries list for non-admin users
-- InterventionFormDialog: auto-assigns user's commune for non-admin users (read-only display)
-- InterventionFormDialog: enforces user's commune on map click (non-admin users always keep their commune)
-- Tested data isolation via API:
-  - Bouknadel user: sees only 77 interventions from سيدي أبي القنادل
-  - SLA user: sees only 80 interventions from سلا
-  - AMEUR user: sees only 84 interventions from عامر
-  - Admin user: sees all 241 interventions across all communes
-- Verified non-admin users cannot bypass commune filter by passing different commune parameter
-- Browser-tested login flow and dashboard for both admin and non-admin users
-
-Stage Summary:
-- Complete data isolation: Non-admin users can ONLY see, create, edit, and delete data from their own commune
-- All API routes enforce authentication and commune-based access control
-- Frontend properly restricts UI elements (commune selectors, commune breakdown charts) for non-admin users
-- Database seeded with data for all 3 communes
-- Admin user retains full access to all communes
-- Login system works correctly with session-based authentication
-
----
-Task ID: per-commune-settings
-Agent: main
-Task: Add per-commune settings — each commune has its own separate settings stored in the database
-
-Work Log:
-- Added `CommuneSettings` model to Prisma schema with `commune` (unique) and `settings` (JSON string) fields
-- Ran `prisma db push` and `prisma generate` to create the table
-- Created `/api/settings` API route with:
-  - GET: Returns settings for the authenticated user's commune (enforced via requireAuth + getCommuneFilter)
-  - PUT: Saves settings for the authenticated user's commune (with sanitization of allowed keys)
-  - POST: Resets settings for a commune to defaults (deletes custom settings)
-- Updated Zustand store (`src/lib/store.ts`):
-  - Added `settingsLoaded`, `settingsCommune` state fields
-  - Added `loadSettings()` async function to fetch from API
-  - Added `saveSettings()` async function to save to API
-  - Changed `resetSettings()` to async (calls API)
-  - Added `setSettings()` for direct state updates
-  - Exported `DEFAULT_SETTINGS` for API and frontend consistency
-- Updated `src/app/page.tsx`:
-  - Added settings loading on auth check (loadSettings after setUser)
-  - Added settings loading on login (handleLogin now async, calls loadSettings)
-  - Updated SettingsView with per-commune features:
-    - Admin users see commune selector tabs to switch between communes' settings
-    - Non-admin users see their commune indicator (fixed, cannot change)
-    - Default commune selector is locked for non-admin users (shows their commune as fixed)
-    - All settings changes auto-save with 800ms debounce via `handleUpdateAndSave()`
-    - Reset settings now calls async `resetSettings()` from API
-  - Added commune settings indicator at top of settings page
-  - Non-admin users see "إعدادات جماعة [X]" indicator with "هذه الإعدادات خاصة بجماعتك فقط"
-- Tested API endpoints:
-  - SLA user GET: returns settings with defaultCommune enforced to "سلا"
-  - SLA user PUT: saves and returns settings with sanitization
-  - SLA user POST (reset): deletes custom settings, returns defaults
-  - Admin user GET: returns all communes' settings
-- Ran lint: all checks passed with no errors
-
-Stage Summary:
-- Per-commune settings fully implemented with database persistence
-- Each commune has completely separate settings (map, display, alerts, etc.)
-- Settings are automatically loaded when user logs in based on their commune
-- Non-admin users can only see and modify their own commune's settings
-- Admin users can switch between communes to manage their settings
-- Auto-save with debounce ensures settings are persisted without explicit save button
-- Default commune is enforced for non-admin users (cannot change to other communes)
-- Reset settings feature properly resets to defaults via API
+- Full User Management system implemented with CRUD operations
+- Per-commune access control: non-admin users restricted to their own commune
+- Admin can manage all users across all communes
+- New "Users" navigation view added
+- API routes: GET/POST /api/auth/users, GET/PUT/DELETE /api/auth/users/[id]
+- UI: search, filter by commune, grouped display, modals for add/edit/password/delete
