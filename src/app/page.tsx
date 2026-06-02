@@ -1590,17 +1590,47 @@ function ReportsView({ stats, selectedCommune }: { stats: Statistics | null; sel
           className="bg-white rounded-2xl border border-slate-100 p-6 shadow-sm">
           <h3 className="font-bold text-slate-800 mb-1">توزيع حسب النوع</h3>
           <p className="text-xs text-slate-400 mb-4">النسبة المئوية لكل نوع تدخل</p>
-          <div className="h-56">
+          <div className="h-72">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
-                <Pie data={typePieData} cx="50%" cy="50%" outerRadius={90} innerRadius={55}
-                  paddingAngle={4} dataKey="value" label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                  labelLine={{ stroke: '#94a3b8' }}>
+                <Pie data={typePieData} cx="50%" cy="42%" outerRadius={80} innerRadius={50}
+                  paddingAngle={5} dataKey="value"
+                  label={({ percent, x, y, cx, cy, midAngle, outerRadius: or }) => {
+                    const RADIAN = Math.PI / 180
+                    const radius = or + 22
+                    const lx = cx + radius * Math.cos(-midAngle * RADIAN)
+                    const ly = cy + radius * Math.sin(-midAngle * RADIAN)
+                    return (
+                      <text x={lx} y={ly} textAnchor={lx > cx ? 'start' : 'end'} dominantBaseline="central"
+                        style={{ fontSize: '11px', fontWeight: 700, fill: '#334155', direction: 'rtl' }}>
+                        {`${(percent * 100).toFixed(0)}%`}
+                      </text>
+                    )
+                  }}
+                  labelLine={false}
+                  stroke="none">
                   {typePieData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
                 </Pie>
-                <Tooltip contentStyle={{ direction: 'rtl', borderRadius: '12px', border: 'none', boxShadow: '0 4px 20px rgba(0,0,0,0.1)' }} />
+                <Tooltip formatter={(value: number, name: string) => [`${value} تدخل`, name]}
+                  contentStyle={{ direction: 'rtl', borderRadius: '12px', border: 'none', boxShadow: '0 4px 20px rgba(0,0,0,0.1)' }} />
+                <Legend verticalAlign="bottom" iconType="circle" iconSize={10}
+                  formatter={(value: string) => <span style={{ color: '#475569', fontSize: '12px', fontWeight: 600, marginRight: 4 }}>{value}</span>}
+                  wrapperStyle={{ paddingTop: 16 }} />
               </PieChart>
             </ResponsiveContainer>
+          </div>
+          {/* Summary Cards below chart */}
+          <div className="grid grid-cols-3 gap-3 mt-3">
+            {typePieData.map((item) => (
+              <div key={item.name} className="flex items-center gap-2 rounded-xl px-3 py-2.5 border"
+                style={{ backgroundColor: item.color + '08', borderColor: item.color + '20' }}>
+                <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: item.color }} />
+                <div className="min-w-0">
+                  <div className="text-[11px] font-bold truncate" style={{ color: item.color }}>{item.name}</div>
+                  <div className="text-xs font-extrabold text-slate-700">{item.value}</div>
+                </div>
+              </div>
+            ))}
           </div>
         </motion.div>
 
