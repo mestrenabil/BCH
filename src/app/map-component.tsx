@@ -48,11 +48,13 @@ const COMMUNE_NAME_MAP: Record<string, string> = {
 }
 
 // Point-in-polygon (ray casting algorithm)
+// GeoJSON coordinates: [longitude, latitude] = [x, y]
+// test point: lat = y, lng = x
 function isPointInPolygon(lat: number, lng: number, polygon: number[][]): boolean {
   let inside = false
   for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
-    const xi = polygon[i][1], yi = polygon[i][0]
-    const xj = polygon[j][1], yj = polygon[j][0]
+    const xi = polygon[i][0], yi = polygon[i][1] // x=lng, y=lat
+    const xj = polygon[j][0], yj = polygon[j][1]
     const intersect = ((yi > lat) !== (yj > lat)) && (lng < (xj - xi) * (lat - yi) / (yj - yi) + xi)
     if (intersect) inside = !inside
   }
