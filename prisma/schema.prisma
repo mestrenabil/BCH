@@ -67,3 +67,15 @@ model InterventionMaterial {
 
   @@unique([interventionId, productId])
 }
+
+model Agent {
+  id        String   @id @default(cuid())
+  nom       String   // اسم العون
+  prenom    String   @default("") // اللقب
+  telephone String   @default("") // رقم الهاتف
+  commune   String   @default("") // الجماعة الترابية
+  fonction  String   @default("عون صحية") // الوظيفة: عون صحية، مراقب، مسؤول
+  actif     Boolean  @default(true) // نشط أو لا
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

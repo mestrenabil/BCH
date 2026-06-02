@@ -2137,6 +2137,296 @@ function QuartierManagementSection() {
   )
 }
 
+// ===== AGENT MANAGEMENT SECTION =====
+function AgentManagementSection() {
+  const [agents, setAgents] = useState<{ id: string; nom: string; prenom: string; telephone: string; commune: string; fonction: string; actif: boolean }[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [showForm, setShowForm] = useState(false)
+  const [editingAgent, setEditingAgent] = useState<{ id: string; nom: string; prenom: string; telephone: string; commune: string; fonction: string; actif: boolean } | null>(null)
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
+  const [filterCommune, setFilterCommune] = useState('ALL')
+
+  const FONCTION_LABELS: Record<string, string> = {
+    'عون صحية': 'عون صحية',
+    'مراقب': 'مراقب صحي',
+    'مسؤول': 'مسؤول المصالح',
+    'تقني': 'تقني',
+  }
+
+  useEffect(() => {
+    let cancelled = false
+    const load = async () => {
+      try {
+        const params = new URLSearchParams()
+        if (filterCommune !== 'ALL') params.set('commune', filterCommune)
+        const res = await fetch(`/api/agents?${params}`)
+        const data = await res.json()
+        if (!cancelled) { setAgents(data.agents || []); setIsLoading(false) }
+      } catch { if (!cancelled) setIsLoading(false) }
+    }
+    load()
+    return () => { cancelled = true }
+  }, [filterCommune])
+
+  const refreshAgents = useCallback(() => {
+    const load = async () => {
+      try {
+        const params = new URLSearchParams()
+        if (filterCommune !== 'ALL') params.set('commune', filterCommune)
+        const res = await fetch(`/api/agents?${params}`)
+        const data = await res.json()
+        setAgents(data.agents || [])
+      } catch { /* */ }
+    }
+    load()
+  }, [filterCommune])
+
+  const handleSave = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault()
+    const form = new FormData(e.currentTarget)
+    const data = {
+      nom: form.get('nom') as string,
+      prenom: form.get('prenom') as string,
+      telephone: form.get('telephone') as string,
+      commune: form.get('commune') as string,
+      fonction: form.get('fonction') as string,
+      actif: form.get('actif') === 'on',
+    }
+    if (!data.nom) { toast.error('يرجى إدخال اسم العون'); return }
+    try {
+      const res = await fetch(editingAgent ? `/api/agents/${editingAgent.id}` : '/api/agents', {
+        method: editingAgent ? 'PUT' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      })
+      if (res.ok) {
+        toast.success(editingAgent ? 'تم تحديث العون بنجاح' : 'تم إضافة العون بنجاح')
+        setShowForm(false); setEditingAgent(null); refreshAgents()
+      } else {
+        const err = await res.json().catch(() => ({}))
+        toast.error(err.error || 'حدث خطأ')
+      }
+    } catch { toast.error('حدث خطأ أثناء الحفظ') }
+  }
+
+  const handleDelete = async (id: string) => {
+    try {
+      const res = await fetch(`/api/agents/${id}`, { method: 'DELETE' })
+      if (res.ok) { toast.success('تم حذف العون بنجاح'); refreshAgents() }
+      else { toast.error('حدث خطأ أثناء الحذف') }
+    } catch { toast.error('حدث خطأ') }
+    setDeleteConfirm(null)
+  }
+
+  const handleToggleActive = async (id: string, currentActif: boolean) => {
+    try {
+      const res = await fetch(`/api/agents/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ actif: !currentActif }),
+      })
+      if (res.ok) { refreshAgents(); toast.success(!currentActif ? 'تم تفعيل العون' : 'تم تعطيل العون') }
+    } catch { toast.error('حدث خطأ') }
+  }
+
+  return (
+    <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}
+      className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+      <div className="bg-gradient-to-l from-orange-600 to-amber-600 text-white px-6 py-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="font-bold text-base">👤 إدارة الأعوان</h3>
+            <p className="text-amber-200 text-xs mt-0.5">إضافة وتعديل وحذف الأعوان المكلفين بالتدخلات</p>
+          </div>
+          <motion.button onClick={() => { setEditingAgent(null); setShowForm(true) }}
+            whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
+            className="px-4 py-2 bg-white/20 backdrop-blur-sm rounded-xl text-sm font-bold flex items-center gap-1.5 hover:bg-white/30 transition-colors">
+            <span>+</span> إضافة عون
+          </motion.button>
+        </div>
+      </div>
+      <div className="p-6 space-y-4">
+        {/* Filter */}
+        <div className="flex items-center gap-3">
+          <select value={filterCommune} onChange={(e) => setFilterCommune(e.target.value)}
+            className="px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-amber-500/20">
+            <option value="ALL">كل الجماعات</option>
+            <option value="سلا">جماعة سلا</option>
+            <option value="سيدي أبي القنادل">جماعة سيدي أبي القنادل</option>
+            <option value="عامر">جماعة عامر</option>
+          </select>
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-amber-50 border border-amber-100">
+            <span className="text-sm">👤</span>
+            <span className="text-xs font-bold text-amber-700">{agents.length} عون</span>
+          </div>
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-50 border border-emerald-100">
+            <span className="text-sm">✅</span>
+            <span className="text-xs font-bold text-emerald-700">{agents.filter(a => a.actif).length} نشط</span>
+          </div>
+        </div>
+
+        {/* Agent List */}
+        {isLoading ? (
+          <div className="flex items-center justify-center h-32"><div className="w-8 h-8 border-4 border-amber-500 border-t-transparent rounded-full animate-spin" /></div>
+        ) : agents.length === 0 ? (
+          <div className="text-center py-10 text-slate-400">
+            <p className="text-4xl mb-2">👤</p>
+            <p className="text-sm font-medium">لا يوجد أعوان مسجلون</p>
+            <button onClick={() => { setEditingAgent(null); setShowForm(true) }}
+              className="mt-2 text-xs text-amber-600 font-bold hover:underline">إضافة عون جديد</button>
+          </div>
+        ) : (
+          <div className="space-y-2 max-h-80 overflow-y-auto">
+            {agents.map((agent) => (
+              <motion.div key={agent.id} initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
+                className={`flex items-center justify-between gap-3 rounded-xl px-4 py-3 border transition-all group ${
+                  agent.actif ? 'bg-white border-slate-100 hover:bg-slate-50' : 'bg-slate-50/50 border-slate-100 opacity-60'
+                }`}>
+                <div className="flex items-center gap-3 min-w-0 flex-1">
+                  <div className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold ${
+                    agent.actif ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-400'
+                  }`}>
+                    {agent.nom.charAt(0)}
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-semibold text-slate-700 truncate">{agent.nom} {agent.prenom}</p>
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${
+                        agent.actif ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-400'
+                      }`}>{agent.actif ? 'نشط' : 'معطل'}</span>
+                    </div>
+                    <div className="flex items-center gap-3 text-[11px] text-slate-400">
+                      <span>{agent.fonction}</span>
+                      {agent.commune && <span>🏛️ {agent.commune}</span>}
+                      {agent.telephone && <span>📞 {agent.telephone}</span>}
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button onClick={() => handleToggleActive(agent.id, agent.actif)}
+                    className="w-7 h-7 rounded-lg hover:bg-emerald-50 text-xs flex items-center justify-center transition-colors"
+                    title={agent.actif ? 'تعطيل' : 'تفعيل'}>{agent.actif ? '⏸️' : '▶️'}</button>
+                  <button onClick={() => { setEditingAgent(agent); setShowForm(true) }}
+                    className="w-7 h-7 rounded-lg hover:bg-blue-50 text-blue-500 text-xs flex items-center justify-center transition-colors" title="تعديل">✏️</button>
+                  <button onClick={() => setDeleteConfirm(agent.id)}
+                    className="w-7 h-7 rounded-lg hover:bg-red-50 text-red-500 text-xs flex items-center justify-center transition-colors" title="حذف">🗑️</button>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Add/Edit Form Dialog */}
+      <AnimatePresence>
+        {showForm && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            onClick={() => { setShowForm(false); setEditingAgent(null) }}>
+            <motion.div initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.9, y: 20 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white rounded-2xl max-w-md w-full shadow-2xl">
+              <div className="bg-gradient-to-l from-orange-600 to-amber-600 p-5 rounded-t-2xl text-white">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center text-xl backdrop-blur-sm">
+                      {editingAgent ? '✏️' : '👤'}
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-lg">{editingAgent ? 'تعديل العون' : 'إضافة عون جديد'}</h3>
+                      <p className="text-amber-100 text-xs">{editingAgent ? 'تحديث بيانات العون' : 'تسجيل عون مكلف بالتدخلات'}</p>
+                    </div>
+                  </div>
+                  <button onClick={() => { setShowForm(false); setEditingAgent(null) }}
+                    className="w-8 h-8 rounded-lg bg-white/20 flex items-center justify-center hover:bg-white/30 transition-colors">✕</button>
+                </div>
+              </div>
+              <form onSubmit={handleSave} className="p-5 space-y-4">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 mb-1.5">* الاسم</label>
+                    <input name="nom" defaultValue={editingAgent?.nom || ''} required placeholder="محمد"
+                      className="w-full px-3 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none text-sm" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 mb-1.5">اللقب</label>
+                    <input name="prenom" defaultValue={editingAgent?.prenom || ''} placeholder="بنعلي"
+                      className="w-full px-3 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none text-sm" />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 mb-1.5">📞 رقم الهاتف</label>
+                  <input name="telephone" defaultValue={editingAgent?.telephone || ''} placeholder="06XXXXXXXX" dir="ltr"
+                    className="w-full px-3 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none text-sm text-right" />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 mb-1.5">🏛️ الجماعة</label>
+                    <select name="commune" defaultValue={editingAgent?.commune || ''}
+                      className="w-full px-3 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none text-sm">
+                      <option value="">— اختر —</option>
+                      <option value="سلا">جماعة سلا</option>
+                      <option value="سيدي أبي القنادل">جماعة سيدي أبي القنادل</option>
+                      <option value="عامر">جماعة عامر</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 mb-1.5">🎯 الوظيفة</label>
+                    <select name="fonction" defaultValue={editingAgent?.fonction || 'عون صحية'}
+                      className="w-full px-3 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none text-sm">
+                      {Object.entries(FONCTION_LABELS).map(([k, v]) => (
+                        <option key={k} value={k}>{v}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <input type="checkbox" name="actif" id="agent-actif" defaultChecked={editingAgent?.actif !== false}
+                    className="w-4 h-4 rounded accent-amber-600" />
+                  <label htmlFor="agent-actif" className="text-sm font-medium text-slate-700">عون نشط</label>
+                </div>
+                <div className="flex gap-3 pt-2">
+                  <button type="button" onClick={() => { setShowForm(false); setEditingAgent(null) }}
+                    className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-medium text-sm hover:bg-slate-50 transition-colors">إلغاء</button>
+                  <button type="submit"
+                    className="flex-1 px-4 py-2.5 rounded-xl bg-gradient-to-l from-orange-600 to-amber-600 text-white font-medium text-sm shadow-lg shadow-amber-200 hover:shadow-amber-300 transition-all">
+                    {editingAgent ? '💾 تحديث العون' : '👤 إضافة العون'}
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Delete Confirmation */}
+      <AnimatePresence>
+        {deleteConfirm && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            onClick={() => setDeleteConfirm(null)}>
+            <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} exit={{ scale: 0.9 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl">
+              <div className="text-center">
+                <div className="w-14 h-14 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-3"><span className="text-2xl">🗑️</span></div>
+                <h3 className="font-bold text-slate-800 mb-1">حذف العون</h3>
+                <p className="text-sm text-slate-500 mb-4">هل أنت متأكد من حذف هذا العون؟</p>
+                <div className="flex gap-3">
+                  <button onClick={() => setDeleteConfirm(null)}
+                    className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-medium text-sm hover:bg-slate-50 transition-colors">إلغاء</button>
+                  <button onClick={() => handleDelete(deleteConfirm)}
+                    className="flex-1 px-4 py-2.5 rounded-xl bg-red-600 text-white font-medium text-sm hover:bg-red-700 transition-colors shadow-lg shadow-red-200">حذف</button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.div>
+  )
+}
+
 // ===== SETTINGS VIEW =====
 function SettingsView() {
   const { settings, updateSettings, resetSettings, setSelectedYear, setSelectedCommune } = useAppStore()
@@ -2354,6 +2644,246 @@ function SettingsView() {
                 animate={{ left: settings.animationsEnabled ? '2rem' : '0.25rem' }}
                 transition={{ type: 'spring', stiffness: 500, damping: 30 }} />
             </button>
+          </div>
+
+          <div className="border-t border-slate-100" />
+
+          {/* Font Size */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <label className="text-sm font-semibold text-slate-700">📝 حجم الخط</label>
+              <p className="text-xs text-slate-400 mt-0.5">حجم النصوص في التطبيق</p>
+            </div>
+            <div className="flex gap-2">
+              {[
+                { value: 'small' as const, label: 'صغير', icon: '🔤' },
+                { value: 'medium' as const, label: 'متوسط', icon: '🔠' },
+                { value: 'large' as const, label: 'كبير', icon: '🔡' },
+              ].map((opt) => (
+                <button key={opt.value} onClick={() => updateSettings({ fontSize: opt.value })}
+                  className={`px-3 py-2 rounded-xl text-sm font-medium transition-all flex items-center gap-1.5 ${
+                    settings.fontSize === opt.value
+                      ? 'bg-purple-600 text-white shadow-lg shadow-purple-200'
+                      : 'bg-slate-50 text-slate-600 border border-slate-200 hover:bg-slate-100'
+                  }`}>
+                  <span className="text-xs">{opt.icon}</span>
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="border-t border-slate-100" />
+
+          {/* Compact Mode */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <label className="text-sm font-semibold text-slate-700">📐 الوضع المضغوط</label>
+              <p className="text-xs text-slate-400 mt-0.5">تقليل المسافات لعرض بيانات أكثر</p>
+            </div>
+            <button onClick={() => updateSettings({ compactMode: !settings.compactMode })}
+              className={`relative w-14 h-8 rounded-full transition-colors duration-300 ${settings.compactMode ? 'bg-emerald-500' : 'bg-slate-300'}`}>
+              <motion.div className="absolute top-1 w-6 h-6 bg-white rounded-full shadow-md"
+                animate={{ left: settings.compactMode ? '2rem' : '0.25rem' }}
+                transition={{ type: 'spring', stiffness: 500, damping: 30 }} />
+            </button>
+          </div>
+        </div>
+      </motion.div>
+
+      {/* Alert Settings */}
+      <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }}
+        className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+        <div className="bg-gradient-to-l from-rose-600 to-red-600 text-white px-6 py-4">
+          <h3 className="font-bold text-base">🔔 إعدادات التنبيهات</h3>
+          <p className="text-rose-200 text-xs mt-0.5">تنبيهات المخزون والمواعيد</p>
+        </div>
+        <div className="p-6 space-y-5">
+          {/* Stock Alert */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <label className="text-sm font-semibold text-slate-700">📦 تنبيه المخزون المنخفض</label>
+              <p className="text-xs text-slate-400 mt-0.5">تنبيه عند انخفاض كمية مادة في المخزون عن العتبة</p>
+            </div>
+            <button onClick={() => updateSettings({ stockAlertEnabled: !settings.stockAlertEnabled })}
+              className={`relative w-14 h-8 rounded-full transition-colors duration-300 ${settings.stockAlertEnabled ? 'bg-emerald-500' : 'bg-slate-300'}`}>
+              <motion.div className="absolute top-1 w-6 h-6 bg-white rounded-full shadow-md"
+                animate={{ left: settings.stockAlertEnabled ? '2rem' : '0.25rem' }}
+                transition={{ type: 'spring', stiffness: 500, damping: 30 }} />
+            </button>
+          </div>
+
+          <div className="border-t border-slate-100" />
+
+          {/* Stock Alert Threshold */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <label className="text-sm font-semibold text-slate-700">📊 عتبة تنبيه المخزون</label>
+              <p className="text-xs text-slate-400 mt-0.5">الحد الأدنى قبل إطلاق التنبيه</p>
+            </div>
+            <div className="flex items-center gap-3 w-full sm:w-64">
+              <input type="range" min="1" max="50" step="1" value={settings.stockAlertThreshold}
+                onChange={(e) => updateSettings({ stockAlertThreshold: parseInt(e.target.value) })}
+                className="flex-1 h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-rose-600" />
+              <span className="text-sm font-bold text-slate-700 bg-slate-50 px-3 py-1 rounded-lg min-w-[3rem] text-center">{settings.stockAlertThreshold}</span>
+            </div>
+          </div>
+
+          <div className="border-t border-slate-100" />
+
+          {/* Deadline Reminder */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <label className="text-sm font-semibold text-slate-700">⏰ تذكير المواعيد</label>
+              <p className="text-xs text-slate-400 mt-0.5">تذكير بالتدخلات المبرمجة قبل موعدها</p>
+            </div>
+            <button onClick={() => updateSettings({ deadlineReminderEnabled: !settings.deadlineReminderEnabled })}
+              className={`relative w-14 h-8 rounded-full transition-colors duration-300 ${settings.deadlineReminderEnabled ? 'bg-emerald-500' : 'bg-slate-300'}`}>
+              <motion.div className="absolute top-1 w-6 h-6 bg-white rounded-full shadow-md"
+                animate={{ left: settings.deadlineReminderEnabled ? '2rem' : '0.25rem' }}
+                transition={{ type: 'spring', stiffness: 500, damping: 30 }} />
+            </button>
+          </div>
+
+          <div className="border-t border-slate-100" />
+
+          {/* Deadline Reminder Days */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <label className="text-sm font-semibold text-slate-700">📅 أيام قبل التذكير</label>
+              <p className="text-xs text-slate-400 mt-0.5">عدد الأيام قبل موعد التدخل للتنبيه</p>
+            </div>
+            <div className="flex items-center gap-3 w-full sm:w-64">
+              <input type="range" min="1" max="14" step="1" value={settings.deadlineReminderDays}
+                onChange={(e) => updateSettings({ deadlineReminderDays: parseInt(e.target.value) })}
+                className="flex-1 h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-rose-600" />
+              <span className="text-sm font-bold text-slate-700 bg-slate-50 px-3 py-1 rounded-lg min-w-[3rem] text-center">{settings.deadlineReminderDays} يوم</span>
+            </div>
+          </div>
+        </div>
+      </motion.div>
+
+      {/* Agent Management */}
+      <AgentManagementSection />
+
+      {/* Data Export */}
+      <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.45 }}
+        className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+        <div className="bg-gradient-to-l from-indigo-600 to-violet-600 text-white px-6 py-4">
+          <h3 className="font-bold text-base">📤 تصدير البيانات</h3>
+          <p className="text-indigo-200 text-xs mt-0.5">تصدير التدخلات والتقارير بتنسيقات مختلفة</p>
+        </div>
+        <div className="p-6 space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* Export CSV */}
+            <motion.button onClick={() => {
+              const params = new URLSearchParams({ format: 'csv' })
+              if (settings.defaultYear) params.set('year', settings.defaultYear)
+              if (settings.defaultCommune !== 'ALL') params.set('commune', settings.defaultCommune)
+              window.open(`/api/export?${params.toString()}`, '_blank')
+              toast.success('جاري تحميل ملف CSV...')
+            }} whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+              className="flex items-center gap-3 p-4 rounded-xl border-2 border-dashed border-emerald-200 hover:border-emerald-400 hover:bg-emerald-50/50 transition-all group">
+              <div className="w-12 h-12 rounded-xl bg-emerald-100 flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">📊</div>
+              <div className="text-right">
+                <div className="text-sm font-bold text-slate-700">تصدير CSV</div>
+                <div className="text-[11px] text-slate-400">ملف جدول بيانات متوافق مع Excel</div>
+              </div>
+            </motion.button>
+
+            {/* Export JSON */}
+            <motion.button onClick={() => {
+              const params = new URLSearchParams({ format: 'json' })
+              if (settings.defaultYear) params.set('year', settings.defaultYear)
+              if (settings.defaultCommune !== 'ALL') params.set('commune', settings.defaultCommune)
+              window.open(`/api/export?${params.toString()}`, '_blank')
+              toast.success('جاري تحميل ملف JSON...')
+            }} whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+              className="flex items-center gap-3 p-4 rounded-xl border-2 border-dashed border-blue-200 hover:border-blue-400 hover:bg-blue-50/50 transition-all group">
+              <div className="w-12 h-12 rounded-xl bg-blue-100 flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">📋</div>
+              <div className="text-right">
+                <div className="text-sm font-bold text-slate-700">تصدير JSON</div>
+                <div className="text-[11px] text-slate-400">بيانات مهيكلة للمطورين</div>
+              </div>
+            </motion.button>
+          </div>
+
+          {/* Export options info */}
+          <div className="bg-slate-50 rounded-xl p-3.5 flex items-start gap-3">
+            <span className="text-lg mt-0.5">💡</span>
+            <div className="text-xs text-slate-500 leading-relaxed">
+              <strong className="text-slate-600">ملاحظة:</strong> يتم تصدير البيانات حسب السنة والجماعة المختارة حالياً. يمكنك تغيير الفلترات قبل التصدير.
+            </div>
+          </div>
+        </div>
+      </motion.div>
+
+      {/* Backup & Restore */}
+      <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }}
+        className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+        <div className="bg-gradient-to-l from-cyan-600 to-sky-600 text-white px-6 py-4">
+          <h3 className="font-bold text-base">💾 النسخ الاحتياطي</h3>
+          <p className="text-cyan-200 text-xs mt-0.5">حفظ واستعادة بيانات التطبيق</p>
+        </div>
+        <div className="p-6 space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* Backup */}
+            <motion.button onClick={async () => {
+              try {
+                const [interventions, products, quartiers, agents] = await Promise.all([
+                  fetch('/api/export?format=json').then(r => r.json()),
+                  fetch('/api/products').then(r => r.json()),
+                  fetch('/api/quartiers').then(r => r.json()),
+                  fetch('/api/agents').then(r => r.json()),
+                ])
+                const backup = {
+                  version: '2.0',
+                  date: new Date().toISOString(),
+                  interventions,
+                  products: products.products || [],
+                  quartiers: quartiers.quartiers || [],
+                  agents: agents.agents || [],
+                  settings,
+                }
+                const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' })
+                const url = URL.createObjectURL(blob)
+                const a = document.createElement('a')
+                a.href = url; a.download = `backup-3d-${new Date().toISOString().split('T')[0]}.json`
+                a.click(); URL.revokeObjectURL(url)
+                toast.success('تم تحميل النسخة الاحتياطية بنجاح')
+              } catch { toast.error('حدث خطأ أثناء النسخ الاحتياطي') }
+            }} whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+              className="flex items-center gap-3 p-4 rounded-xl bg-cyan-50 border border-cyan-100 hover:bg-cyan-100/70 transition-all group">
+              <div className="w-12 h-12 rounded-xl bg-cyan-200/70 flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">💾</div>
+              <div className="text-right">
+                <div className="text-sm font-bold text-cyan-800">إنشاء نسخة احتياطية</div>
+                <div className="text-[11px] text-cyan-600">تحميل جميع البيانات كملف JSON</div>
+              </div>
+            </motion.button>
+
+            {/* Restore */}
+            <motion.button onClick={() => {
+              const input = document.createElement('input')
+              input.type = 'file'; input.accept = '.json'
+              input.onchange = async (e) => {
+                const file = (e.target as HTMLInputElement).files?.[0]
+                if (!file) return
+                try {
+                  const text = await file.text()
+                  const backup = JSON.parse(text)
+                  if (!backup.version) { toast.error('ملف النسخة الاحتياطية غير صالح'); return }
+                  toast.success(`تم العثور على ${backup.interventions?.total || 0} تدخل، ${backup.quartiers?.length || 0} حي، ${backup.agents?.length || 0} عون`)
+                } catch { toast.error('حدث خطأ أثناء قراءة الملف') }
+              }
+              input.click()
+            }} whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+              className="flex items-center gap-3 p-4 rounded-xl bg-slate-50 border border-slate-200 hover:bg-slate-100/70 transition-all group">
+              <div className="w-12 h-12 rounded-xl bg-slate-200/70 flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">📂</div>
+              <div className="text-right">
+                <div className="text-sm font-bold text-slate-700">استعادة من نسخة</div>
+                <div className="text-[11px] text-slate-500">استيراد بيانات من ملف احتياطي</div>
+              </div>
+            </motion.button>
           </div>
         </div>
       </motion.div>

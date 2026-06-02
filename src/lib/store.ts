@@ -14,6 +14,12 @@ interface AppSettings {
   defaultCommune: CommuneType | 'ALL'
   defaultYear: string
   interventionsPerPage: number
+  stockAlertEnabled: boolean
+  stockAlertThreshold: number
+  deadlineReminderEnabled: boolean
+  deadlineReminderDays: number
+  fontSize: 'small' | 'medium' | 'large'
+  compactMode: boolean
 }
 
 export interface MapClickCoords {
@@ -68,6 +74,12 @@ const DEFAULT_SETTINGS: AppSettings = {
   defaultCommune: 'ALL',
   defaultYear: CURRENT_YEAR,
   interventionsPerPage: 50,
+  stockAlertEnabled: true,
+  stockAlertThreshold: 10,
+  deadlineReminderEnabled: true,
+  deadlineReminderDays: 3,
+  fontSize: 'medium',
+  compactMode: false,
 }
 
 export const useAppStore = create<AppState>((set) => ({
