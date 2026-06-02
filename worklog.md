@@ -96,3 +96,28 @@ Stage Summary:
 - Inventory shows both commune-specific and shared products when a commune is selected
 - Product form includes commune selector
 - All existing functionality preserved
+---
+Task ID: quartier-management
+Agent: main
+Task: Add quartier (neighborhood) CRUD management
+
+Work Log:
+- Added `commune` field to Quartier model in Prisma schema
+- Pushed schema changes to database
+- Created `/api/quartiers` API route with GET (with commune filter) and POST
+- Created `/api/quartiers/[id]` API route with GET, PUT, DELETE
+- Added `QuartierManagementSection` component in Settings view
+  - List quartiers grouped by commune with colored badges
+  - Search and filter by commune
+  - Add/edit quartier dialog with name, commune, latitude, longitude
+  - Delete confirmation dialog
+- Updated Quartier interface to include `commune` field
+- Updated intervention form quartier dropdown to show commune name next to quartier name
+- Fixed lint error (setState in effect) by using proper useEffect pattern
+- Cleared .next cache and restarted server for Prisma Client update
+
+Stage Summary:
+- Full CRUD for quartiers available in Settings page
+- Quartiers can be filtered by commune
+- Intervention form shows commune alongside quartier name for clarity
+- All existing functionality preserved

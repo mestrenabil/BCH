@@ -33,7 +33,7 @@ interface Statistics {
   quartiers: { id: string; nom: string; latitude: number; longitude: number }[]
 }
 
-interface Quartier { id: string; nom: string; latitude: number; longitude: number }
+interface Quartier { id: string; nom: string; commune: string; latitude: number; longitude: number }
 
 // ===== CONSTANTS =====
 const TYPE_LABELS: Record<string, string> = {
@@ -1694,6 +1694,288 @@ function ReportsView({ stats, selectedCommune }: { stats: Statistics | null; sel
   )
 }
 
+// ===== QUARTIER MANAGEMENT SECTION =====
+function QuartierManagementSection() {
+  const [quartiers, setQuartiers] = useState<Quartier[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [showForm, setShowForm] = useState(false)
+  const [editingQuartier, setEditingQuartier] = useState<Quartier | null>(null)
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
+  const [filterCommune, setFilterCommune] = useState('ALL')
+  const [searchQuery, setSearchQuery] = useState('')
+
+  useEffect(() => {
+    let cancelled = false
+    const load = async () => {
+      try {
+        const params = new URLSearchParams()
+        if (filterCommune !== 'ALL') params.set('commune', filterCommune)
+        const res = await fetch(`/api/quartiers?${params}`)
+        const data = await res.json()
+        if (!cancelled) {
+          setQuartiers(data.quartiers || [])
+          setIsLoading(false)
+        }
+      } catch (err) { console.error('Failed to fetch quartiers:', err); if (!cancelled) setIsLoading(false) }
+    }
+    load()
+    return () => { cancelled = true }
+  }, [filterCommune])
+
+  const refreshQuartiers = useCallback(() => {
+    const load = async () => {
+      try {
+        const params = new URLSearchParams()
+        if (filterCommune !== 'ALL') params.set('commune', filterCommune)
+        const res = await fetch(`/api/quartiers?${params}`)
+        const data = await res.json()
+        setQuartiers(data.quartiers || [])
+      } catch (err) { console.error('Failed to fetch quartiers:', err) }
+    }
+    load()
+  }, [filterCommune])
+
+  const handleSave = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault()
+    const form = new FormData(e.currentTarget)
+    const data = {
+      nom: form.get('nom') as string,
+      commune: form.get('commune') as string,
+      latitude: form.get('latitude') as string,
+      longitude: form.get('longitude') as string,
+    }
+    if (!data.nom) { toast.error('يرجى إدخال اسم الحي'); return }
+    try {
+      const res = await fetch(editingQuartier ? `/api/quartiers/${editingQuartier.id}` : '/api/quartiers', {
+        method: editingQuartier ? 'PUT' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      })
+      if (res.ok) {
+        toast.success(editingQuartier ? 'تم تحديث الحي بنجاح' : 'تم إضافة الحي بنجاح')
+        setShowForm(false); setEditingQuartier(null); refreshQuartiers()
+      } else {
+        const err = await res.json().catch(() => ({}))
+        toast.error(err.error || 'حدث خطأ')
+      }
+    } catch { toast.error('حدث خطأ أثناء الحفظ') }
+  }
+
+  const handleDelete = async (id: string) => {
+    try {
+      const res = await fetch(`/api/quartiers/${id}`, { method: 'DELETE' })
+      if (res.ok) {
+        toast.success('تم حذف الحي بنجاح')
+        refreshQuartiers()
+      } else {
+        const err = await res.json().catch(() => ({}))
+        toast.error(err.error || 'حدث خطأ أثناء الحذف')
+      }
+    } catch { toast.error('حدث خطأ') }
+    setDeleteConfirm(null)
+  }
+
+  const filteredQuartiers = quartiers.filter(q =>
+    !searchQuery || q.nom.includes(searchQuery) || q.commune.includes(searchQuery)
+  )
+
+  // Group quartiers by commune
+  const groupedQuartiers: Record<string, Quartier[]> = {}
+  for (const q of filteredQuartiers) {
+    const key = q.commune || 'بدون جماعة'
+    if (!groupedQuartiers[key]) groupedQuartiers[key] = []
+    groupedQuartiers[key].push(q)
+  }
+
+  return (
+    <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.45 }}
+      className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+      <div className="bg-gradient-to-l from-teal-600 to-cyan-600 text-white px-6 py-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="font-bold text-base">🏘️ إدارة الأحياء</h3>
+            <p className="text-teal-200 text-xs mt-0.5">إضافة وتعديل وحذف الأحياء السكنية</p>
+          </div>
+          <motion.button onClick={() => { setEditingQuartier(null); setShowForm(true) }}
+            whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
+            className="px-4 py-2 bg-white/20 backdrop-blur-sm rounded-xl text-sm font-bold flex items-center gap-1.5 hover:bg-white/30 transition-colors">
+            <span>+</span> إضافة حي
+          </motion.button>
+        </div>
+      </div>
+      <div className="p-6 space-y-4">
+        {/* Filters */}
+        <div className="flex flex-col sm:flex-row gap-3">
+          <div className="flex-1 relative">
+            <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="🔍 بحث عن حي..." className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none text-sm" />
+          </div>
+          <select value={filterCommune} onChange={(e) => setFilterCommune(e.target.value)}
+            className="px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-teal-500/20">
+            <option value="ALL">كل الجماعات</option>
+            <option value="سلا">جماعة سلا</option>
+            <option value="سيدي أبي القنادل">جماعة سيدي أبي القنادل</option>
+            <option value="عامر">جماعة عامر</option>
+          </select>
+        </div>
+
+        {/* Stats Row */}
+        <div className="flex gap-3">
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-teal-50 border border-teal-100">
+            <span className="text-sm">🏘️</span>
+            <span className="text-xs font-bold text-teal-700">{quartiers.length} حي</span>
+          </div>
+          {Object.entries(COMMUNE_LABELS).map(([key, label]) => {
+            const count = quartiers.filter(q => q.commune === key).length
+            return (
+              <div key={key} className="flex items-center gap-2 px-3 py-1.5 rounded-lg border"
+                style={{ backgroundColor: COMMUNE_COLORS[key as keyof typeof COMMUNE_COLORS] + '08', borderColor: COMMUNE_COLORS[key as keyof typeof COMMUNE_COLORS] + '20' }}>
+                <div className="w-2 h-2 rounded-full" style={{ backgroundColor: COMMUNE_COLORS[key as keyof typeof COMMUNE_COLORS] }} />
+                <span className="text-xs font-bold" style={{ color: COMMUNE_COLORS[key as keyof typeof COMMUNE_COLORS] }}>{count}</span>
+              </div>
+            )
+          })}
+        </div>
+
+        {/* Quartier List */}
+        {isLoading ? (
+          <div className="flex items-center justify-center h-32"><div className="w-8 h-8 border-4 border-teal-500 border-t-transparent rounded-full animate-spin" /></div>
+        ) : filteredQuartiers.length === 0 ? (
+          <div className="text-center py-10 text-slate-400">
+            <p className="text-4xl mb-2">🏘️</p>
+            <p className="text-sm font-medium">لا توجد أحياء</p>
+            <button onClick={() => { setEditingQuartier(null); setShowForm(true) }}
+              className="mt-2 text-xs text-teal-600 font-bold hover:underline">إضافة حي جديد</button>
+          </div>
+        ) : (
+          <div className="space-y-4 max-h-96 overflow-y-auto">
+            {Object.entries(groupedQuartiers).map(([communeKey, items]) => (
+              <div key={communeKey}>
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: communeKey !== 'بدون جماعة' ? COMMUNE_COLORS[communeKey as keyof typeof COMMUNE_COLORS] || '#64748b' : '#94a3b8' }} />
+                  <span className="text-xs font-bold text-slate-600">{communeKey !== 'بدون جماعة' ? COMMUNE_LABELS[communeKey as keyof typeof COMMUNE_LABELS] || communeKey : 'بدون جماعة'}</span>
+                  <span className="text-[10px] text-slate-400">({items.length})</span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                  {items.map((q) => (
+                    <motion.div key={q.id} initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
+                      className="flex items-center justify-between gap-2 bg-slate-50 hover:bg-slate-100 rounded-xl px-3 py-2.5 border border-slate-100 transition-all group">
+                      <div className="flex items-center gap-2 min-w-0 flex-1">
+                        <span className="text-sm">📍</span>
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold text-slate-700 truncate">{q.nom}</p>
+                          <p className="text-[10px] text-slate-400 font-mono">{q.latitude.toFixed(4)}, {q.longitude.toFixed(4)}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button onClick={() => { setEditingQuartier(q); setShowForm(true) }}
+                          className="w-7 h-7 rounded-lg hover:bg-blue-50 text-blue-500 text-xs flex items-center justify-center transition-colors" title="تعديل">✏️</button>
+                        <button onClick={() => setDeleteConfirm(q.id)}
+                          className="w-7 h-7 rounded-lg hover:bg-red-50 text-red-500 text-xs flex items-center justify-center transition-colors" title="حذف">🗑️</button>
+                      </div>
+                    </motion.div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Add/Edit Form Dialog */}
+      <AnimatePresence>
+        {showForm && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            onClick={() => { setShowForm(false); setEditingQuartier(null) }}>
+            <motion.div initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.9, y: 20 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white rounded-2xl max-w-md w-full shadow-2xl">
+              <div className="bg-gradient-to-l from-teal-600 to-cyan-600 p-5 rounded-t-2xl text-white">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center text-xl backdrop-blur-sm">
+                      {editingQuartier ? '✏️' : '🏘️'}
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-lg">{editingQuartier ? 'تعديل الحي' : 'إضافة حي جديد'}</h3>
+                      <p className="text-teal-100 text-xs">{editingQuartier ? 'تحديث بيانات الحي' : 'إدخال حي سكني جديد'}</p>
+                    </div>
+                  </div>
+                  <button onClick={() => { setShowForm(false); setEditingQuartier(null) }}
+                    className="w-8 h-8 rounded-lg bg-white/20 flex items-center justify-center hover:bg-white/30 transition-colors">✕</button>
+                </div>
+              </div>
+              <form onSubmit={handleSave} className="p-5 space-y-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 mb-1.5">* اسم الحي</label>
+                  <input name="nom" defaultValue={editingQuartier?.nom || ''} required placeholder="مثال: حي الأمل"
+                    className="w-full px-3 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none text-sm" />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 mb-1.5">الجماعة</label>
+                  <select name="commune" defaultValue={editingQuartier?.commune || ''}
+                    className="w-full px-3 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none text-sm">
+                    <option value="">— اختر الجماعة —</option>
+                    <option value="سلا">جماعة سلا</option>
+                    <option value="سيدي أبي القنادل">جماعة سيدي أبي القنادل</option>
+                    <option value="عامر">جماعة عامر</option>
+                  </select>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 mb-1.5">خط العرض</label>
+                    <input name="latitude" type="number" step="any" defaultValue={editingQuartier?.latitude ?? 34.052} placeholder="34.052"
+                      className="w-full px-3 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none text-sm" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 mb-1.5">خط الطول</label>
+                    <input name="longitude" type="number" step="any" defaultValue={editingQuartier?.longitude ?? -6.735} placeholder="-6.735"
+                      className="w-full px-3 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none text-sm" />
+                  </div>
+                </div>
+                <div className="flex gap-3 pt-2">
+                  <button type="button" onClick={() => { setShowForm(false); setEditingQuartier(null) }}
+                    className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-medium text-sm hover:bg-slate-50 transition-colors">إلغاء</button>
+                  <button type="submit"
+                    className="flex-1 px-4 py-2.5 rounded-xl bg-gradient-to-l from-teal-600 to-cyan-600 text-white font-medium text-sm shadow-lg shadow-teal-200 hover:shadow-teal-300 transition-all">
+                    {editingQuartier ? '💾 تحديث الحي' : '🏘️ إضافة الحي'}
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Delete Confirmation */}
+      <AnimatePresence>
+        {deleteConfirm && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            onClick={() => setDeleteConfirm(null)}>
+            <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} exit={{ scale: 0.9 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl">
+              <div className="text-center">
+                <div className="w-14 h-14 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-3"><span className="text-2xl">🗑️</span></div>
+                <h3 className="font-bold text-slate-800 mb-1">حذف الحي</h3>
+                <p className="text-sm text-slate-500 mb-4">هل أنت متأكد من حذف هذا الحي؟ التدخلات المرتبطة به لن تُحذف.</p>
+                <div className="flex gap-3">
+                  <button onClick={() => setDeleteConfirm(null)}
+                    className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-medium text-sm hover:bg-slate-50 transition-colors">إلغاء</button>
+                  <button onClick={() => handleDelete(deleteConfirm)}
+                    className="flex-1 px-4 py-2.5 rounded-xl bg-red-600 text-white font-medium text-sm hover:bg-red-700 transition-colors shadow-lg shadow-red-200">حذف</button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.div>
+  )
+}
+
 // ===== SETTINGS VIEW =====
 function SettingsView() {
   const { settings, updateSettings, resetSettings, setSelectedYear, setSelectedCommune } = useAppStore()
@@ -1949,6 +2231,9 @@ function SettingsView() {
           </div>
         </div>
       </motion.div>
+
+      {/* Quartier Management */}
+      <QuartierManagementSection />
 
       {/* Reset Settings */}
       <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }}
@@ -2229,7 +2514,11 @@ function InterventionFormDialog({ interventionId, quartiers, mapClickCoords, onC
                 <select value={formData.quartier} onChange={(e) => updateField('quartier', e.target.value)} required
                   className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-300">
                   <option value="">اختر الحي</option>
-                  {quartiers.map(q => <option key={q.id} value={q.nom}>{q.nom}</option>)}
+                  {quartiers.map(q => (
+                    <option key={q.id} value={q.nom}>
+                      {q.nom}{q.commune ? ` — ${COMMUNE_LABELS[q.commune as keyof typeof COMMUNE_LABELS] || q.commune}` : ''}
+                    </option>
+                  ))}
                 </select>
               </div>
               <div>

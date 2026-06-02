@@ -33,6 +33,7 @@ model Intervention {
 model Quartier {
   id        String @id @default(cuid())
   nom       String @unique
+  commune   String @default("") // الجماعة الترابية: سلا، سيدي أبي القنادل، عامر
   latitude  Float
   longitude Float
 }
