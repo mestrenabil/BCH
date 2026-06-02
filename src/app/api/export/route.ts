@@ -1,13 +1,22 @@
 import { db } from '@/lib/db'
 import { NextRequest, NextResponse } from 'next/server'
+import { requireAuth, getCommuneFilter } from '@/lib/auth'
 
 export async function GET(request: NextRequest) {
   try {
+    // Require authentication
+    const authResult = await requireAuth()
+    if ('error' in authResult) return authResult.error
+    const { user } = authResult
+
     const { searchParams } = new URL(request.url)
     const format = searchParams.get('format') || 'csv'
     const year = searchParams.get('year')
-    const commune = searchParams.get('commune')
+    const requestedCommune = searchParams.get('commune')
     const type = searchParams.get('type')
+
+    // Enforce commune filter based on user's role
+    const communeFilter = getCommuneFilter(user, requestedCommune)
 
     const where: Record<string, unknown> = {}
     if (year) {
@@ -15,7 +24,7 @@ export async function GET(request: NextRequest) {
       const end = new Date(parseInt(year), 11, 31)
       where.date = { gte: start, lte: end }
     }
-    if (commune) where.commune = commune
+    if (communeFilter) where.commune = communeFilter
     if (type) where.type = type
 
     const interventions = await db.intervention.findMany({
@@ -66,7 +75,7 @@ export async function GET(request: NextRequest) {
       return new NextResponse(csv, {
         headers: {
           'Content-Type': 'text/csv; charset=utf-8',
-          'Content-Disposition': `attachment; filename="interventions-${year || 'all'}${commune ? '-' + commune : ''}.csv"`,
+          'Content-Disposition': `attachment; filename="interventions-${year || 'all'}${communeFilter ? '-' + communeFilter : ''}.csv"`,
         },
       })
     }

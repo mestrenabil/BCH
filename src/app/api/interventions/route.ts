@@ -1,25 +1,34 @@
 import { db } from '@/lib/db'
 import { NextRequest, NextResponse } from 'next/server'
+import { requireAuth, getCommuneFilter } from '@/lib/auth'
 
 export async function GET(request: NextRequest) {
   try {
+    // Require authentication
+    const authResult = await requireAuth()
+    if ('error' in authResult) return authResult.error
+    const { user } = authResult
+
     const { searchParams } = new URL(request.url)
     const type = searchParams.get('type')
     const statut = searchParams.get('statut')
     const quartier = searchParams.get('quartier')
-    const commune = searchParams.get('commune')
+    const requestedCommune = searchParams.get('commune')
     const from = searchParams.get('from')
     const to = searchParams.get('to')
     const search = searchParams.get('search')
     const page = parseInt(searchParams.get('page') || '1')
     const limit = parseInt(searchParams.get('limit') || '50')
 
+    // Enforce commune filter based on user's role
+    const communeFilter = getCommuneFilter(user, requestedCommune)
+
     const where: Record<string, unknown> = {}
 
     if (type) where.type = type
     if (statut) where.statut = statut
     if (quartier) where.quartier = quartier
-    if (commune) where.commune = commune
+    if (communeFilter) where.commune = communeFilter
     if (from || to) {
       where.date = {
         ...(from ? { gte: new Date(from) } : {}),
@@ -67,6 +76,11 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    // Require authentication
+    const authResult = await requireAuth()
+    if ('error' in authResult) return authResult.error
+    const { user } = authResult
+
     const body = await request.json()
     const {
       type, date, quartier, adresse, commune, latitude, longitude,
@@ -79,6 +93,9 @@ export async function POST(request: NextRequest) {
     if (!type || !date || !quartier || !agentNom || !statut) {
       return NextResponse.json({ error: 'يرجى ملء جميع الحقول المطلوبة' }, { status: 400 })
     }
+
+    // Enforce commune: non-admin users can only create interventions for their own commune
+    const enforcedCommune = user.commune !== 'ALL' ? user.commune : (commune || '')
 
     // Validate materials stock availability
     if (materials && Array.isArray(materials) && materials.length > 0) {
@@ -139,7 +156,7 @@ export async function POST(request: NextRequest) {
         date: new Date(date),
         quartier,
         adresse: adresse || '',
-        commune: commune || '',
+        commune: enforcedCommune,
         latitude: parseFloat(latitude) || 0,
         longitude: parseFloat(longitude) || 0,
         statut,

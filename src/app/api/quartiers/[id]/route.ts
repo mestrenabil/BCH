@@ -1,11 +1,22 @@
 import { db } from '@/lib/db'
 import { NextRequest, NextResponse } from 'next/server'
+import { requireAuth } from '@/lib/auth'
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const authResult = await requireAuth()
+    if ('error' in authResult) return authResult.error
+    const { user } = authResult
+
     const { id } = await params
     const quartier = await db.quartier.findUnique({ where: { id } })
     if (!quartier) return NextResponse.json({ error: 'الحي غير موجود' }, { status: 404 })
+
+    // Non-admin users can only view quartiers from their own commune
+    if (user.commune !== 'ALL' && quartier.commune !== user.commune) {
+      return NextResponse.json({ error: 'ليس لديك صلاحية الوصول لهذا الحي' }, { status: 403 })
+    }
+
     return NextResponse.json(quartier)
   } catch (error) {
     console.error('GET quartier error:', error)
@@ -15,15 +26,32 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const authResult = await requireAuth()
+    if ('error' in authResult) return authResult.error
+    const { user } = authResult
+
     const { id } = await params
+
+    // Check quartier belongs to user's commune
+    const existing = await db.quartier.findUnique({ where: { id } })
+    if (!existing) return NextResponse.json({ error: 'الحي غير موجود' }, { status: 404 })
+    if (user.commune !== 'ALL' && existing.commune !== user.commune) {
+      return NextResponse.json({ error: 'ليس لديك صلاحية تعديل هذا الحي' }, { status: 403 })
+    }
+
     const body = await request.json()
     const { nom, commune, latitude, longitude } = body
 
-    // If renaming, check uniqueness
+    // Non-admin users cannot change the commune
+    const enforcedCommune = user.commune !== 'ALL'
+      ? user.commune
+      : (commune !== undefined ? commune : existing.commune)
+
+    // If renaming, check uniqueness within the same commune
     if (nom) {
-      const existing = await db.quartier.findFirst({ where: { nom, id: { not: id } } })
-      if (existing) {
-        return NextResponse.json({ error: 'حي بهذا الاسم موجود مسبقاً' }, { status: 409 })
+      const nameCheck = await db.quartier.findFirst({ where: { nom, commune: enforcedCommune, id: { not: id } } })
+      if (nameCheck) {
+        return NextResponse.json({ error: 'حي بهذا الاسم موجود مسبقاً في هذه الجماعة' }, { status: 409 })
       }
     }
 
@@ -31,7 +59,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       where: { id },
       data: {
         ...(nom !== undefined && { nom }),
-        ...(commune !== undefined && { commune }),
+        commune: enforcedCommune,
         ...(latitude !== undefined && { latitude: parseFloat(latitude) || 0 }),
         ...(longitude !== undefined && { longitude: parseFloat(longitude) || 0 }),
       },
@@ -46,11 +74,22 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
 export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const authResult = await requireAuth()
+    if ('error' in authResult) return authResult.error
+    const { user } = authResult
+
     const { id } = await params
+
+    // Check quartier belongs to user's commune
+    const existing = await db.quartier.findUnique({ where: { id } })
+    if (!existing) return NextResponse.json({ error: 'الحي غير موجود' }, { status: 404 })
+    if (user.commune !== 'ALL' && existing.commune !== user.commune) {
+      return NextResponse.json({ error: 'ليس لديك صلاحية حذف هذا الحي' }, { status: 403 })
+    }
 
     // Check if quartier is used in any intervention
     const interventionsCount = await db.intervention.count({
-      where: { quartier: (await db.quartier.findUnique({ where: { id } }))?.nom },
+      where: { quartier: existing.nom },
     })
 
     await db.quartier.delete({ where: { id } })

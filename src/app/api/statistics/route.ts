@@ -1,11 +1,20 @@
 import { db } from '@/lib/db'
 import { NextRequest, NextResponse } from 'next/server'
+import { requireAuth, getCommuneFilter } from '@/lib/auth'
 
 export async function GET(request: NextRequest) {
   try {
+    // Require authentication
+    const authResult = await requireAuth()
+    if ('error' in authResult) return authResult.error
+    const { user } = authResult
+
     const { searchParams } = new URL(request.url)
     const year = searchParams.get('year')
-    const commune = searchParams.get('commune')
+    const requestedCommune = searchParams.get('commune')
+
+    // Enforce commune filter based on user's role
+    const communeFilter = getCommuneFilter(user, requestedCommune)
 
     const where: Record<string, unknown> = {}
     if (year) {
@@ -13,7 +22,7 @@ export async function GET(request: NextRequest) {
       const end = new Date(parseInt(year), 11, 31)
       where.date = { gte: start, lte: end }
     }
-    if (commune) where.commune = commune
+    if (communeFilter) where.commune = communeFilter
 
     const [total, byType, byStatut, byQuartier, byCommune, monthly, recent] = await Promise.all([
       // Total count
@@ -114,8 +123,10 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Get quartiers list
-    const quartiers = await db.quartier.findMany()
+    // Get quartiers list — also filter by user's commune
+    const quartierWhere: Record<string, unknown> = {}
+    if (communeFilter) quartierWhere.commune = communeFilter
+    const quartiers = await db.quartier.findMany({ where: quartierWhere })
 
     return NextResponse.json({
       total,
@@ -126,6 +137,7 @@ export async function GET(request: NextRequest) {
       monthly: monthlyData,
       recent,
       quartiers,
+      userCommune: user.commune, // Send user's commune so frontend knows
     })
   } catch (error) {
     console.error('Statistics error:', error)

@@ -105,6 +105,16 @@ function LoginPage({ onLogin }: { onLogin: (user: AuthUser) => void }) {
   const [isLoading, setIsLoading] = useState(false)
   const [mode, setMode] = useState<'select' | 'login'>('select')
 
+  // Seed users on mount if they don't exist yet
+  useEffect(() => {
+    const ensureUsers = async () => {
+      try {
+        await fetch('/api/auth/seed-users', { method: 'POST' })
+      } catch { /* ignore - users might already exist */ }
+    }
+    ensureUsers()
+  }, [])
+
   const handleSelectCommune = (key: string) => {
     setSelectedCommuneKey(key)
     const info = COMMUNE_USER_INFO[key]
@@ -773,8 +783,8 @@ export default function HomePage() {
               </motion.div>
             ) : (
               <motion.div key={currentView} variants={pageVariants} initial="initial" animate="animate" exit="exit">
-                {currentView === 'dashboard' && <DashboardView stats={stats} onNavigate={setCurrentView} selectedCommune={selectedCommune} />}
-                {currentView === 'map' && <MapView interventions={interventions} quartiers={quartiers} selectedCommune={selectedCommune} onMapClick={(lat, lng, commune) => {
+                {currentView === 'dashboard' && <DashboardView stats={stats} onNavigate={setCurrentView} selectedCommune={selectedCommune} canSeeAllCommunes={canSeeAllCommunes} />}
+                {currentView === 'map' && <MapView interventions={interventions} quartiers={quartiers} selectedCommune={selectedCommune} canSeeAllCommunes={canSeeAllCommunes} onMapClick={(lat: number, lng: number, commune: string | null) => {
                   const { settings: currentSettings } = useAppStore.getState()
                   if (!currentSettings.mapClickEnabled) return
                   setMapClickCoords({ latitude: lat, longitude: lng, commune })
@@ -786,7 +796,7 @@ export default function HomePage() {
                     page={interventionsPage} setPage={setInterventionsPage}
                     onEdit={setEditingInterventionId} onRefresh={fetchInterventions} selectedCommune={selectedCommune} />
                 )}
-                {currentView === 'reports' && <ReportsView stats={stats} selectedCommune={selectedCommune} />}
+                {currentView === 'reports' && <ReportsView stats={stats} selectedCommune={selectedCommune} canSeeAllCommunes={canSeeAllCommunes} />}
                 {currentView === 'inventory' && <InventoryView />}
                 {currentView === 'settings' && <SettingsView />}
               </motion.div>
@@ -799,7 +809,7 @@ export default function HomePage() {
       <AnimatePresence>
         {isFormOpen && (
           <InterventionFormDialog interventionId={editingInterventionId} quartiers={quartiers}
-            mapClickCoords={mapClickCoords}
+            mapClickCoords={mapClickCoords} userCommune={user?.commune || 'ALL'}
             onClose={() => { setIsFormOpen(false); setEditingInterventionId(null); setMapClickCoords(null) }}
             onSave={async () => { await fetchStats(); await fetchInterventions() }} />
         )}
@@ -845,7 +855,7 @@ export default function HomePage() {
 }
 
 // ===== DASHBOARD =====
-function DashboardView({ stats, onNavigate, selectedCommune }: { stats: Statistics | null; onNavigate: (v: ViewType) => void; selectedCommune: CommuneType | 'ALL' }) {
+function DashboardView({ stats, onNavigate, selectedCommune, canSeeAllCommunes }: { stats: Statistics | null; onNavigate: (v: ViewType) => void; selectedCommune: CommuneType | 'ALL'; canSeeAllCommunes: boolean }) {
   if (!stats) return null
   const completionRate = stats.total > 0 ? Math.round(((stats.byStatut.TERMINEE || 0) / stats.total) * 100) : 0
   const inProgressRate = stats.total > 0 ? Math.round(((stats.byStatut.EN_COURS || 0) / stats.total) * 100) : 0
@@ -911,8 +921,8 @@ function DashboardView({ stats, onNavigate, selectedCommune }: { stats: Statisti
         ))}
       </div>
 
-      {/* Commune Breakdown - Only show when ALL communes selected */}
-      {selectedCommune === 'ALL' && stats.byCommune && (
+      {/* Commune Breakdown - Only show for admin users viewing ALL communes */}
+      {canSeeAllCommunes && selectedCommune === 'ALL' && stats.byCommune && (
         <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}
           className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
           <div className="bg-gradient-to-l from-teal-600 to-emerald-600 text-white px-6 py-4">
@@ -1003,8 +1013,8 @@ function DashboardView({ stats, onNavigate, selectedCommune }: { stats: Statisti
                 )
               })}
             </div>
-            {/* Commune comparison chart */}
-            {stats.byCommune && Object.keys(stats.byCommune).length > 0 && (
+            {/* Commune comparison chart - Only for admin users */}
+            {canSeeAllCommunes && stats.byCommune && Object.keys(stats.byCommune).length > 0 && (
               <div className="mt-4 h-48">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={
@@ -1222,7 +1232,7 @@ function DashboardView({ stats, onNavigate, selectedCommune }: { stats: Statisti
 }
 
 // ===== MAP VIEW =====
-function MapView({ interventions, quartiers, selectedCommune, onMapClick, onRefresh }: { interventions: Intervention[]; quartiers: Quartier[]; selectedCommune: CommuneType | 'ALL'; onMapClick: (lat: number, lng: number, commune: string | null) => void; onRefresh?: () => void }) {
+function MapView({ interventions, quartiers, selectedCommune, canSeeAllCommunes, onMapClick, onRefresh }: { interventions: Intervention[]; quartiers: Quartier[]; selectedCommune: CommuneType | 'ALL'; canSeeAllCommunes: boolean; onMapClick: (lat: number, lng: number, commune: string | null) => void; onRefresh?: () => void }) {
   const [mapLoaded, setMapLoaded] = useState(false)
   const [MapComponent, setMapComponent] = useState<React.ComponentType<{ interventions: Intervention[]; quartiers: Quartier[]; selectedCommune: string; onMapClick?: (lat: number, lng: number, commune: string | null) => void; mapClickEnabled?: boolean; showCommunePopups?: boolean; onInterventionCreated?: () => void }> | null>(null)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
@@ -1315,31 +1325,44 @@ function MapView({ interventions, quartiers, selectedCommune, onMapClick, onRefr
 
             {/* Commune Filter */}
             <div className="px-3 pb-2">
-              <div className="bg-slate-50 rounded-xl p-3 border border-slate-100">
-                <div className="flex items-center justify-between mb-2">
-                  <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">🏛️ فلترة الجماعات</p>
-                  <span className="text-[9px] text-slate-400">👥 {totalPopulation.toLocaleString('ar-MA')}</span>
-                </div>
-                <div className="flex flex-wrap gap-1.5">
-                  <button onClick={() => setSelectedCommune('ALL')}
-                    className={`px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all ${selectedCommune === 'ALL' ? 'bg-slate-800 text-white shadow-md' : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'}`}>
-                    الكل
-                  </button>
-                  {COMMUNE_INFO.map((info) => (
-                    <button key={info.key}
-                      onClick={() => setSelectedCommune(selectedCommune === info.key ? 'ALL' : info.key as CommuneType)}
-                      onMouseEnter={() => setHoveredCommune(info.key)}
-                      onMouseLeave={() => setHoveredCommune(null)}
-                      className={`px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all flex items-center gap-1.5 ${
-                        selectedCommune === info.key ? 'text-white shadow-md' : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
-                      }`}
-                      style={selectedCommune === info.key ? { backgroundColor: info.color } : {}}>
-                      <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: selectedCommune === info.key ? 'white' : info.color }} />
-                      {info.name.replace('جماعة ', '')}
+              {canSeeAllCommunes ? (
+                <div className="bg-slate-50 rounded-xl p-3 border border-slate-100">
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">🏛️ فلترة الجماعات</p>
+                    <span className="text-[9px] text-slate-400">👥 {totalPopulation.toLocaleString('ar-MA')}</span>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    <button onClick={() => setSelectedCommune('ALL')}
+                      className={`px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all ${selectedCommune === 'ALL' ? 'bg-slate-800 text-white shadow-md' : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'}`}>
+                      الكل
                     </button>
-                  ))}
+                    {COMMUNE_INFO.map((info) => (
+                      <button key={info.key}
+                        onClick={() => setSelectedCommune(selectedCommune === info.key ? 'ALL' : info.key as CommuneType)}
+                        onMouseEnter={() => setHoveredCommune(info.key)}
+                        onMouseLeave={() => setHoveredCommune(null)}
+                        className={`px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all flex items-center gap-1.5 ${
+                          selectedCommune === info.key ? 'text-white shadow-md' : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
+                        }`}
+                        style={selectedCommune === info.key ? { backgroundColor: info.color } : {}}>
+                        <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: selectedCommune === info.key ? 'white' : info.color }} />
+                        {info.name.replace('جماعة ', '')}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              </div>
+              ) : (
+                <div className="bg-slate-50 rounded-xl p-3 border border-slate-100">
+                  <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">🏛️ جماعتك</p>
+                  {activeCommune && (
+                    <div className="flex items-center gap-2 px-3 py-2 rounded-lg text-white font-bold text-sm"
+                      style={{ backgroundColor: activeCommune.color }}>
+                      <div className="w-2 h-2 rounded-full bg-white" />
+                      {activeCommune.name}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Active Commune Detail */}
@@ -1386,13 +1409,15 @@ function MapView({ interventions, quartiers, selectedCommune, onMapClick, onRefr
             <div className="px-3 pb-2">
               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">الحدود الترابية • السكان القانونيون 2024</p>
               <div className="space-y-1.5">
-                {COMMUNE_INFO.map((info) => (
+                {COMMUNE_INFO.filter(info => canSeeAllCommunes || info.key === selectedCommune).map((info) => (
                   <motion.div
                     key={info.name}
                     onMouseEnter={() => setHoveredCommune(info.key)}
                     onMouseLeave={() => setHoveredCommune(null)}
-                    onClick={() => setSelectedCommune(selectedCommune === info.key ? 'ALL' : info.key as CommuneType)}
-                    className={`flex items-center gap-2.5 p-2 rounded-lg cursor-pointer transition-all ${
+                    onClick={() => canSeeAllCommunes ? setSelectedCommune(selectedCommune === info.key ? 'ALL' : info.key as CommuneType) : undefined}
+                    className={`flex items-center gap-2.5 p-2 rounded-lg transition-all ${
+                      canSeeAllCommunes ? 'cursor-pointer' : ''
+                    } ${
                       selectedCommune !== 'ALL' && selectedCommune !== info.key ? 'opacity-40' : 'hover:bg-slate-50'
                     } ${hoveredCommune === info.key ? 'bg-slate-50 ring-1 ring-slate-200' : ''}`}
                   >
@@ -1407,10 +1432,7 @@ function MapView({ interventions, quartiers, selectedCommune, onMapClick, onRefr
                       <div className="text-[10px] text-slate-400">👥 {info.population} نسمة</div>
                     </div>
                     <div className="text-[10px] font-bold text-slate-500 flex-shrink-0">
-                      {interventions.filter(i => {
-                        const commune = info.key
-                        return true // simplified — actual filtering is in map component
-                      }).length > 0 && (
+                      {interventions.length > 0 && (
                         <span className="bg-slate-100 px-1.5 py-0.5 rounded-md">
                           {interventions.length}
                         </span>
@@ -2071,7 +2093,7 @@ function ProductFormDialog({ product, categories, units, onSave, onClose }: {
 }
 
 // ===== REPORTS VIEW =====
-function ReportsView({ stats, selectedCommune }: { stats: Statistics | null; selectedCommune: CommuneType | 'ALL' }) {
+function ReportsView({ stats, selectedCommune, canSeeAllCommunes }: { stats: Statistics | null; selectedCommune: CommuneType | 'ALL'; canSeeAllCommunes: boolean }) {
   if (!stats) return null
 
   const monthlyChartData = Object.entries(stats.monthly).sort(([a], [b]) => a.localeCompare(b)).map(([month, data]) => ({
@@ -3500,14 +3522,17 @@ interface DropdownProduct {
   id: string; nom: string; categorie: string; unite: string; quantiteStock: number; prixUnitaire: number; reference: string
 }
 
-function InterventionFormDialog({ interventionId, quartiers, mapClickCoords, onClose, onSave }: {
+function InterventionFormDialog({ interventionId, quartiers, mapClickCoords, userCommune, onClose, onSave }: {
   interventionId: string | null; quartiers: Quartier[]
-  mapClickCoords: MapClickCoords | null
+  mapClickCoords: MapClickCoords | null; userCommune: string
   onClose: () => void; onSave: () => Promise<void>
 }) {
+  // For non-admin users, always use their assigned commune
+  const enforcedCommune = userCommune !== 'ALL' ? userCommune : (mapClickCoords?.commune || '')
+
   const [formData, setFormData] = useState({
     type: 'DERATISATION', date: new Date().toISOString().split('T')[0],
-    quartier: '', adresse: '', commune: mapClickCoords?.commune || '',
+    quartier: '', adresse: '', commune: enforcedCommune,
     latitude: mapClickCoords ? mapClickCoords.latitude.toString() : '34.052', 
     longitude: mapClickCoords ? mapClickCoords.longitude.toString() : '-6.735',
     statut: 'PLANIFIEE', description: '', agentNom: '', produitUtilise: '',
@@ -3532,10 +3557,11 @@ function InterventionFormDialog({ interventionId, quartiers, mapClickCoords, onC
         ...prev,
         latitude: mapClickCoords.latitude.toString(),
         longitude: mapClickCoords.longitude.toString(),
-        commune: mapClickCoords.commune || prev.commune,
+        // Non-admin users always keep their assigned commune
+        commune: userCommune !== 'ALL' ? userCommune : (mapClickCoords.commune || prev.commune),
       }))
     }
-  }, [mapClickCoords, interventionId])
+  }, [mapClickCoords, interventionId, userCommune])
 
   useEffect(() => {
     if (interventionId) {
@@ -3680,15 +3706,21 @@ function InterventionFormDialog({ interventionId, quartiers, mapClickCoords, onC
               <div>
                 <label className="block text-sm font-semibold text-slate-700 mb-1.5">
                   🏛️ الجماعة
-                  {mapClickCoords && !mapClickCoords.commune && !interventionId && <span className="text-[10px] text-amber-500 mr-1">⚠️ مطلوبة</span>}
+                  {userCommune !== 'ALL' && <span className="text-[10px] text-emerald-600 mr-1">✓ جماعتك</span>}
                 </label>
-                <select value={formData.commune} onChange={(e) => updateField('commune', e.target.value)}
-                  className={`w-full px-3 py-2.5 rounded-xl border text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-300 ${mapClickCoords && !mapClickCoords.commune && !interventionId ? 'border-amber-300 bg-amber-50/50' : 'border-slate-200 bg-white'}`}>
-                  <option value="">— اختر الجماعة —</option>
-                  <option value="سلا">جماعة سلا</option>
-                  <option value="سيدي أبي القنادل">جماعة سيدي أبي القنادل</option>
-                  <option value="عامر">جماعة عامر</option>
-                </select>
+                {userCommune !== 'ALL' ? (
+                  <div className="w-full px-3 py-2.5 rounded-xl border border-emerald-200 bg-emerald-50/50 text-sm font-bold text-emerald-700">
+                    {COMMUNE_LABELS[userCommune] || userCommune}
+                  </div>
+                ) : (
+                  <select value={formData.commune} onChange={(e) => updateField('commune', e.target.value)}
+                    className={`w-full px-3 py-2.5 rounded-xl border text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-300 ${mapClickCoords && !mapClickCoords.commune && !interventionId ? 'border-amber-300 bg-amber-50/50' : 'border-slate-200 bg-white'}`}>
+                    <option value="">— اختر الجماعة —</option>
+                    <option value="سلا">جماعة سلا</option>
+                    <option value="سيدي أبي القنادل">جماعة سيدي أبي القنادل</option>
+                    <option value="عامر">جماعة عامر</option>
+                  </select>
+                )}
               </div>
               <div>
                 <label className="block text-sm font-semibold text-slate-700 mb-1.5">التاريخ *</label>

@@ -35,33 +35,32 @@ const DEFAULT_USERS = [
 
 export async function POST() {
   try {
-    // Delete existing users and sessions
-    await db.session.deleteMany()
-    await db.user.deleteMany()
-
-    // Create default users
+    // Only create users that don't already exist
     const createdUsers = []
     for (const u of DEFAULT_USERS) {
-      const user = await db.user.create({
-        data: {
-          username: u.username,
-          password: hashPassword(u.password),
-          nom: u.nom,
-          commune: u.commune,
-          role: u.role,
-        }
-      })
-      createdUsers.push({
-        username: u.username,
-        nom: u.nom,
-        commune: u.commune,
-        role: u.role,
-      })
+      const existing = await db.user.findUnique({ where: { username: u.username } })
+      if (!existing) {
+        const user = await db.user.create({
+          data: {
+            username: u.username,
+            password: hashPassword(u.password),
+            nom: u.nom,
+            commune: u.commune,
+            role: u.role,
+          }
+        })
+        createdUsers.push({
+          username: user.username,
+          nom: user.nom,
+          commune: user.commune,
+          role: user.role,
+        })
+      }
     }
 
     return NextResponse.json({
-      message: 'تم إنشاء المستخدمين الافتراضيين بنجاح',
-      users: createdUsers,
+      message: createdUsers.length > 0 ? 'تم إنشاء المستخدمين الافتراضيين بنجاح' : 'المستخدمون موجودون مسبقاً',
+      usersCreated: createdUsers.length,
     })
   } catch (error) {
     console.error('Seed users error:', error)

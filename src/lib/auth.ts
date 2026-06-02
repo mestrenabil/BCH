@@ -1,5 +1,6 @@
 import { db } from '@/lib/db'
 import { cookies } from 'next/headers'
+import { NextResponse } from 'next/server'
 import crypto from 'crypto'
 
 const SESSION_COOKIE_NAME = '3d_session_token'
@@ -95,6 +96,45 @@ export async function cleanupSessions(): Promise<void> {
   } catch {
     // Ignore errors
   }
+}
+
+/**
+ * Require authentication for API routes.
+ * Returns the authenticated user or a 401 NextResponse.
+ * Use this in API route handlers to enforce login.
+ */
+export async function requireAuth(): Promise<{ user: AuthUser } | { error: NextResponse }> {
+  const user = await getAuthUser()
+  if (!user) {
+    return {
+      error: NextResponse.json(
+        { error: 'يرجى تسجيل الدخول أولاً' },
+        { status: 401 }
+      )
+    }
+  }
+  return { user }
+}
+
+/**
+ * Get the commune filter for the authenticated user.
+ * - Admin users (commune='ALL') can see all communes — returns null (no filter)
+ * - Responsible users can only see their own commune — returns their commune name
+ * This also respects an optional requestedCommune parameter:
+ * - Admin can request any commune or 'ALL'
+ * - Non-admin users are always restricted to their own commune regardless of request
+ */
+export function getCommuneFilter(user: AuthUser, requestedCommune?: string | null): string | null {
+  // Non-admin users are always restricted to their own commune
+  if (user.commune !== 'ALL') {
+    return user.commune
+  }
+  // Admin users: respect the requested filter if provided
+  if (requestedCommune && requestedCommune !== 'ALL') {
+    return requestedCommune
+  }
+  // Admin with no specific filter — see all
+  return null
 }
 
 export { SESSION_COOKIE_NAME, SESSION_DURATION_HOURS }

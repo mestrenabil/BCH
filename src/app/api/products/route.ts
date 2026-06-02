@@ -1,23 +1,32 @@
 import { db } from '@/lib/db'
 import { NextRequest, NextResponse } from 'next/server'
+import { requireAuth, getCommuneFilter } from '@/lib/auth'
 
 export async function GET(request: NextRequest) {
   try {
+    // Require authentication
+    const authResult = await requireAuth()
+    if ('error' in authResult) return authResult.error
+    const { user } = authResult
+
     const { searchParams } = new URL(request.url)
     const categorie = searchParams.get('categorie')
-    const commune = searchParams.get('commune')
+    const requestedCommune = searchParams.get('commune')
     const search = searchParams.get('search')
     const alerteOnly = searchParams.get('alerte') === 'true'
+
+    // Enforce commune filter based on user's role
+    const communeFilter = getCommuneFilter(user, requestedCommune)
 
     // Build where clause with proper AND/OR combinations
     const andConditions: Record<string, unknown>[] = []
 
     if (categorie) andConditions.push({ categorie })
-    if (commune) {
-      // Show products for selected commune OR shared products (empty commune / ALL)
+    if (communeFilter) {
+      // Show products for user's commune OR shared products (empty commune / ALL)
       andConditions.push({
         OR: [
-          { commune: commune },
+          { commune: communeFilter },
           { commune: '' },
           { commune: 'ALL' },
         ]
@@ -43,9 +52,9 @@ export async function GET(request: NextRequest) {
 
     // Compute inventory stats (also respect commune filter for stats)
     const statsWhere: Record<string, unknown> = {}
-    if (commune) {
+    if (communeFilter) {
       statsWhere.OR = [
-        { commune: commune },
+        { commune: communeFilter },
         { commune: '' },
         { commune: 'ALL' },
       ]
@@ -73,12 +82,20 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    // Require authentication
+    const authResult = await requireAuth()
+    if ('error' in authResult) return authResult.error
+    const { user } = authResult
+
     const body = await request.json()
     const { nom, categorie, commune, unite, quantiteStock, seuilAlerte, prixUnitaire, fournisseur, description } = body
 
     if (!nom || !categorie) {
       return NextResponse.json({ error: 'يرجى ملء جميع الحقول المطلوبة' }, { status: 400 })
     }
+
+    // Enforce commune: non-admin users can only add products for their own commune
+    const enforcedCommune = user.commune !== 'ALL' ? user.commune : (commune || '')
 
     // Generate reference
     const prefix = categorie === 'DERATISATION' ? 'PR-DR' : categorie === 'DESINSECTISATION' ? 'PR-DI' : categorie === 'DESINFECTION' ? 'PR-DF' : 'PR-GN'
@@ -95,7 +112,7 @@ export async function POST(request: NextRequest) {
       data: {
         nom,
         categorie,
-        commune: commune || '',
+        commune: enforcedCommune,
         unite: unite || 'لتر',
         quantiteStock: parseInt(quantiteStock) || 0,
         seuilAlerte: parseInt(seuilAlerte) || 10,

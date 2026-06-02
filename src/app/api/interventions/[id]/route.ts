@@ -1,8 +1,13 @@
 import { db } from '@/lib/db'
 import { NextRequest, NextResponse } from 'next/server'
+import { requireAuth } from '@/lib/auth'
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const authResult = await requireAuth()
+    if ('error' in authResult) return authResult.error
+    const { user } = authResult
+
     const { id } = await params
     const intervention = await db.intervention.findUnique({
       where: { id },
@@ -17,6 +22,12 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     if (!intervention) {
       return NextResponse.json({ error: 'التدخل غير موجود' }, { status: 404 })
     }
+
+    // Non-admin users can only view interventions from their own commune
+    if (user.commune !== 'ALL' && intervention.commune !== user.commune) {
+      return NextResponse.json({ error: 'ليس لديك صلاحية الوصول لهذا التدخل' }, { status: 403 })
+    }
+
     return NextResponse.json(intervention)
   } catch (error) {
     console.error('GET intervention error:', error)
@@ -26,7 +37,21 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const authResult = await requireAuth()
+    if ('error' in authResult) return authResult.error
+    const { user } = authResult
+
     const { id } = await params
+
+    // Get existing intervention and check commune permission
+    const existingCheck = await db.intervention.findUnique({ where: { id } })
+    if (!existingCheck) {
+      return NextResponse.json({ error: 'التدخل غير موجود' }, { status: 404 })
+    }
+    if (user.commune !== 'ALL' && existingCheck.commune !== user.commune) {
+      return NextResponse.json({ error: 'ليس لديك صلاحية تعديل هذا التدخل' }, { status: 403 })
+    }
+
     const body = await request.json()
     const { materials, ...restBody } = body
 
@@ -54,7 +79,6 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         if (!mat.productId || !mat.quantity || mat.quantity <= 0) continue
         const product = await db.product.findUnique({ where: { id: mat.productId } })
         if (!product) {
-          // Re-deduct the old materials since we restored them
           for (const existingMat of existing.materials) {
             await db.product.update({
               where: { id: existingMat.productId },
@@ -63,10 +87,8 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
           }
           return NextResponse.json({ error: `المنتج غير موجود` }, { status: 400 })
         }
-        // After restoring old stock, check if new quantity is available
         const currentStock = product.quantiteStock + (existing.materials.find(m => m.productId === mat.productId)?.quantity || 0)
         if (currentStock < mat.quantity) {
-          // Re-deduct the old materials since we restored them
           for (const existingMat of existing.materials) {
             await db.product.update({
               where: { id: existingMat.productId },
@@ -83,9 +105,13 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     // Delete existing materials
     await db.interventionMaterial.deleteMany({ where: { interventionId: id } })
 
+    // Enforce commune: non-admin users cannot change the commune
+    const enforcedCommune = user.commune !== 'ALL' ? user.commune : undefined
+
     // Update intervention
     const updateData: Record<string, unknown> = {
       ...restBody,
+      ...(enforcedCommune && { commune: enforcedCommune }),
       date: restBody.date ? new Date(restBody.date as string) : undefined,
       latitude: restBody.latitude ? parseFloat(restBody.latitude as string) : undefined,
       longitude: restBody.longitude ? parseFloat(restBody.longitude as string) : undefined,
@@ -134,7 +160,20 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
 export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const authResult = await requireAuth()
+    if ('error' in authResult) return authResult.error
+    const { user } = authResult
+
     const { id } = await params
+
+    // Get existing and check commune permission
+    const existingCheck = await db.intervention.findUnique({ where: { id } })
+    if (!existingCheck) {
+      return NextResponse.json({ error: 'التدخل غير موجود' }, { status: 404 })
+    }
+    if (user.commune !== 'ALL' && existingCheck.commune !== user.commune) {
+      return NextResponse.json({ error: 'ليس لديك صلاحية حذف هذا التدخل' }, { status: 403 })
+    }
 
     // Get existing materials to restore stock
     const existing = await db.intervention.findUnique({
@@ -143,7 +182,6 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     })
 
     if (existing) {
-      // Restore stock for all materials
       for (const mat of existing.materials) {
         await db.product.update({
           where: { id: mat.productId },
@@ -152,7 +190,6 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
       }
     }
 
-    // Delete materials first (cascade should handle this, but be explicit)
     await db.interventionMaterial.deleteMany({ where: { interventionId: id } })
     await db.intervention.delete({ where: { id } })
     return NextResponse.json({ message: 'تم حذف التدخل بنجاح' })

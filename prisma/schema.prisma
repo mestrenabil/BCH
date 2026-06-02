@@ -32,10 +32,12 @@ model Intervention {
 
 model Quartier {
   id        String @id @default(cuid())
-  nom       String @unique
+  nom       String // اسم الحي — يمكن تكراره عبر الجماعات
   commune   String @default("") // الجماعة الترابية: سلا، سيدي أبي القنادل، عامر
   latitude  Float
   longitude Float
+
+  @@unique([nom, commune]) // اسم الحي فريد داخل كل جماعة
 }
 
 model Product {

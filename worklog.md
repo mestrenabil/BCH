@@ -149,3 +149,50 @@ Stage Summary:
 - Beautiful RTL Arabic login page with commune selection
 - User info displayed in header, sidebar, and footer
 - Settings page includes user management section
+
+---
+Task ID: commune-data-isolation
+Agent: main
+Task: Enforce strict commune-based data isolation — each commune responsible sees and manages ONLY their own commune's data
+
+Work Log:
+- Added `requireAuth()` and `getCommuneFilter()` helper functions to /lib/auth.ts
+- Updated ALL API routes to require authentication and enforce commune filtering:
+  - /api/interventions (GET/POST) — filters by user's commune; non-admin users can only create for their commune
+  - /api/interventions/[id] (GET/PUT/DELETE) — checks commune ownership before any operation
+  - /api/statistics — automatically filters all queries by user's commune
+  - /api/products (GET/POST) — filters by user's commune or shared products; enforces commune on create
+  - /api/products/[id] (GET/PUT/DELETE) — checks commune ownership before any operation
+  - /api/products/for-dropdown — filters by user's commune
+  - /api/quartiers (GET/POST) — filters by user's commune; enforces commune on create
+  - /api/quartiers/[id] (GET/PUT/DELETE) — checks commune ownership before any operation
+  - /api/agents (GET/POST) — filters by user's commune; enforces commune on create
+  - /api/agents/[id] (GET/PUT/DELETE) — checks commune ownership before any operation
+  - /api/export — filters by user's commune
+- Changed Quartier unique constraint from `@unique nom` to `@@unique([nom, commune])` to allow same quartier name in different communes
+- Updated seed data to include quartiers for ALL 3 communes (سلا, سيدي أبي القنادل, عامر)
+- Updated seed data to create interventions and agents for ALL 3 communes
+- Updated seed data to create products assigned to specific communes
+- Updated seed-users route to only create users if they don't exist (no destructive deletion)
+- Added user seeding on LoginPage mount (ensures users exist before first login)
+- Updated frontend to pass `canSeeAllCommunes` to DashboardView, MapView, ReportsView
+- DashboardView: hides "التوزيع حسب الجماعة" section for non-admin users
+- MapView: shows read-only commune indicator for non-admin users instead of filter buttons
+- MapView: only shows user's commune in boundaries list for non-admin users
+- InterventionFormDialog: auto-assigns user's commune for non-admin users (read-only display)
+- InterventionFormDialog: enforces user's commune on map click (non-admin users always keep their commune)
+- Tested data isolation via API:
+  - Bouknadel user: sees only 77 interventions from سيدي أبي القنادل
+  - SLA user: sees only 80 interventions from سلا
+  - AMEUR user: sees only 84 interventions from عامر
+  - Admin user: sees all 241 interventions across all communes
+- Verified non-admin users cannot bypass commune filter by passing different commune parameter
+- Browser-tested login flow and dashboard for both admin and non-admin users
+
+Stage Summary:
+- Complete data isolation: Non-admin users can ONLY see, create, edit, and delete data from their own commune
+- All API routes enforce authentication and commune-based access control
+- Frontend properly restricts UI elements (commune selectors, commune breakdown charts) for non-admin users
+- Database seeded with data for all 3 communes
+- Admin user retains full access to all communes
+- Login system works correctly with session-based authentication
