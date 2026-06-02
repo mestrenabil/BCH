@@ -375,6 +375,7 @@ export default function HomePage() {
     sidebarOpen, setSidebarOpen,
     mapClickCoords, setMapClickCoords,
     user, setUser, isAuthenticated, isAuthLoading, setAuthLoading,
+    loadSettings, settingsCommune,
   } = useAppStore()
 
   const [stats, setStats] = useState<Statistics | null>(null)
@@ -399,6 +400,8 @@ export default function HomePage() {
           if (data.user.commune !== 'ALL') {
             setSelectedCommune(data.user.commune as CommuneType)
           }
+          // Load per-commune settings from DB
+          await loadSettings(data.user.commune !== 'ALL' ? data.user.commune : undefined)
         } else {
           setUser(null)
         }
@@ -411,12 +414,14 @@ export default function HomePage() {
   }, [])
 
   // Auth: handle login
-  const handleLogin = useCallback((loggedInUser: AuthUser) => {
+  const handleLogin = useCallback(async (loggedInUser: AuthUser) => {
     setUser(loggedInUser)
     if (loggedInUser.commune !== 'ALL') {
       setSelectedCommune(loggedInUser.commune as CommuneType)
     }
-  }, [setUser, setSelectedCommune])
+    // Load per-commune settings from DB
+    await loadSettings(loggedInUser.commune !== 'ALL' ? loggedInUser.commune : undefined)
+  }, [setUser, setSelectedCommune, loadSettings])
 
   // Auth: handle logout
   const handleLogout = useCallback(async () => {
@@ -2942,9 +2947,40 @@ function UserManagementSection() {
 
 // ===== SETTINGS VIEW =====
 function SettingsView() {
-  const { settings, updateSettings, resetSettings, setSelectedYear, setSelectedCommune } = useAppStore()
+  const { settings, updateSettings, resetSettings, saveSettings, loadSettings, settingsCommune, settingsLoaded, setSelectedYear, setSelectedCommune, user } = useAppStore()
   const [confirmReset, setConfirmReset] = useState(false)
   const [confirmResetData, setConfirmResetData] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
+  const [isAdminViewingCommune, setIsAdminViewingCommune] = useState<string | null>(null)
+
+  // For admin users: allow switching which commune's settings to view/edit
+  const canSeeAllCommunes = user?.role === 'admin' || user?.commune === 'ALL'
+  const currentSettingsCommune = isAdminViewingCommune || settingsCommune || user?.commune || 'ALL'
+
+  // Load settings on mount
+  useEffect(() => {
+    if (!settingsLoaded) {
+      loadSettings(user?.commune !== 'ALL' ? user?.commune : undefined)
+    }
+  }, [settingsLoaded, loadSettings, user?.commune])
+
+  // Admin: load different commune's settings
+  const handleAdminSwitchCommune = async (commune: string) => {
+    setIsAdminViewingCommune(commune === 'ALL' ? null : commune)
+    await loadSettings(commune === 'ALL' ? undefined : commune)
+  }
+
+  // Auto-save settings with debounce
+  const saveTimerRef = useRef<NodeJS.Timeout | null>(null)
+  const handleUpdateAndSave = (partial: Partial<typeof settings>) => {
+    updateSettings(partial)
+    // Debounce save: 800ms after last change
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
+    saveTimerRef.current = setTimeout(async () => {
+      const ok = await saveSettings()
+      if (!ok) toast.error('حدث خطأ أثناء حفظ الإعدادات')
+    }, 800)
+  }
 
   const handleApplyDefaults = () => {
     setSelectedYear(settings.defaultYear)
@@ -2986,6 +3022,57 @@ function SettingsView() {
         <p className="text-slate-500 text-sm mt-1">تهيئة مكونات التطبيق وتخصيص الإعدادات</p>
       </motion.div>
 
+      {/* Commune Settings Selector — for admin users */}
+      {canSeeAllCommunes && (
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}
+          className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+          <div className="bg-gradient-to-l from-emerald-700 to-teal-700 text-white px-6 py-4">
+            <h3 className="font-bold text-base">🏛️ إعدادات الجماعة</h3>
+            <p className="text-emerald-200 text-xs mt-0.5">كل جماعة لها إعداداتها المنفصلة — اختر الجماعة لتعديل إعداداتها</p>
+          </div>
+          <div className="p-4">
+            <div className="flex flex-wrap gap-2">
+              {[
+                { key: 'ALL', label: 'عام (المشترك)', icon: '🌐', color: '#475569' },
+                { key: 'سلا', label: 'جماعة سلا', icon: '🏙️', color: '#059669' },
+                { key: 'سيدي أبي القنادل', label: 'جماعة سيدي أبي القنادل', icon: '🏘️', color: '#7c3aed' },
+                { key: 'عامر', label: 'جماعة عامر', icon: '🌄', color: '#d97706' },
+              ].map((c) => (
+                <button key={c.key}
+                  onClick={() => handleAdminSwitchCommune(c.key)}
+                  className={`px-4 py-2.5 rounded-xl text-sm font-medium transition-all flex items-center gap-2 ${
+                    currentSettingsCommune === c.key
+                      ? 'text-white shadow-lg'
+                      : 'bg-slate-50 text-slate-600 border border-slate-200 hover:bg-slate-100'
+                  }`}
+                  style={currentSettingsCommune === c.key ? { backgroundColor: c.color } : {}}>
+                  <span>{c.icon}</span>
+                  {c.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </motion.div>
+      )}
+
+      {/* Current commune indicator — for non-admin users */}
+      {!canSeeAllCommunes && user?.commune && (
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}
+          className="flex items-center gap-3 bg-white rounded-xl border border-slate-100 shadow-sm px-4 py-3">
+          <div className="w-8 h-8 rounded-lg flex items-center justify-center text-lg"
+            style={{ backgroundColor: (COMMUNE_COLORS[user.commune] || '#475569') + '20' }}>
+            {COMMUNE_USER_INFO[user.commune]?.icon || '🏠'}
+          </div>
+          <div>
+            <div className="text-sm font-bold text-slate-700">إعدادات {COMMUNE_LABELS[user.commune] || user.commune}</div>
+            <div className="text-[11px] text-slate-400">هذه الإعدادات خاصة بجماعتك فقط</div>
+          </div>
+          <div className="mr-auto">
+            <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+          </div>
+        </motion.div>
+      )}
+
       {/* General Settings */}
       <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
         className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
@@ -3000,7 +3087,7 @@ function SettingsView() {
               <label className="text-sm font-semibold text-slate-700">📅 السنة الافتراضية</label>
               <p className="text-xs text-slate-400 mt-0.5">السنة المعروضة عند فتح التطبيق</p>
             </div>
-            <select value={settings.defaultYear} onChange={(e) => updateSettings({ defaultYear: e.target.value })}
+            <select value={settings.defaultYear} onChange={(e) => handleUpdateAndSave({ defaultYear: e.target.value })}
               className="px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-300 w-full sm:w-40">
               <option value="">الكل</option>
               {getYearOptions(10).map((y) => (
@@ -3017,13 +3104,21 @@ function SettingsView() {
               <label className="text-sm font-semibold text-slate-700">🏛️ الجماعة الافتراضية</label>
               <p className="text-xs text-slate-400 mt-0.5">الجماعة المعروضة عند فتح التطبيق</p>
             </div>
-            <select value={settings.defaultCommune} onChange={(e) => updateSettings({ defaultCommune: e.target.value as CommuneType | 'ALL' })}
-              className="px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-300 w-full sm:w-48">
-              <option value="ALL">كل الجماعات</option>
-              <option value="سلا">جماعة سلا</option>
-              <option value="سيدي أبي القنادل">جماعة سيدي أبي القنادل</option>
-              <option value="عامر">جماعة عامر</option>
-            </select>
+            {!canSeeAllCommunes ? (
+              <div className="flex items-center gap-2 px-4 py-2.5 bg-slate-50 rounded-xl border border-slate-200">
+                <div className="w-3 h-3 rounded-full" style={{ backgroundColor: COMMUNE_COLORS[user?.commune || ''] || '#475569' }} />
+                <span className="text-sm font-medium text-slate-700">{COMMUNE_LABELS[user?.commune || ''] || user?.commune}</span>
+                <span className="text-[10px] text-slate-400">(ثابت)</span>
+              </div>
+            ) : (
+              <select value={settings.defaultCommune} onChange={(e) => handleUpdateAndSave({ defaultCommune: e.target.value as CommuneType | 'ALL' })}
+                className="px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-300 w-full sm:w-48">
+                <option value="ALL">كل الجماعات</option>
+                <option value="سلا">جماعة سلا</option>
+                <option value="سيدي أبي القنادل">جماعة سيدي أبي القنادل</option>
+                <option value="عامر">جماعة عامر</option>
+              </select>
+            )}
           </div>
 
           <div className="border-t border-slate-100" />
@@ -3034,7 +3129,7 @@ function SettingsView() {
               <label className="text-sm font-semibold text-slate-700">📋 عدد التدخلات في كل صفحة</label>
               <p className="text-xs text-slate-400 mt-0.5">الحد الأقصى للتدخلات المعروضة</p>
             </div>
-            <select value={settings.interventionsPerPage} onChange={(e) => updateSettings({ interventionsPerPage: parseInt(e.target.value) })}
+            <select value={settings.interventionsPerPage} onChange={(e) => handleUpdateAndSave({ interventionsPerPage: parseInt(e.target.value) })}
               className="px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-300 w-full sm:w-40">
               <option value="20">20</option>
               <option value="50">50</option>
@@ -3074,7 +3169,7 @@ function SettingsView() {
                 { value: 'light' as const, label: 'خريطة عادية', icon: '🗺️' },
                 { value: 'satellite' as const, label: 'صورة ساتلية', icon: '🛰️' },
               ].map((tile) => (
-                <button key={tile.value} onClick={() => updateSettings({ mapDefaultTile: tile.value })}
+                <button key={tile.value} onClick={() => handleUpdateAndSave({ mapDefaultTile: tile.value })}
                   className={`px-4 py-2.5 rounded-xl text-sm font-medium transition-all flex items-center gap-2 ${
                     settings.mapDefaultTile === tile.value
                       ? 'bg-blue-600 text-white shadow-lg shadow-blue-200'
@@ -3095,7 +3190,7 @@ function SettingsView() {
               <label className="text-sm font-semibold text-slate-700">📍 إضافة تدخل بالنقر على الخريطة</label>
               <p className="text-xs text-slate-400 mt-0.5">تفعيل أو تعطيل إمكانية إضافة تدخل جديد بالضغط على موقع في الخريطة</p>
             </div>
-            <button onClick={() => updateSettings({ mapClickEnabled: !settings.mapClickEnabled })}
+            <button onClick={() => handleUpdateAndSave({ mapClickEnabled: !settings.mapClickEnabled })}
               className={`relative w-14 h-8 rounded-full transition-colors duration-300 ${settings.mapClickEnabled ? 'bg-emerald-500' : 'bg-slate-300'}`}>
               <motion.div className="absolute top-1 w-6 h-6 bg-white rounded-full shadow-md"
                 animate={{ left: settings.mapClickEnabled ? '2rem' : '0.25rem' }}
@@ -3111,7 +3206,7 @@ function SettingsView() {
               <label className="text-sm font-semibold text-slate-700">🏛️ نوافذ الحدود الإدارية الترابية</label>
               <p className="text-xs text-slate-400 mt-0.5">عرض أو إخفاء النوافذ المنبثقة عند النقر على حدود الجماعات</p>
             </div>
-            <button onClick={() => updateSettings({ showCommunePopups: !settings.showCommunePopups })}
+            <button onClick={() => handleUpdateAndSave({ showCommunePopups: !settings.showCommunePopups })}
               className={`relative w-14 h-8 rounded-full transition-colors duration-300 ${settings.showCommunePopups ? 'bg-emerald-500' : 'bg-slate-300'}`}>
               <motion.div className="absolute top-1 w-6 h-6 bg-white rounded-full shadow-md"
                 animate={{ left: settings.showCommunePopups ? '2rem' : '0.25rem' }}
@@ -3129,7 +3224,7 @@ function SettingsView() {
             </div>
             <div className="flex items-center gap-3 w-full sm:w-64">
               <input type="range" min="20" max="120" step="10" value={settings.mapClusterRadius}
-                onChange={(e) => updateSettings({ mapClusterRadius: parseInt(e.target.value) })}
+                onChange={(e) => handleUpdateAndSave({ mapClusterRadius: parseInt(e.target.value) })}
                 className="flex-1 h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-600" />
               <span className="text-sm font-bold text-slate-700 bg-slate-50 px-3 py-1 rounded-lg min-w-[3rem] text-center">{settings.mapClusterRadius}</span>
             </div>
@@ -3151,7 +3246,7 @@ function SettingsView() {
               <label className="text-sm font-semibold text-slate-700">✨ الرسوم المتحركة</label>
               <p className="text-xs text-slate-400 mt-0.5">تفعيل أو تعطيل التأثيرات الحركية في التطبيق</p>
             </div>
-            <button onClick={() => updateSettings({ animationsEnabled: !settings.animationsEnabled })}
+            <button onClick={() => handleUpdateAndSave({ animationsEnabled: !settings.animationsEnabled })}
               className={`relative w-14 h-8 rounded-full transition-colors duration-300 ${settings.animationsEnabled ? 'bg-emerald-500' : 'bg-slate-300'}`}>
               <motion.div className="absolute top-1 w-6 h-6 bg-white rounded-full shadow-md"
                 animate={{ left: settings.animationsEnabled ? '2rem' : '0.25rem' }}
@@ -3173,7 +3268,7 @@ function SettingsView() {
                 { value: 'medium' as const, label: 'متوسط', icon: '🔠' },
                 { value: 'large' as const, label: 'كبير', icon: '🔡' },
               ].map((opt) => (
-                <button key={opt.value} onClick={() => updateSettings({ fontSize: opt.value })}
+                <button key={opt.value} onClick={() => handleUpdateAndSave({ fontSize: opt.value })}
                   className={`px-3 py-2 rounded-xl text-sm font-medium transition-all flex items-center gap-1.5 ${
                     settings.fontSize === opt.value
                       ? 'bg-purple-600 text-white shadow-lg shadow-purple-200'
@@ -3194,7 +3289,7 @@ function SettingsView() {
               <label className="text-sm font-semibold text-slate-700">📐 الوضع المضغوط</label>
               <p className="text-xs text-slate-400 mt-0.5">تقليل المسافات لعرض بيانات أكثر</p>
             </div>
-            <button onClick={() => updateSettings({ compactMode: !settings.compactMode })}
+            <button onClick={() => handleUpdateAndSave({ compactMode: !settings.compactMode })}
               className={`relative w-14 h-8 rounded-full transition-colors duration-300 ${settings.compactMode ? 'bg-emerald-500' : 'bg-slate-300'}`}>
               <motion.div className="absolute top-1 w-6 h-6 bg-white rounded-full shadow-md"
                 animate={{ left: settings.compactMode ? '2rem' : '0.25rem' }}
@@ -3218,7 +3313,7 @@ function SettingsView() {
               <label className="text-sm font-semibold text-slate-700">📦 تنبيه المخزون المنخفض</label>
               <p className="text-xs text-slate-400 mt-0.5">تنبيه عند انخفاض كمية مادة في المخزون عن العتبة</p>
             </div>
-            <button onClick={() => updateSettings({ stockAlertEnabled: !settings.stockAlertEnabled })}
+            <button onClick={() => handleUpdateAndSave({ stockAlertEnabled: !settings.stockAlertEnabled })}
               className={`relative w-14 h-8 rounded-full transition-colors duration-300 ${settings.stockAlertEnabled ? 'bg-emerald-500' : 'bg-slate-300'}`}>
               <motion.div className="absolute top-1 w-6 h-6 bg-white rounded-full shadow-md"
                 animate={{ left: settings.stockAlertEnabled ? '2rem' : '0.25rem' }}
@@ -3236,7 +3331,7 @@ function SettingsView() {
             </div>
             <div className="flex items-center gap-3 w-full sm:w-64">
               <input type="range" min="1" max="50" step="1" value={settings.stockAlertThreshold}
-                onChange={(e) => updateSettings({ stockAlertThreshold: parseInt(e.target.value) })}
+                onChange={(e) => handleUpdateAndSave({ stockAlertThreshold: parseInt(e.target.value) })}
                 className="flex-1 h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-rose-600" />
               <span className="text-sm font-bold text-slate-700 bg-slate-50 px-3 py-1 rounded-lg min-w-[3rem] text-center">{settings.stockAlertThreshold}</span>
             </div>
@@ -3250,7 +3345,7 @@ function SettingsView() {
               <label className="text-sm font-semibold text-slate-700">⏰ تذكير المواعيد</label>
               <p className="text-xs text-slate-400 mt-0.5">تذكير بالتدخلات المبرمجة قبل موعدها</p>
             </div>
-            <button onClick={() => updateSettings({ deadlineReminderEnabled: !settings.deadlineReminderEnabled })}
+            <button onClick={() => handleUpdateAndSave({ deadlineReminderEnabled: !settings.deadlineReminderEnabled })}
               className={`relative w-14 h-8 rounded-full transition-colors duration-300 ${settings.deadlineReminderEnabled ? 'bg-emerald-500' : 'bg-slate-300'}`}>
               <motion.div className="absolute top-1 w-6 h-6 bg-white rounded-full shadow-md"
                 animate={{ left: settings.deadlineReminderEnabled ? '2rem' : '0.25rem' }}
@@ -3268,7 +3363,7 @@ function SettingsView() {
             </div>
             <div className="flex items-center gap-3 w-full sm:w-64">
               <input type="range" min="1" max="14" step="1" value={settings.deadlineReminderDays}
-                onChange={(e) => updateSettings({ deadlineReminderDays: parseInt(e.target.value) })}
+                onChange={(e) => handleUpdateAndSave({ deadlineReminderDays: parseInt(e.target.value) })}
                 className="flex-1 h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-rose-600" />
               <span className="text-sm font-bold text-slate-700 bg-slate-50 px-3 py-1 rounded-lg min-w-[3rem] text-center">{settings.deadlineReminderDays} يوم</span>
             </div>
@@ -3455,7 +3550,7 @@ function SettingsView() {
             </div>
             {confirmReset ? (
               <div className="flex gap-2">
-                <motion.button onClick={() => { resetSettings(); setConfirmReset(false); toast.success('تم إعادة ضبط الإعدادات') }} whileTap={{ scale: 0.95 }}
+                <motion.button onClick={async () => { const ok = await resetSettings(); setConfirmReset(false); toast.success(ok ? 'تم إعادة ضبط الإعدادات' : 'حدث خطأ أثناء إعادة الضبط') }} whileTap={{ scale: 0.95 }}
                   className="px-4 py-2 bg-red-600 text-white rounded-xl text-sm font-medium shadow-lg">
                   ⚠️ تأكيد
                 </motion.button>

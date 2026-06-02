@@ -105,3 +105,10 @@ model Session {
 
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
+
+model CommuneSettings {
+  id        String   @id @default(cuid())
+  commune   String   @unique // الجماعة الترابية: سلا، سيدي أبي القنادل، عامر
+  settings  String   @default("{}") // إعدادات JSON كنص
+  updatedAt DateTime @updatedAt
+}

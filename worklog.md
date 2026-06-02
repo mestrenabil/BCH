@@ -196,3 +196,50 @@ Stage Summary:
 - Database seeded with data for all 3 communes
 - Admin user retains full access to all communes
 - Login system works correctly with session-based authentication
+
+---
+Task ID: per-commune-settings
+Agent: main
+Task: Add per-commune settings — each commune has its own separate settings stored in the database
+
+Work Log:
+- Added `CommuneSettings` model to Prisma schema with `commune` (unique) and `settings` (JSON string) fields
+- Ran `prisma db push` and `prisma generate` to create the table
+- Created `/api/settings` API route with:
+  - GET: Returns settings for the authenticated user's commune (enforced via requireAuth + getCommuneFilter)
+  - PUT: Saves settings for the authenticated user's commune (with sanitization of allowed keys)
+  - POST: Resets settings for a commune to defaults (deletes custom settings)
+- Updated Zustand store (`src/lib/store.ts`):
+  - Added `settingsLoaded`, `settingsCommune` state fields
+  - Added `loadSettings()` async function to fetch from API
+  - Added `saveSettings()` async function to save to API
+  - Changed `resetSettings()` to async (calls API)
+  - Added `setSettings()` for direct state updates
+  - Exported `DEFAULT_SETTINGS` for API and frontend consistency
+- Updated `src/app/page.tsx`:
+  - Added settings loading on auth check (loadSettings after setUser)
+  - Added settings loading on login (handleLogin now async, calls loadSettings)
+  - Updated SettingsView with per-commune features:
+    - Admin users see commune selector tabs to switch between communes' settings
+    - Non-admin users see their commune indicator (fixed, cannot change)
+    - Default commune selector is locked for non-admin users (shows their commune as fixed)
+    - All settings changes auto-save with 800ms debounce via `handleUpdateAndSave()`
+    - Reset settings now calls async `resetSettings()` from API
+  - Added commune settings indicator at top of settings page
+  - Non-admin users see "إعدادات جماعة [X]" indicator with "هذه الإعدادات خاصة بجماعتك فقط"
+- Tested API endpoints:
+  - SLA user GET: returns settings with defaultCommune enforced to "سلا"
+  - SLA user PUT: saves and returns settings with sanitization
+  - SLA user POST (reset): deletes custom settings, returns defaults
+  - Admin user GET: returns all communes' settings
+- Ran lint: all checks passed with no errors
+
+Stage Summary:
+- Per-commune settings fully implemented with database persistence
+- Each commune has completely separate settings (map, display, alerts, etc.)
+- Settings are automatically loaded when user logs in based on their commune
+- Non-admin users can only see and modify their own commune's settings
+- Admin users can switch between communes to manage their settings
+- Auto-save with debounce ensures settings are persisted without explicit save button
+- Default commune is enforced for non-admin users (cannot change to other communes)
+- Reset settings feature properly resets to defaults via API

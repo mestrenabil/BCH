@@ -13,7 +13,7 @@ export interface AuthUser {
   role: string
 }
 
-interface AppSettings {
+export interface AppSettings {
   animationsEnabled: boolean
   mapClickEnabled: boolean
   showCommunePopups: boolean
@@ -60,9 +60,16 @@ interface AppState {
   setEditingInterventionId: (id: string | null) => void
   sidebarOpen: boolean
   setSidebarOpen: (open: boolean) => void
+  // Settings — per-commune, loaded from DB
   settings: AppSettings
+  settingsLoaded: boolean
+  settingsCommune: string // which commune's settings are currently loaded
   updateSettings: (partial: Partial<AppSettings>) => void
-  resetSettings: () => void
+  loadSettings: (commune?: string) => Promise<AppSettings | null>
+  saveSettings: () => Promise<boolean>
+  resetSettings: () => Promise<boolean>
+  setSettings: (settings: AppSettings, commune: string) => void
+  // Map
   mapClickCoords: MapClickCoords | null
   setMapClickCoords: (coords: MapClickCoords | null) => void
 }
@@ -80,7 +87,7 @@ export function getYearOptions(yearsBack: number = 10): { value: string; label: 
   return options
 }
 
-const DEFAULT_SETTINGS: AppSettings = {
+export const DEFAULT_SETTINGS: AppSettings = {
   animationsEnabled: true,
   mapClickEnabled: true,
   showCommunePopups: false,
@@ -97,7 +104,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   compactMode: false,
 }
 
-export const useAppStore = create<AppState>((set) => ({
+export const useAppStore = create<AppState>((set, get) => ({
   // Auth
   user: null,
   setUser: (user) => set({ user, isAuthenticated: !!user }),
@@ -121,9 +128,65 @@ export const useAppStore = create<AppState>((set) => ({
   setEditingInterventionId: (id) => set({ editingInterventionId: id, isFormOpen: !!id }),
   sidebarOpen: false,
   setSidebarOpen: (open) => set({ sidebarOpen: open }),
-  settings: DEFAULT_SETTINGS,
-  updateSettings: (partial) => set((state) => ({ settings: { ...state.settings, ...partial } })),
-  resetSettings: () => set({ settings: DEFAULT_SETTINGS }),
+  // Settings
+  settings: { ...DEFAULT_SETTINGS },
+  settingsLoaded: false,
+  settingsCommune: '',
+  setSettings: (settings, commune) => set({ settings, settingsCommune: commune, settingsLoaded: true }),
+  updateSettings: (partial) => {
+    set((state) => ({ settings: { ...state.settings, ...partial } }))
+    // Auto-save to backend after a brief delay (debounced in practice by the component)
+  },
+  loadSettings: async (commune?: string) => {
+    try {
+      const params = new URLSearchParams()
+      if (commune) params.set('commune', commune)
+      const res = await fetch(`/api/settings?${params.toString()}`)
+      if (!res.ok) return null
+      const data = await res.json()
+      const loadedSettings = { ...DEFAULT_SETTINGS, ...data.settings } as AppSettings
+      set({ settings: loadedSettings, settingsCommune: data.commune, settingsLoaded: true })
+      return loadedSettings
+    } catch {
+      return null
+    }
+  },
+  saveSettings: async () => {
+    const { settings, settingsCommune, user } = get()
+    try {
+      const res = await fetch('/api/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          commune: settingsCommune || user?.commune,
+          settings,
+        }),
+      })
+      if (!res.ok) return false
+      const data = await res.json()
+      set({ settings: { ...DEFAULT_SETTINGS, ...data.settings }, settingsCommune: data.commune })
+      return true
+    } catch {
+      return false
+    }
+  },
+  resetSettings: async () => {
+    const { settingsCommune, user } = get()
+    try {
+      const res = await fetch('/api/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ commune: settingsCommune || user?.commune }),
+      })
+      if (!res.ok) return false
+      const data = await res.json()
+      set({ settings: { ...DEFAULT_SETTINGS, ...data.settings }, settingsCommune: data.commune })
+      return true
+    } catch {
+      return false
+    }
+  },
+  // Map
   mapClickCoords: null,
   setMapClickCoords: (coords) => set({ mapClickCoords: coords }),
 }))
