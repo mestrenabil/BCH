@@ -25,9 +25,17 @@ interface Intervention {
   materials?: InterventionMaterial[]
 }
 
+interface CommuneBreakdown {
+  total: number
+  DERATISATION: number
+  DESINSECTISATION: number
+  DESINFECTION: number
+}
+
 interface Statistics {
   total: number; byType: Record<string, number>; byStatut: Record<string, number>
   byQuartier: { quartier: string; count: number }[]
+  byCommune: Record<string, CommuneBreakdown>
   monthly: Record<string, Record<string, number>>
   recent: Intervention[]
   quartiers: { id: string; nom: string; latitude: number; longitude: number }[]
@@ -471,7 +479,11 @@ function DashboardView({ stats, onNavigate, selectedCommune }: { stats: Statisti
       <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col sm:flex-row sm:items-center gap-2">
         <div>
           <h2 className="text-2xl font-bold text-slate-800">لوحة القيادة</h2>
-          <p className="text-slate-500 text-sm mt-1">نظرة عامة على عمليات 3D — جماعة بوقنادل سلا</p>
+          <p className="text-slate-500 text-sm mt-1">
+            {selectedCommune === 'ALL'
+              ? 'نظرة عامة على عمليات 3D — حسب الجماعة'
+              : `نظرة عامة على عمليات 3D — ${COMMUNE_LABELS[selectedCommune]}`}
+          </p>
         </div>
         {selectedCommune !== 'ALL' && (
           <motion.span initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }}
@@ -504,6 +516,125 @@ function DashboardView({ stats, onNavigate, selectedCommune }: { stats: Statisti
           </motion.div>
         ))}
       </div>
+
+      {/* Commune Breakdown - Only show when ALL communes selected */}
+      {selectedCommune === 'ALL' && stats.byCommune && (
+        <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}
+          className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+          <div className="bg-gradient-to-l from-teal-600 to-emerald-600 text-white px-6 py-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="font-bold text-base">🏛️ التوزيع حسب الجماعة</h3>
+                <p className="text-emerald-100 text-xs mt-0.5">تفصيل التدخلات لكل جماعة ترابية</p>
+              </div>
+              <div className="text-2xl font-extrabold">{stats.total}</div>
+            </div>
+          </div>
+          <div className="p-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              {(['سلا', 'سيدي أبي القنادل', 'عامر'] as const).map((communeKey, i) => {
+                const data = stats.byCommune?.[communeKey]
+                const color = COMMUNE_COLORS[communeKey]
+                const label = COMMUNE_LABELS[communeKey]
+                const total = data?.total || 0
+                const pct = stats.total > 0 ? Math.round((total / stats.total) * 100) : 0
+                const derat = data?.DERATISATION || 0
+                const desins = data?.DESINSECTISATION || 0
+                const desinf = data?.DESINFECTION || 0
+
+                return (
+                  <motion.div key={communeKey} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.2 + i * 0.08 }}
+                    className="rounded-xl border-2 overflow-hidden hover:shadow-md transition-shadow"
+                    style={{ borderColor: color + '30' }}>
+                    {/* Header */}
+                    <div className="px-4 py-3 flex items-center justify-between"
+                      style={{ backgroundColor: color + '0A' }}>
+                      <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 rounded-full" style={{ backgroundColor: color }} />
+                        <span className="text-sm font-bold" style={{ color }}>{label}</span>
+                      </div>
+                      <span className="text-lg font-extrabold" style={{ color }}>{total}</span>
+                    </div>
+                    {/* Progress bar */}
+                    <div className="px-4 pt-2">
+                      <div className="w-full bg-slate-100 rounded-full h-2">
+                        <motion.div className="h-full rounded-full"
+                          style={{ backgroundColor: color }}
+                          initial={{ width: 0 }}
+                          animate={{ width: `${pct}%` }}
+                          transition={{ duration: 1, delay: 0.5 }} />
+                      </div>
+                      <div className="flex justify-between mt-1 mb-2">
+                        <span className="text-[10px] text-slate-400">{pct}% من الإجمالي</span>
+                      </div>
+                    </div>
+                    {/* Type breakdown */}
+                    <div className="px-4 pb-3 space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-xs">🐀</span>
+                          <span className="text-[11px] text-slate-500">مكافحة القوارض</span>
+                        </div>
+                        <span className="text-xs font-bold text-slate-700">{derat}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-xs">🦟</span>
+                          <span className="text-[11px] text-slate-500">مكافحة الحشرات</span>
+                        </div>
+                        <span className="text-xs font-bold text-slate-700">{desins}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-xs">🧴</span>
+                          <span className="text-[11px] text-slate-500">التطهير والتعقيم</span>
+                        </div>
+                        <span className="text-xs font-bold text-slate-700">{desinf}</span>
+                      </div>
+                    </div>
+                    {/* Stacked mini bar */}
+                    <div className="px-4 pb-3">
+                      <div className="flex h-2 rounded-full overflow-hidden bg-slate-100">
+                        {total > 0 && (
+                          <>
+                            <div style={{ width: `${(derat / total) * 100}%`, backgroundColor: TYPE_COLORS.DERATISATION }} />
+                            <div style={{ width: `${(desins / total) * 100}%`, backgroundColor: TYPE_COLORS.DESINSECTISATION }} />
+                            <div style={{ width: `${(desinf / total) * 100}%`, backgroundColor: TYPE_COLORS.DESINFECTION }} />
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  </motion.div>
+                )
+              })}
+            </div>
+            {/* Commune comparison chart */}
+            {stats.byCommune && Object.keys(stats.byCommune).length > 0 && (
+              <div className="mt-4 h-48">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={
+                    (['سلا', 'سيدي أبي القنادل', 'عامر'] as const).map(key => ({
+                      name: key === 'سلا' ? 'سلا' : key === 'سيدي أبي القنادل' ? 'أبي القنادل' : 'عامر',
+                      'مكافحة القوارض': stats.byCommune?.[key]?.DERATISATION || 0,
+                      'مكافحة الحشرات': stats.byCommune?.[key]?.DESINSECTISATION || 0,
+                      'التطهير والتعقيم': stats.byCommune?.[key]?.DESINFECTION || 0,
+                    }))
+                  } barGap={3}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                    <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#64748b' }} />
+                    <YAxis tick={{ fontSize: 10, fill: '#94a3b8' }} />
+                    <Tooltip contentStyle={{ direction: 'rtl', borderRadius: '12px', border: 'none', boxShadow: '0 4px 20px rgba(0,0,0,0.1)' }} />
+                    <Bar dataKey="مكافحة القوارض" stackId="a" fill={TYPE_COLORS.DERATISATION} radius={[0, 0, 0, 0]} />
+                    <Bar dataKey="مكافحة الحشرات" stackId="a" fill={TYPE_COLORS.DESINSECTISATION} radius={[0, 0, 0, 0]} />
+                    <Bar dataKey="التطهير والتعقيم" stackId="a" fill={TYPE_COLORS.DESINFECTION} radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+          </div>
+        </motion.div>
+      )}
 
       {/* Main Dashboard Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

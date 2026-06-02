@@ -15,7 +15,7 @@ export async function GET(request: NextRequest) {
     }
     if (commune) where.commune = commune
 
-    const [total, byType, byStatut, byQuartier, monthly, recent] = await Promise.all([
+    const [total, byType, byStatut, byQuartier, byCommune, monthly, recent] = await Promise.all([
       // Total count
       db.intervention.count({ where }),
       // By type
@@ -36,6 +36,12 @@ export async function GET(request: NextRequest) {
         _count: true,
         where,
         orderBy: { _count: { quartier: 'desc' } },
+      }),
+      // By commune
+      db.intervention.groupBy({
+        by: ['commune'],
+        _count: true,
+        where,
       }),
       // Monthly for current year
       db.intervention.findMany({
@@ -82,6 +88,32 @@ export async function GET(request: NextRequest) {
       statutStats[item.statut as keyof typeof statutStats] = item._count
     }
 
+    // Process commune data
+    const communeStats: Record<string, { total: number; DERATISATION: number; DESINSECTISATION: number; DESINFECTION: number }> = {}
+    for (const item of byCommune) {
+      const key = item.commune || 'غير محدد'
+      if (!communeStats[key]) {
+        communeStats[key] = { total: 0, DERATISATION: 0, DESINSECTISATION: 0, DESINFECTION: 0 }
+      }
+      communeStats[key].total = item._count
+    }
+
+    // Get detailed commune+type breakdown
+    const byCommuneType = await db.intervention.groupBy({
+      by: ['commune', 'type'],
+      _count: true,
+      where,
+    })
+    for (const item of byCommuneType) {
+      const key = item.commune || 'غير محدد'
+      if (!communeStats[key]) {
+        communeStats[key] = { total: 0, DERATISATION: 0, DESINSECTISATION: 0, DESINFECTION: 0 }
+      }
+      if (item.type === 'DERATISATION' || item.type === 'DESINSECTISATION' || item.type === 'DESINFECTION') {
+        communeStats[key][item.type] = item._count
+      }
+    }
+
     // Get quartiers list
     const quartiers = await db.quartier.findMany()
 
@@ -90,6 +122,7 @@ export async function GET(request: NextRequest) {
       byType: typeStats,
       byStatut: statutStats,
       byQuartier: byQuartier.map(q => ({ quartier: q.quartier, count: q._count })),
+      byCommune: communeStats,
       monthly: monthlyData,
       recent,
       quartiers,
