@@ -1,5 +1,6 @@
 import { db } from '@/lib/db'
 import { NextResponse } from 'next/server'
+import { hashPassword } from '@/lib/auth'
 
 // Quartier coordinates verified against Bouknadel commune boundary (OSM Relation 2498879)
 // Boundary box: Lat 34.1101-34.1290, Lon -6.7501 to -6.7281
@@ -55,7 +56,22 @@ export async function POST() {
   try {
     await db.intervention.deleteMany()
     await db.product.deleteMany()
+    await db.session.deleteMany()
     await db.quartier.deleteMany()
+
+    // Seed users (only if they don't already exist)
+    const usersSeed = [
+      { username: 'admin', password: hashPassword('admin123'), nom: 'المسؤول العام', commune: 'ALL', role: 'admin' },
+      { username: 'sla', password: hashPassword('sla2025'), nom: 'مسؤول جماعة سلا', commune: 'سلا', role: 'responsable' },
+      { username: 'bouknadel', password: hashPassword('bouknadel2025'), nom: 'مسؤول جماعة سيدي أبي القنادل', commune: 'سيدي أبي القنادل', role: 'responsable' },
+      { username: 'ameur', password: hashPassword('ameur2025'), nom: 'مسؤول جماعة عامر', commune: 'عامر', role: 'responsable' },
+    ]
+    for (const u of usersSeed) {
+      const existing = await db.user.findUnique({ where: { username: u.username } })
+      if (!existing) {
+        await db.user.create({ data: u })
+      }
+    }
 
     for (const q of quartiers) {
       await db.quartier.create({ data: q })

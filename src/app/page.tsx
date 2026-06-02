@@ -7,8 +7,15 @@ import {
   PieChart, Pie, Cell, AreaChart, Area, RadarChart, Radar, PolarGrid,
   PolarAngleAxis, PolarRadiusAxis,
 } from 'recharts'
-import { useAppStore, type ViewType, type InterventionType, type CommuneType, type MapClickCoords, getYearOptions } from '@/lib/store'
+import { useAppStore, type ViewType, type InterventionType, type CommuneType, type MapClickCoords, type AuthUser, getYearOptions } from '@/lib/store'
 import { toast } from 'sonner'
+
+// ===== AUTH CONSTANTS =====
+const COMMUNE_USER_INFO: Record<string, { username: string; password: string; color: string; icon: string }> = {
+  'سلا': { username: 'sla', password: 'sla2025', color: '#059669', icon: '🏙️' },
+  'سيدي أبي القنادل': { username: 'bouknadel', password: 'bouknadel2025', color: '#7c3aed', icon: '🏘️' },
+  'عامر': { username: 'ameur', password: 'ameur2025', color: '#d97706', icon: '🌄' },
+}
 
 // ===== TYPE DEFINITIONS =====
 interface InterventionMaterial {
@@ -89,6 +96,265 @@ const cardVariants = {
   hover: { scale: 1.02, transition: { duration: 0.2 } },
 }
 
+// ===== LOGIN PAGE =====
+function LoginPage({ onLogin }: { onLogin: (user: AuthUser) => void }) {
+  const [selectedCommuneKey, setSelectedCommuneKey] = useState<string>('')
+  const [username, setUsername] = useState('')
+  const [password, setPassword] = useState('')
+  const [error, setError] = useState('')
+  const [isLoading, setIsLoading] = useState(false)
+  const [mode, setMode] = useState<'select' | 'login'>('select')
+
+  const handleSelectCommune = (key: string) => {
+    setSelectedCommuneKey(key)
+    const info = COMMUNE_USER_INFO[key]
+    if (info) {
+      setUsername(info.username)
+    }
+    setMode('login')
+  }
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setError('')
+    setIsLoading(true)
+
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password }),
+      })
+      const data = await res.json()
+
+      if (!res.ok) {
+        setError(data.error || 'حدث خطأ أثناء تسجيل الدخول')
+        return
+      }
+
+      onLogin(data.user)
+      toast.success(`مرحباً ${data.user.nom}!`)
+    } catch {
+      setError('حدث خطأ في الاتصال بالخادم')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  return (
+    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-emerald-900 via-teal-800 to-emerald-950 p-4" dir="rtl">
+      {/* Background decorative elements */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute top-20 right-20 w-72 h-72 bg-emerald-500/10 rounded-full blur-3xl" />
+        <div className="absolute bottom-20 left-20 w-96 h-96 bg-teal-500/10 rounded-full blur-3xl" />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-emerald-400/5 rounded-full blur-3xl" />
+      </div>
+
+      <motion.div
+        initial={{ opacity: 0, y: 30 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.6 }}
+        className="relative z-10 w-full max-w-lg"
+      >
+        {/* Logo & Title */}
+        <motion.div
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+          className="text-center mb-8"
+        >
+          <div className="w-20 h-20 rounded-2xl bg-white/10 backdrop-blur-md flex items-center justify-center text-5xl mx-auto border border-white/20 shadow-2xl mb-5">
+            🏛️
+          </div>
+          <h1 className="text-3xl font-extrabold text-white mb-2">عمالة سلا</h1>
+          <p className="text-emerald-200/80 text-sm font-medium">قسم حفظ الصحة والبيئة</p>
+          <p className="text-emerald-300/60 text-xs mt-1">نظام تدبير عمليات 3D — مكافحة الجرذان • مكافحة الحشرات • التطهير</p>
+        </motion.div>
+
+        <AnimatePresence mode="wait">
+          {mode === 'select' ? (
+            <motion.div
+              key="select"
+              initial={{ opacity: 0, x: 50 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -50 }}
+              transition={{ duration: 0.3 }}
+              className="bg-white/10 backdrop-blur-xl rounded-3xl border border-white/20 shadow-2xl p-8"
+            >
+              <h2 className="text-xl font-bold text-white text-center mb-2">اختر جماعتك</h2>
+              <p className="text-emerald-200/60 text-sm text-center mb-6">حدد الجماعة الترابية للدخول إلى حسابك</p>
+
+              <div className="space-y-3">
+                {Object.entries(COMMUNE_USER_INFO).map(([key, info], i) => (
+                  <motion.button
+                    key={key}
+                    initial={{ opacity: 0, y: 15 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.3 + i * 0.1 }}
+                    onClick={() => handleSelectCommune(key)}
+                    className="w-full flex items-center gap-4 p-4 rounded-2xl border-2 transition-all duration-300 group hover:scale-[1.02] active:scale-[0.98]"
+                    style={{
+                      borderColor: info.color + '40',
+                      backgroundColor: info.color + '10',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.borderColor = info.color + '80'
+                      e.currentTarget.style.backgroundColor = info.color + '20'
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.borderColor = info.color + '40'
+                      e.currentTarget.style.backgroundColor = info.color + '10'
+                    }}
+                  >
+                    <div className="w-14 h-14 rounded-xl flex items-center justify-center text-2xl shadow-lg"
+                      style={{ backgroundColor: info.color + '30' }}>
+                      {info.icon}
+                    </div>
+                    <div className="flex-1 text-right">
+                      <div className="text-white font-bold text-base">{COMMUNE_LABELS[key]}</div>
+                      <div className="text-emerald-200/50 text-xs mt-0.5">المسؤول: {info.username}</div>
+                    </div>
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-white/30 group-hover:text-white/70 transition-colors rotate-180" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
+                    </svg>
+                  </motion.button>
+                ))}
+
+                {/* Admin login */}
+                <motion.button
+                  initial={{ opacity: 0, y: 15 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.6 }}
+                  onClick={() => { setUsername('admin'); setSelectedCommuneKey('ALL'); setMode('login') }}
+                  className="w-full flex items-center gap-4 p-4 rounded-2xl border-2 border-slate-400/30 bg-slate-500/10 transition-all duration-300 group hover:scale-[1.02] active:scale-[0.98] hover:border-slate-400/60 hover:bg-slate-500/20"
+                >
+                  <div className="w-14 h-14 rounded-xl bg-slate-500/30 flex items-center justify-center text-2xl shadow-lg">
+                    🔐
+                  </div>
+                  <div className="flex-1 text-right">
+                    <div className="text-white font-bold text-base">المسؤول العام</div>
+                    <div className="text-emerald-200/50 text-xs mt-0.5">صلاحية كاملة لجميع الجماعات</div>
+                  </div>
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-white/30 group-hover:text-white/70 transition-colors rotate-180" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
+                  </svg>
+                </motion.button>
+              </div>
+            </motion.div>
+          ) : (
+            <motion.div
+              key="login"
+              initial={{ opacity: 0, x: 50 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -50 }}
+              transition={{ duration: 0.3 }}
+              className="bg-white/10 backdrop-blur-xl rounded-3xl border border-white/20 shadow-2xl p-8"
+            >
+              {/* Back button */}
+              <button
+                onClick={() => { setMode('select'); setError(''); setPassword('') }}
+                className="flex items-center gap-2 text-emerald-200/70 hover:text-white transition-colors mb-6 text-sm"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 rotate-180" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clipRule="evenodd" />
+                </svg>
+                رجوع
+              </button>
+
+              {/* Commune indicator */}
+              {selectedCommuneKey !== 'ALL' && (
+                <div className="flex items-center justify-center gap-3 mb-6">
+                  <div className="w-12 h-12 rounded-xl flex items-center justify-center text-2xl"
+                    style={{ backgroundColor: COMMUNE_USER_INFO[selectedCommuneKey]?.color + '30' }}>
+                    {COMMUNE_USER_INFO[selectedCommuneKey]?.icon}
+                  </div>
+                  <div>
+                    <div className="text-white font-bold">{COMMUNE_LABELS[selectedCommuneKey]}</div>
+                    <div className="text-emerald-200/50 text-xs">تسجيل الدخول</div>
+                  </div>
+                </div>
+              )}
+              {selectedCommuneKey === 'ALL' && (
+                <div className="flex items-center justify-center gap-3 mb-6">
+                  <div className="w-12 h-12 rounded-xl bg-slate-500/30 flex items-center justify-center text-2xl">🔐</div>
+                  <div>
+                    <div className="text-white font-bold">المسؤول العام</div>
+                    <div className="text-emerald-200/50 text-xs">تسجيل الدخول</div>
+                  </div>
+                </div>
+              )}
+
+              <form onSubmit={handleLogin} className="space-y-4">
+                <div>
+                  <label className="block text-emerald-200/80 text-sm font-medium mb-2">اسم المستخدم</label>
+                  <input
+                    type="text"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-white/30 outline-none focus:border-emerald-400/60 focus:bg-white/15 transition-all"
+                    placeholder="أدخل اسم المستخدم"
+                    dir="ltr"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-emerald-200/80 text-sm font-medium mb-2">كلمة المرور</label>
+                  <input
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-white/30 outline-none focus:border-emerald-400/60 focus:bg-white/15 transition-all"
+                    placeholder="أدخل كلمة المرور"
+                    dir="ltr"
+                    required
+                  />
+                </div>
+
+                {error && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -5 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="bg-red-500/20 border border-red-400/30 rounded-xl px-4 py-3 text-red-200 text-sm text-center"
+                  >
+                    {error}
+                  </motion.div>
+                )}
+
+                <motion.button
+                  type="submit"
+                  disabled={isLoading}
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  className="w-full py-3.5 bg-gradient-to-l from-emerald-500 to-teal-500 text-white rounded-xl font-bold text-base shadow-lg shadow-emerald-500/30 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  {isLoading ? (
+                    <>
+                      <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      <span>جاري تسجيل الدخول...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>تسجيل الدخول</span>
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 rotate-180" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M3 10a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clipRule="evenodd" />
+                      </svg>
+                    </>
+                  )}
+                </motion.button>
+              </form>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Footer */}
+        <p className="text-center text-emerald-200/30 text-xs mt-6">
+          © 2025 عمالة سلا — نظام تدبير عمليات 3D
+        </p>
+      </motion.div>
+    </div>
+  )
+}
+
 // ===== MAIN PAGE =====
 export default function HomePage() {
   const {
@@ -98,6 +364,7 @@ export default function HomePage() {
     isFormOpen, setIsFormOpen, editingInterventionId, setEditingInterventionId,
     sidebarOpen, setSidebarOpen,
     mapClickCoords, setMapClickCoords,
+    user, setUser, isAuthenticated, isAuthLoading, setAuthLoading,
   } = useAppStore()
 
   const [stats, setStats] = useState<Statistics | null>(null)
@@ -108,6 +375,52 @@ export default function HomePage() {
   const [isLoading, setIsLoading] = useState(true)
   const [isSeeded, setIsSeeded] = useState(false)
   const [isSeeding, setIsSeeding] = useState(false)
+
+  // Auth: check session on mount
+  useEffect(() => {
+    const checkAuth = async () => {
+      setAuthLoading(true)
+      try {
+        const res = await fetch('/api/auth/me')
+        const data = await res.json()
+        if (data.authenticated && data.user) {
+          setUser(data.user)
+          // Set commune based on user's assigned commune
+          if (data.user.commune !== 'ALL') {
+            setSelectedCommune(data.user.commune as CommuneType)
+          }
+        } else {
+          setUser(null)
+        }
+      } catch {
+        setUser(null)
+      }
+      setAuthLoading(false)
+    }
+    checkAuth()
+  }, [])
+
+  // Auth: handle login
+  const handleLogin = useCallback((loggedInUser: AuthUser) => {
+    setUser(loggedInUser)
+    if (loggedInUser.commune !== 'ALL') {
+      setSelectedCommune(loggedInUser.commune as CommuneType)
+    }
+  }, [setUser, setSelectedCommune])
+
+  // Auth: handle logout
+  const handleLogout = useCallback(async () => {
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' })
+    } catch { /* ignore */ }
+    setUser(null)
+    setSelectedCommune('ALL')
+    setCurrentView('dashboard')
+    toast.success('تم تسجيل الخروج بنجاح')
+  }, [setUser, setSelectedCommune, setCurrentView])
+
+  // Whether the user can see all communes
+  const canSeeAllCommunes = user?.role === 'admin' || user?.commune === 'ALL'
 
   const fetchStats = useCallback(async () => {
     try {
@@ -154,6 +467,7 @@ export default function HomePage() {
   }, [isSeeding, isSeeded, fetchInterventions])
 
   useEffect(() => {
+    if (!isAuthenticated) return
     const init = async () => {
       setIsLoading(true)
       try {
@@ -169,7 +483,7 @@ export default function HomePage() {
       setIsLoading(false)
     }
     init()
-  }, [])
+  }, [isAuthenticated])
 
   const initialLoadDone = useRef(false)
   useEffect(() => {
@@ -185,6 +499,23 @@ export default function HomePage() {
     { id: 'reports', label: 'التقارير', icon: '📈', desc: 'إحصائيات مفصلة' },
     { id: 'settings', label: 'الإعدادات', icon: '⚙️', desc: 'تهيئة التطبيق' },
   ]
+
+  // Show loading while checking auth
+  if (isAuthLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-emerald-900 via-teal-800 to-emerald-950" dir="rtl">
+        <div className="text-center space-y-4">
+          <div className="w-14 h-14 border-4 border-emerald-400 border-t-transparent rounded-full animate-spin mx-auto" />
+          <p className="text-emerald-200/70 font-medium">جاري التحقق...</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Show login page if not authenticated
+  if (!isAuthenticated) {
+    return <LoginPage onLogin={handleLogin} />
+  }
 
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-br from-slate-50 via-white to-emerald-50/30" dir="rtl">
@@ -223,13 +554,17 @@ export default function HomePage() {
               </div>
               <div className="hidden sm:flex items-center gap-2 bg-white/10 backdrop-blur-sm rounded-xl px-3 py-2 border border-white/10">
                 <span className="text-xs text-emerald-100/70">🏛️ الجماعة:</span>
-                <select value={selectedCommune} onChange={(e) => setSelectedCommune(e.target.value as CommuneType | 'ALL')}
-                  className="bg-transparent text-sm font-bold outline-none cursor-pointer">
-                  <option value="ALL" className="text-black">كل الجماعات</option>
-                  <option value="سلا" className="text-black">جماعة سلا</option>
-                  <option value="سيدي أبي القنادل" className="text-black">جماعة سيدي أبي القنادل</option>
-                  <option value="عامر" className="text-black">جماعة عامر</option>
-                </select>
+                {canSeeAllCommunes ? (
+                  <select value={selectedCommune} onChange={(e) => setSelectedCommune(e.target.value as CommuneType | 'ALL')}
+                    className="bg-transparent text-sm font-bold outline-none cursor-pointer">
+                    <option value="ALL" className="text-black">كل الجماعات</option>
+                    <option value="سلا" className="text-black">جماعة سلا</option>
+                    <option value="سيدي أبي القنادل" className="text-black">جماعة سيدي أبي القنادل</option>
+                    <option value="عامر" className="text-black">جماعة عامر</option>
+                  </select>
+                ) : (
+                  <span className="text-sm font-bold">{COMMUNE_LABELS[selectedCommune] || selectedCommune}</span>
+                )}
               </div>
               <div className="hidden sm:flex items-center gap-2 bg-white/10 backdrop-blur-sm rounded-xl px-3 py-2 border border-white/10">
                 <span className="text-xs text-emerald-100/70">🏷️ النوع:</span>
@@ -241,6 +576,25 @@ export default function HomePage() {
                   <option value="DESINFECTION" className="text-black">التطهير والتعقيم</option>
                 </select>
               </div>
+              {/* User Info & Logout */}
+              <div className="hidden sm:flex items-center gap-2 bg-white/10 backdrop-blur-sm rounded-xl px-3 py-2 border border-white/10">
+                <div className="w-7 h-7 rounded-lg flex items-center justify-center text-sm"
+                  style={{ backgroundColor: (user?.commune && user.commune !== 'ALL' ? COMMUNE_COLORS[user.commune] : '#64748b') + '30' }}>
+                  {user?.role === 'admin' ? '🔐' : '👤'}
+                </div>
+                <div className="text-right leading-tight">
+                  <div className="text-[11px] font-bold text-white">{user?.nom}</div>
+                  <div className="text-[9px] text-emerald-200/60">
+                    {user?.commune === 'ALL' ? 'مسؤول عام' : COMMUNE_LABELS[user?.commune || ''] || user?.commune}
+                  </div>
+                </div>
+                <button onClick={handleLogout}
+                  className="p-1.5 hover:bg-white/20 rounded-lg transition-all" title="تسجيل الخروج">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-emerald-200/70 hover:text-white" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M3 3a1 1 0 00-1 1v12a1 1 0 102 0V4a1 1 0 00-1-1zm10.293 9.293a1 1 0 001.414 1.414l3-3a1 1 0 000-1.414l-3-3a1 1 0 10-1.414 1.414L14.586 9H7a1 1 0 100 2h7.586l-1.293 1.293z" clipRule="evenodd" />
+                  </svg>
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -250,18 +604,30 @@ export default function HomePage() {
       <div className="sm:hidden bg-white/90 backdrop-blur-sm border-b border-slate-100 px-3 py-2">
         <div className="flex items-center gap-2 overflow-x-auto">
           <span className="text-[10px] text-slate-400 font-bold whitespace-nowrap">🏛️</span>
-          <button onClick={() => setSelectedCommune('ALL')}
-            className={`px-2.5 py-1 rounded-lg text-[11px] font-bold whitespace-nowrap transition-all ${selectedCommune === 'ALL' ? 'bg-slate-800 text-white shadow-md' : 'bg-slate-100 text-slate-600'}`}>
-            الكل
-          </button>
+          {canSeeAllCommunes && (
+            <button onClick={() => setSelectedCommune('ALL')}
+              className={`px-2.5 py-1 rounded-lg text-[11px] font-bold whitespace-nowrap transition-all ${selectedCommune === 'ALL' ? 'bg-slate-800 text-white shadow-md' : 'bg-slate-100 text-slate-600'}`}>
+              الكل
+            </button>
+          )}
           {Object.entries(COMMUNE_LABELS).map(([key, label]) => (
-            <button key={key} onClick={() => setSelectedCommune(selectedCommune === key ? 'ALL' : key as CommuneType)}
-              className={`px-2.5 py-1 rounded-lg text-[11px] font-bold whitespace-nowrap transition-all flex items-center gap-1 ${selectedCommune === key ? 'text-white shadow-md' : 'bg-slate-100 text-slate-600'}`}
+            <button key={key}
+              onClick={() => canSeeAllCommunes ? setSelectedCommune(selectedCommune === key ? 'ALL' : key as CommuneType) : undefined}
+              className={`px-2.5 py-1 rounded-lg text-[11px] font-bold whitespace-nowrap transition-all flex items-center gap-1 ${selectedCommune === key ? 'text-white shadow-md' : 'bg-slate-100 text-slate-600'} ${!canSeeAllCommunes && selectedCommune !== key ? 'opacity-40 pointer-events-none' : ''}`}
               style={selectedCommune === key ? { backgroundColor: COMMUNE_COLORS[key] } : {}}>
               <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: selectedCommune === key ? 'white' : COMMUNE_COLORS[key] }} />
               {label.replace('جماعة ', '')}
             </button>
           ))}
+          {/* Mobile user & logout */}
+          <div className="flex items-center gap-1 mr-2 pr-2 border-r border-slate-200">
+            <span className="text-[10px] text-slate-500 font-bold">{user?.nom}</span>
+            <button onClick={handleLogout} className="p-1 hover:bg-slate-100 rounded" title="خروج">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 text-slate-400" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M3 3a1 1 0 00-1 1v12a1 1 0 102 0V4a1 1 0 00-1-1zm10.293 9.293a1 1 0 001.414 1.414l3-3a1 1 0 000-1.414l-3-3a1 1 0 10-1.414 1.414L14.586 9H7a1 1 0 100 2h7.586l-1.293 1.293z" clipRule="evenodd" />
+              </svg>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -272,6 +638,26 @@ export default function HomePage() {
             <div className="flex items-center gap-2 mb-4">
               <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
               <span className="text-xs font-semibold text-emerald-600 uppercase tracking-wider">نشط</span>
+            </div>
+            {/* User card */}
+            <div className="bg-gradient-to-l from-slate-50 to-slate-100 rounded-xl p-3 border border-slate-200/80">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-lg flex items-center justify-center text-lg"
+                  style={{ backgroundColor: (user?.commune && user.commune !== 'ALL' ? COMMUNE_COLORS[user.commune] : '#475569') + '20' }}>
+                  {user?.role === 'admin' ? '🔐' : '👤'}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-xs font-bold text-slate-700 truncate">{user?.nom}</div>
+                  <div className="text-[10px] text-slate-400 truncate">
+                    {user?.commune === 'ALL' ? 'مسؤول عام — صلاحية كاملة' : COMMUNE_LABELS[user?.commune || ''] || user?.commune}
+                  </div>
+                </div>
+                <button onClick={handleLogout} className="p-1.5 hover:bg-white rounded-lg transition-all" title="تسجيل الخروج">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-slate-400 hover:text-red-500" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M3 3a1 1 0 00-1 1v12a1 1 0 102 0V4a1 1 0 00-1-1zm10.293 9.293a1 1 0 001.414 1.414l3-3a1 1 0 000-1.414l-3-3a1 1 0 10-1.414 1.414L14.586 9H7a1 1 0 100 2h7.586l-1.293 1.293z" clipRule="evenodd" />
+                  </svg>
+                </button>
+              </div>
             </div>
           </div>
           <nav className="flex-1 px-3 space-y-1">
@@ -423,7 +809,15 @@ export default function HomePage() {
       <footer className="bg-white/80 backdrop-blur-sm border-t border-slate-200 py-3 px-4 mt-auto">
         <div className="max-w-[1800px] mx-auto flex flex-col sm:flex-row items-center justify-between gap-1">
           <p className="text-xs text-slate-500">© 2025 عمالة سلا — قسم حفظ الصحة والبيئة</p>
-          <p className="text-xs text-emerald-600 font-medium">نظام تدبير عمليات 3D ⚡ مكتب مكافحة الجرذان • مكافحة الحشرات • التطهير</p>
+          <div className="flex items-center gap-2">
+            {user && user.commune !== 'ALL' && (
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full"
+                style={{ backgroundColor: COMMUNE_COLORS[user.commune] + '15', color: COMMUNE_COLORS[user.commune] }}>
+                {COMMUNE_LABELS[user.commune]}
+              </span>
+            )}
+            <p className="text-xs text-emerald-600 font-medium">نظام تدبير عمليات 3D ⚡ مكتب مكافحة الجرذان • مكافحة الحشرات • التطهير</p>
+          </div>
         </div>
       </footer>
 
@@ -2427,6 +2821,103 @@ function AgentManagementSection() {
   )
 }
 
+// ===== USER MANAGEMENT SECTION =====
+function UserManagementSection() {
+  const [users, setUsers] = useState<{ id: string; username: string; nom: string; commune: string; role: string; actif: boolean; lastLogin: string | null }[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const res = await fetch('/api/auth/seed-users')
+        const data = await res.json()
+        setUsers(data.users || [])
+      } catch { /* */ }
+      setIsLoading(false)
+    }
+    load()
+  }, [])
+
+  const refreshUsers = useCallback(async () => {
+    try {
+      const res = await fetch('/api/auth/seed-users')
+      const data = await res.json()
+      setUsers(data.users || [])
+    } catch { /* */ }
+  }, [])
+
+  const handleResetUsers = async () => {
+    try {
+      await fetch('/api/auth/seed-users', { method: 'POST' })
+      await refreshUsers()
+      toast.success('تم إعادة إنشاء المستخدمين الافتراضيين')
+    } catch {
+      toast.error('حدث خطأ')
+    }
+  }
+
+  if (isLoading) {
+    return <div className="flex items-center justify-center py-8"><div className="w-6 h-6 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" /></div>
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-slate-500">{users.length} مستخدم مسجل</p>
+        <button onClick={handleResetUsers}
+          className="px-3 py-1.5 bg-emerald-50 text-emerald-600 rounded-lg text-xs font-semibold hover:bg-emerald-100 transition-all">
+          إعادة إنشاء المستخدمين الافتراضيين
+        </button>
+      </div>
+
+      <div className="space-y-2">
+        {users.map((u) => (
+          <div key={u.id} className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl border border-slate-100">
+            <div className="w-9 h-9 rounded-lg flex items-center justify-center text-lg"
+              style={{ backgroundColor: (u.commune !== 'ALL' ? COMMUNE_COLORS[u.commune] || '#64748b' : '#475569') + '20' }}>
+              {u.role === 'admin' ? '🔐' : '👤'}
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="text-sm font-bold text-slate-700">{u.nom}</div>
+              <div className="text-[11px] text-slate-400">
+                @{u.username} • {u.commune === 'ALL' ? 'مسؤول عام' : COMMUNE_LABELS[u.commune] || u.commune}
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${u.actif ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
+                {u.actif ? 'نشط' : 'معطل'}
+              </span>
+              <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${u.role === 'admin' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
+                {u.role === 'admin' ? 'مسؤول' : 'مسؤول جماعة'}
+              </span>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+        <h4 className="text-sm font-bold text-amber-800 mb-2">🔑 معلومات الدخول الافتراضية</h4>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+          {Object.entries(COMMUNE_USER_INFO).map(([key, info]) => (
+            <div key={key} className="bg-white rounded-lg p-2.5 border border-amber-100">
+              <div className="font-bold text-slate-700 mb-1" style={{ color: info.color }}>
+                {COMMUNE_LABELS[key]}
+              </div>
+              <div className="text-slate-500">المستخدم: <span className="font-mono text-slate-700" dir="ltr">{info.username}</span></div>
+              <div className="text-slate-500">كلمة المرور: <span className="font-mono text-slate-700" dir="ltr">{info.password}</span></div>
+            </div>
+          ))}
+          <div className="bg-white rounded-lg p-2.5 border border-amber-100">
+            <div className="font-bold text-slate-700 mb-1">🔐 المسؤول العام</div>
+            <div className="text-slate-500">المستخدم: <span className="font-mono text-slate-700" dir="ltr">admin</span></div>
+            <div className="text-slate-500">كلمة المرور: <span className="font-mono text-slate-700" dir="ltr">admin123</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ===== SETTINGS VIEW =====
 function SettingsView() {
   const { settings, updateSettings, resetSettings, setSelectedYear, setSelectedCommune } = useAppStore()
@@ -2958,6 +3449,18 @@ function SettingsView() {
               </button>
             )}
           </div>
+        </div>
+      </motion.div>
+
+      {/* About */}
+      <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.6 }}
+        className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+        <div className="bg-gradient-to-l from-emerald-700 to-teal-700 text-white px-6 py-4">
+          <h3 className="font-bold text-base">👥 إدارة المستخدمين</h3>
+          <p className="text-emerald-200 text-xs mt-0.5">الحسابات المرخصة للدخول</p>
+        </div>
+        <div className="p-6">
+          <UserManagementSection />
         </div>
       </motion.div>
 

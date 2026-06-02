@@ -79,3 +79,27 @@ model Agent {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
+
+model User {
+  id           String   @id @default(cuid())
+  username     String   @unique // اسم المستخدم
+  password     String   // كلمة المرور (مشفرة)
+  nom          String   // الاسم الكامل
+  commune      String   // الجماعة الترابية: سلا، سيدي أبي القنادل، عامر، أو ALL للمسؤول العام
+  role         String   @default("responsable") // الدور: admin (مسؤول عام)، responsable (مسؤول جماعة)
+  actif        Boolean  @default(true) // نشط أو لا
+  lastLogin    DateTime? // آخر دخول
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  sessions     Session[]
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  token     String   @unique // رمز الجلسة
+  userId    String   // معرف المستخدم
+  expiresAt DateTime // تاريخ الانتهاء
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}

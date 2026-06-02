@@ -5,6 +5,14 @@ export type InterventionType = 'DERATISATION' | 'DESINSECTISATION' | 'DESINFECTI
 export type StatutType = 'PLANIFIEE' | 'EN_COURS' | 'TERMINEE' | 'ANNULEE'
 export type CommuneType = 'سلا' | 'سيدي أبي القنادل' | 'عامر'
 
+export interface AuthUser {
+  id: string
+  username: string
+  nom: string
+  commune: string
+  role: string
+}
+
 interface AppSettings {
   animationsEnabled: boolean
   mapClickEnabled: boolean
@@ -29,6 +37,13 @@ export interface MapClickCoords {
 }
 
 interface AppState {
+  // Auth
+  user: AuthUser | null
+  setUser: (user: AuthUser | null) => void
+  isAuthenticated: boolean
+  isAuthLoading: boolean
+  setAuthLoading: (loading: boolean) => void
+  // Navigation
   currentView: ViewType
   setCurrentView: (view: ViewType) => void
   selectedType: InterventionType | 'ALL'
@@ -83,6 +98,13 @@ const DEFAULT_SETTINGS: AppSettings = {
 }
 
 export const useAppStore = create<AppState>((set) => ({
+  // Auth
+  user: null,
+  setUser: (user) => set({ user, isAuthenticated: !!user }),
+  isAuthenticated: false,
+  isAuthLoading: true,
+  setAuthLoading: (loading) => set({ isAuthLoading: loading }),
+  // Navigation
   currentView: 'dashboard',
   setCurrentView: (view) => set({ currentView: view }),
   selectedType: 'ALL',

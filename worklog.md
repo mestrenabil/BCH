@@ -121,3 +121,31 @@ Stage Summary:
 - Quartiers can be filtered by commune
 - Intervention form shows commune alongside quartier name for clarity
 - All existing functionality preserved
+
+---
+Task ID: auth-system
+Agent: main
+Task: Add commune-based login system where each commune has its own responsible person who controls only their commune
+
+Work Log:
+- Added User and Session models to Prisma schema
+- Created /lib/auth.ts with auth utilities
+- Created auth API routes (login, logout, me, seed-users)
+- Updated Zustand store with auth state
+- Created LoginPage component with commune selection and login form
+- Updated HomePage with auth flow (check auth, show login, load data only when authenticated)
+- Updated header with user info and logout, locked commune selector for non-admin
+- Updated mobile filters and sidebar with user info
+- Added UserManagementSection in Settings
+- Updated seed route to create default users
+- Tested all auth APIs successfully
+
+Stage Summary:
+- Full commune-based authentication system implemented
+- 4 default users: admin (all communes), sla (سلا), bouknadel (سيدي أبي القنادل), ameur (عامر)
+- Commune responsable users can only see data for their own commune
+- Admin user has access to all communes
+- Session management with HTTP-only cookies (24h expiry)
+- Beautiful RTL Arabic login page with commune selection
+- User info displayed in header, sidebar, and footer
+- Settings page includes user management section
