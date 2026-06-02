@@ -12,20 +12,30 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const format = searchParams.get('format') || 'csv'
     const year = searchParams.get('year')
+    const from = searchParams.get('from')
+    const to = searchParams.get('to')
     const requestedCommune = searchParams.get('commune')
     const type = searchParams.get('type')
+    const statut = searchParams.get('statut')
 
     // Enforce commune filter based on user's role
     const communeFilter = getCommuneFilter(user, requestedCommune)
 
     const where: Record<string, unknown> = {}
-    if (year) {
+    if (from || to) {
+      // Use from/to date range if provided
+      const dateFilter: Record<string, Date> = {}
+      if (from) dateFilter.gte = new Date(from + 'T00:00:00')
+      if (to) dateFilter.lte = new Date(to + 'T23:59:59.999')
+      where.date = dateFilter
+    } else if (year) {
       const start = new Date(parseInt(year), 0, 1)
-      const end = new Date(parseInt(year), 11, 31)
+      const end = new Date(parseInt(year), 11, 31, 23, 59, 59, 999)
       where.date = { gte: start, lte: end }
     }
     if (communeFilter) where.commune = communeFilter
     if (type) where.type = type
+    if (statut) where.statut = statut
 
     const interventions = await db.intervention.findMany({
       where,
@@ -72,10 +82,12 @@ export async function GET(request: NextRequest) {
       })
 
       const csv = BOM + [headers.join(','), ...rows.map(r => r.join(','))].join('\n')
+      // Use ASCII-safe filename to avoid ByteString conversion error with Arabic chars
+      const safeCommune = communeFilter ? encodeURIComponent(communeFilter) : ''
       return new NextResponse(csv, {
         headers: {
           'Content-Type': 'text/csv; charset=utf-8',
-          'Content-Disposition': `attachment; filename="interventions-${year || 'all'}${communeFilter ? '-' + communeFilter : ''}.csv"`,
+          'Content-Disposition': `attachment; filename="interventions-${year || 'all'}${safeCommune ? '-' + safeCommune : ''}.csv"`,
         },
       })
     }

@@ -9,6 +9,13 @@ import {
 } from 'recharts'
 import { useAppStore, type ViewType, type InterventionType, type CommuneType, type MapClickCoords, type AuthUser, getYearOptions } from '@/lib/store'
 import { toast } from 'sonner'
+import DocumentsView from './documents-view'
+import ExportView from './export-view'
+import NotificationsView from './notifications-view'
+import AlertsView from './alerts-view'
+import CalendarView from './calendar-view'
+import KpiView from './kpi-view'
+import AgentsView from './agents-view'
 
 // ===== AUTH CONSTANTS =====
 const COMMUNE_USER_INFO: Record<string, { username: string; password: string; color: string; icon: string }> = {
@@ -506,14 +513,25 @@ export default function HomePage() {
   }, [selectedYear, selectedType, selectedCommune, fetchStats, fetchInterventions])
   useEffect(() => { if (!isLoading) initialLoadDone.current = true }, [isLoading])
 
-  const navItems: { id: ViewType; label: string; icon: string; desc: string }[] = [
-    { id: 'dashboard', label: 'لوحة القيادة', icon: '📊', desc: 'نظرة شاملة' },
-    { id: 'map', label: 'الخريطة', icon: '🗺️', desc: 'SIG تفاعلي' },
-    { id: 'interventions', label: 'التدخلات', icon: '📋', desc: 'إدارة العمليات' },
-    { id: 'inventory', label: 'المخزون', icon: '📦', desc: 'تدبير المواد' },
-    { id: 'reports', label: 'التقارير', icon: '📈', desc: 'إحصائيات مفصلة' },
-    { id: 'users', label: 'المستخدمون', icon: '👥', desc: 'إدارة الحسابات' },
-    { id: 'settings', label: 'الإعدادات', icon: '⚙️', desc: 'تهيئة التطبيق' },
+  const navItems: { id: ViewType; label: string; icon: string; desc: string; section?: string }[] = [
+    // 📋 الأقسام الأساسية
+    { id: 'dashboard', label: 'لوحة القيادة', icon: '📊', desc: 'نظرة شاملة', section: '📋 الأقسام الأساسية' },
+    { id: 'map', label: 'الخريطة', icon: '🗺️', desc: 'SIG تفاعلي', section: '📋 الأقسام الأساسية' },
+    { id: 'interventions', label: 'التدخلات', icon: '📋', desc: 'إدارة العمليات', section: '📋 الأقسام الأساسية' },
+    { id: 'agents', label: 'الأعوان', icon: '👷', desc: 'إدارة الأعوان', section: '📋 الأقسام الأساسية' },
+    { id: 'inventory', label: 'المخزون', icon: '📦', desc: 'تدبير المواد', section: '📋 الأقسام الأساسية' },
+    { id: 'documents', label: 'المستندات', icon: '📁', desc: 'تنظيم وعرض الملفات', section: '📋 الأقسام الأساسية' },
+    { id: 'calendar', label: 'التقويم', icon: '📅', desc: 'عرض شهري للتدخلات', section: '📋 الأقسام الأساسية' },
+    // 📊 التتبع والتحليل
+    { id: 'reports', label: 'التقارير', icon: '📈', desc: 'إحصائيات مفصلة', section: '📊 التتبع والتحليل' },
+    { id: 'kpi', label: 'مؤشرات الأداء', icon: '🎯', desc: 'KPI لوحة المتابعة', section: '📊 التتبع والتحليل' },
+    { id: 'alerts', label: 'التنبيهات والتتبع', icon: '⚡', desc: 'تنبيهات المخزون والتدخلات', section: '📊 التتبع والتحليل' },
+    // 📱 التقارير والاتصال
+    { id: 'export', label: 'التصدير', icon: '📤', desc: 'تصدير التقارير والبيانات', section: '📱 التقارير والاتصال' },
+    { id: 'notifications', label: 'الإشعارات', icon: '🔔', desc: 'مركز التنبيهات', section: '📱 التقارير والاتصال' },
+    // 👥 الإدارة
+    { id: 'users', label: 'المستخدمون', icon: '👥', desc: 'إدارة الحسابات', section: '👥 الإدارة' },
+    { id: 'settings', label: 'الإعدادات', icon: '⚙️', desc: 'تهيئة التطبيق', section: '👥 الإدارة' },
   ]
 
   // Show loading while checking auth
@@ -676,25 +694,35 @@ export default function HomePage() {
               </div>
             </div>
           </div>
-          <nav className="flex-1 px-3 space-y-1">
-            {navItems.map((item) => (
-              <motion.button key={item.id}
-                onClick={() => setCurrentView(item.id)}
-                whileHover={{ x: -4 }}
-                whileTap={{ scale: 0.98 }}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 ${
-                  currentView === item.id
-                    ? 'bg-gradient-to-l from-emerald-600 to-teal-600 text-white shadow-lg shadow-emerald-200'
-                    : 'text-slate-600 hover:bg-emerald-50 hover:text-emerald-700'
-                }`}
-              >
-                <span className="text-xl">{item.icon}</span>
-                <div className="text-right">
-                  <div>{item.label}</div>
-                  <div className={`text-[10px] ${currentView === item.id ? 'text-emerald-100' : 'text-slate-400'}`}>{item.desc}</div>
-                </div>
-              </motion.button>
-            ))}
+          <nav className="flex-1 px-3 overflow-y-auto" style={{ scrollbarWidth: 'none' }}>
+            {navItems.map((item, idx) => {
+              const showSection = item.section && (idx === 0 || navItems[idx - 1].section !== item.section)
+              return (
+                <React.Fragment key={item.id}>
+                  {showSection && (
+                    <div className="px-4 pt-4 pb-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                      {item.section}
+                    </div>
+                  )}
+                  <motion.button
+                    onClick={() => setCurrentView(item.id)}
+                    whileHover={{ x: -4 }}
+                    whileTap={{ scale: 0.98 }}
+                    className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 ${
+                      currentView === item.id
+                        ? 'bg-gradient-to-l from-emerald-600 to-teal-600 text-white shadow-lg shadow-emerald-200'
+                        : 'text-slate-600 hover:bg-emerald-50 hover:text-emerald-700'
+                    }`}
+                  >
+                    <span className="text-lg">{item.icon}</span>
+                    <div className="text-right">
+                      <div className="text-[13px]">{item.label}</div>
+                      <div className={`text-[10px] ${currentView === item.id ? 'text-emerald-100' : 'text-slate-400'}`}>{item.desc}</div>
+                    </div>
+                  </motion.button>
+                </React.Fragment>
+              )
+            })}
           </nav>
           <div className="p-4 border-t border-slate-100">
             <motion.button
@@ -705,22 +733,6 @@ export default function HomePage() {
               <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" /></svg>
               <span>إضافة تدخل جديد</span>
             </motion.button>
-          </div>
-          <div className="p-3 border-t border-slate-100">
-            <button
-              onClick={() => setCurrentView('settings')}
-              className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 ${
-                currentView === 'settings'
-                  ? 'bg-gradient-to-l from-slate-600 to-slate-700 text-white shadow-lg'
-                  : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'
-              }`}
-            >
-              <span className="text-lg">⚙️</span>
-              <div className="text-right">
-                <div>الإعدادات</div>
-                <div className={`text-[10px] ${currentView === 'settings' ? 'text-slate-200' : 'text-slate-400'}`}>تهيئة التطبيق</div>
-              </div>
-            </button>
           </div>
           {stats && (
             <div className="p-4 border-t border-slate-100 space-y-3">
@@ -760,16 +772,26 @@ export default function HomePage() {
                   <h2 className="font-bold text-emerald-700">القائمة</h2>
                   <button onClick={() => setSidebarOpen(false)} className="p-2 hover:bg-slate-100 rounded-lg">✕</button>
                 </div>
-                <nav className="flex-1 p-3 space-y-1">
-                  {navItems.map((item) => (
-                    <button key={item.id}
-                      onClick={() => { setCurrentView(item.id); setSidebarOpen(false) }}
-                      className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${
-                        currentView === item.id ? 'bg-emerald-600 text-white shadow-lg' : 'text-slate-600 hover:bg-slate-50'
-                      }`}>
-                      <span className="text-xl">{item.icon}</span><span>{item.label}</span>
-                    </button>
-                  ))}
+                <nav className="flex-1 p-3 overflow-y-auto" style={{ scrollbarWidth: 'none' }}>
+                  {navItems.map((item, idx) => {
+                    const showSection = item.section && (idx === 0 || navItems[idx - 1].section !== item.section)
+                    return (
+                      <React.Fragment key={item.id}>
+                        {showSection && (
+                          <div className="px-4 pt-3 pb-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                            {item.section}
+                          </div>
+                        )}
+                        <button
+                          onClick={() => { setCurrentView(item.id); setSidebarOpen(false) }}
+                          className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all ${
+                            currentView === item.id ? 'bg-emerald-600 text-white shadow-lg' : 'text-slate-600 hover:bg-slate-50'
+                          }`}>
+                          <span className="text-lg">{item.icon}</span><span className="text-[13px]">{item.label}</span>
+                        </button>
+                      </React.Fragment>
+                    )
+                  })}
                 </nav>
               </motion.aside>
             </>
@@ -804,6 +826,13 @@ export default function HomePage() {
                 )}
                 {currentView === 'reports' && <ReportsView stats={stats} selectedCommune={selectedCommune} canSeeAllCommunes={canSeeAllCommunes} />}
                 {currentView === 'inventory' && <InventoryView />}
+                {currentView === 'documents' && <DocumentsView />}
+                {currentView === 'calendar' && <CalendarView />}
+                {currentView === 'notifications' && <NotificationsView />}
+                {currentView === 'alerts' && <AlertsView />}
+                {currentView === 'kpi' && <KpiView />}
+                {currentView === 'export' && <ExportView />}
+                {currentView === 'agents' && <AgentsView />}
                 {currentView === 'users' && <UsersView />}
                 {currentView === 'settings' && <SettingsView />}
               </motion.div>
@@ -840,18 +869,22 @@ export default function HomePage() {
 
       {/* Mobile Nav */}
       <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-slate-200 z-40 shadow-lg">
-        <div className="flex items-center justify-around py-1.5 px-2">
-          {navItems.map((item) => (
-            <button key={item.id} onClick={() => setCurrentView(item.id)}
-              className={`flex flex-col items-center gap-0.5 px-2 py-1.5 rounded-xl transition-all ${
-                currentView === item.id ? 'text-emerald-600 bg-emerald-50' : 'text-slate-400'
-              }`}>
-              <span className="text-lg">{item.icon}</span>
-              <span className="text-[9px] font-semibold">{item.label}</span>
-            </button>
-          ))}
+        <div className="flex items-center justify-around py-1.5 px-1">
+          {['dashboard', 'map', 'interventions', 'agents', 'notifications'].map((viewId) => {
+            const item = navItems.find(n => n.id === viewId)
+            if (!item) return null
+            return (
+              <button key={item.id} onClick={() => setCurrentView(item.id)}
+                className={`flex flex-col items-center gap-0.5 px-1.5 py-1.5 rounded-xl transition-all ${
+                  currentView === item.id ? 'text-emerald-600 bg-emerald-50' : 'text-slate-400'
+                }`}>
+                <span className="text-lg">{item.icon}</span>
+                <span className="text-[9px] font-semibold">{item.label}</span>
+              </button>
+            )
+          })}
           <motion.button onClick={() => setIsFormOpen(true)} whileTap={{ scale: 0.9 }}
-            className="flex flex-col items-center gap-0.5 px-2 py-1.5">
+            className="flex flex-col items-center gap-0.5 px-1.5 py-1.5">
             <span className="w-9 h-9 bg-gradient-to-br from-emerald-500 to-teal-600 text-white rounded-full flex items-center justify-center text-lg shadow-lg shadow-emerald-200">+</span>
             <span className="text-[9px] font-semibold text-emerald-600">إضافة</span>
           </motion.button>

@@ -112,3 +112,20 @@ model CommuneSettings {
   settings  String   @default("{}") // إعدادات JSON كنص
   updatedAt DateTime @updatedAt
 }
+
+model Document {
+  id          String   @id @default(cuid())
+  titre       String   // عنوان المستند
+  description String   @default("") // وصف المستند
+  categorie   String   @default("عام") // الفئة: عام، تقارير، محاضر، مراسلات، قرارات، عقود، أخرى
+  commune     String   @default("") // الجماعة الترابية
+  nomFichier  String   // اسم الملف الأصلي
+  cheminFichier String // مسار الملف المخزن
+  typeFichier String   @default("") // نوع الملف: pdf, doc, xls, img, etc.
+  tailleFichier Int    @default(0) // حجم الملف بالبايت
+  reference   String   @default("") // مرجع المستند
+  dateDocument DateTime? // تاريخ المستند
+  uploadedBy  String   @default("") // اسم المستخدم الذي رفع الملف
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}

@@ -191,3 +191,20 @@ html {
   background: oklch(0.55 0.18 160 / 0.2);
   color: oklch(0.25 0.03 160);
 }
+
+/* Print styles */
+@media print {
+  body {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    color-adjust: exact !important;
+  }
+  header, aside, .no-print, [class*="sidebar"], [class*="Sidebar"] {
+    display: none !important;
+  }
+  main, .print-area {
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+}

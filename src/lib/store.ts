@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 
-export type ViewType = 'dashboard' | 'map' | 'interventions' | 'inventory' | 'reports' | 'users' | 'settings'
+export type ViewType = 'dashboard' | 'map' | 'interventions' | 'inventory' | 'reports' | 'documents' | 'users' | 'settings' | 'agents' | 'calendar' | 'kpi' | 'alerts' | 'export' | 'notifications'
 export type InterventionType = 'DERATISATION' | 'DESINSECTISATION' | 'DESINFECTION'
 export type StatutType = 'PLANIFIEE' | 'EN_COURS' | 'TERMINEE' | 'ANNULEE'
 export type CommuneType = 'سلا' | 'سيدي أبي القنادل' | 'عامر'
@@ -28,6 +28,20 @@ export interface AppSettings {
   deadlineReminderDays: number
   fontSize: 'small' | 'medium' | 'large'
   compactMode: boolean
+  // Print / Document settings
+  presidentName: string
+  responsableName: string
+  chefServiceName: string
+  communeNameFr: string
+  communeNameAr: string
+  communeAddress: string
+  communePhone: string
+  communeFax: string
+  communeEmail: string
+  communeLogo: string
+  showWatermark: boolean
+  watermarkText: string
+  documentFooter: string
 }
 
 export interface MapClickCoords {
@@ -102,6 +116,20 @@ export const DEFAULT_SETTINGS: AppSettings = {
   deadlineReminderDays: 3,
   fontSize: 'medium',
   compactMode: false,
+  // Print / Document settings
+  presidentName: '',
+  responsableName: '',
+  chefServiceName: '',
+  communeNameFr: '',
+  communeNameAr: '',
+  communeAddress: '',
+  communePhone: '',
+  communeFax: '',
+  communeEmail: '',
+  communeLogo: '',
+  showWatermark: false,
+  watermarkText: 'BCH',
+  documentFooter: '',
 }
 
 export const useAppStore = create<AppState>((set, get) => ({

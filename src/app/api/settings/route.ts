@@ -18,6 +18,20 @@ const DEFAULT_SETTINGS = {
   deadlineReminderDays: 3,
   fontSize: 'medium',
   compactMode: false,
+  // Print / Document settings
+  presidentName: '',
+  responsableName: '',
+  chefServiceName: '',
+  communeNameFr: '',
+  communeNameAr: '',
+  communeAddress: '',
+  communePhone: '',
+  communeFax: '',
+  communeEmail: '',
+  communeLogo: '',
+  showWatermark: false,
+  watermarkText: 'BCH',
+  documentFooter: '',
 }
 
 // GET /api/settings — Return settings for the authenticated user's commune
