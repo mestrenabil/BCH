@@ -1482,12 +1482,6 @@ export default function PrintDocument({
                     className="w-3.5 h-3.5 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500" />
                   <span className="text-[10px] font-medium text-slate-600">علامة مائية / Watermark</span>
                 </label>
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input type="checkbox" checked={showCachetCircles} onChange={(e) => setShowCachetCircles(e.target.checked)}
-                    className="w-3.5 h-3.5 rounded border-slate-300 text-amber-600 focus:ring-amber-500" />
-                  <span className="text-[10px] font-medium text-slate-600">دوائر الختم / Cachets</span>
-                  <span className="text-[8px] text-slate-400">💡 إخفاء الأختام إذا كانت مطبوعة مسبقاً</span>
-                </label>
               </div>
             </div>
           </div>
