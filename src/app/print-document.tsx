@@ -228,6 +228,16 @@ export default function PrintDocument({
   // ========================
   // PRINT HANDLER — Generates a highly professional administrative document
   // ========================
+  const handleClassicPrint = useCallback(() => {
+    document.body.classList.add('classic-print-active')
+    setTimeout(() => {
+      window.print()
+      setTimeout(() => {
+        document.body.classList.remove('classic-print-active')
+      }, 500)
+    }, 100)
+  }, [])
+
   const handlePrint = useCallback(() => {
     const printWindow = window.open('', '_blank')
     if (!printWindow) {
@@ -1492,7 +1502,7 @@ export default function PrintDocument({
             إغلاق
           </button>
           <motion.button
-            onClick={() => window.print()}
+            onClick={handleClassicPrint}
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
             className="px-5 py-2.5 rounded-xl font-bold border-2 border-slate-200 bg-white text-slate-600 hover:bg-slate-50 flex items-center gap-2 text-sm transition-all"

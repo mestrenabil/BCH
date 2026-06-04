@@ -225,3 +225,105 @@ html {
     max-height: none !important;
   }
 }
+
+/* Classic Print Mode — Administrative black/gray style */
+body.classic-print-active {
+  /* Override all emerald/teal/amber/green/red colors to black/gray */
+}
+body.classic-print-active .bg-gradient-to-l.from-emerald-600.via-teal-500,
+body.classic-print-active .bg-gradient-to-l.from-emerald-800,
+body.classic-print-active [class*="bg-emerald"],
+body.classic-print-active [class*="bg-teal"],
+body.classic-print-active [class*="bg-amber-50"],
+body.classic-print-active [class*="bg-red-50"],
+body.classic-print-active [class*="bg-green-50"] {
+  background: #f9fafb !important;
+  background-color: #f9fafb !important;
+}
+body.classic-print-active [class*="bg-emerald-600"],
+body.classic-print-active [class*="bg-emerald-700"],
+body.classic-print-active [class*="bg-emerald-800"] {
+  background: #1f2937 !important;
+  background-color: #1f2937 !important;
+}
+body.classic-print-active [class*="bg-emerald-50"],
+body.classic-print-active [class*="bg-emerald-50/50"] {
+  background: #f3f4f6 !important;
+  background-color: #f3f4f6 !important;
+}
+body.classic-print-active [class*="text-emerald-700"],
+body.classic-print-active [class*="text-emerald-800"] {
+  color: #111827 !important;
+}
+body.classic-print-active [class*="text-emerald-600"],
+body.classic-print-active [class*="text-emerald-500"] {
+  color: #374151 !important;
+}
+body.classic-print-active [class*="border-emerald"] {
+  border-color: #d1d5db !important;
+}
+body.classic-print-active [class*="border-r-4"].border-emerald-500,
+body.classic-print-active [class*="border-r-4"].border-amber-500 {
+  border-right-color: #374151 !important;
+}
+body.classic-print-active [class*="text-amber-700"],
+body.classic-print-active [class*="text-amber-500"] {
+  color: #374151 !important;
+}
+body.classic-print-active [class*="text-red-500"],
+body.classic-print-active [class*="text-red-600"] {
+  color: #374151 !important;
+}
+body.classic-print-active [class*="text-green-500"],
+body.classic-print-active [class*="text-green-600"] {
+  color: #374151 !important;
+}
+body.classic-print-active [class*="text-teal-700"],
+body.classic-print-active [class*="text-teal-800"] {
+  color: #1f2937 !important;
+}
+body.classic-print-active [class*="border-teal"] {
+  border-color: #9ca3af !important;
+}
+body.classic-print-active .h-1\\.5,
+body.classic-print-active .h-1.bg-gradient-to-l,
+body.classic-print-active .h-px.bg-gradient-to-l,
+body.classic-print-active .h-px.bg-emerald-600,
+body.classic-print-active .absolute.top-0[class*="bg-emerald"],
+body.classic-print-active .absolute.top-0[class*="bg-red"],
+body.classic-print-active .absolute.top-0[class*="bg-amber"],
+body.classic-print-active .absolute.top-0[class*="bg-green"] {
+  background: #374151 !important;
+  background-color: #374151 !important;
+}
+body.classic-print-active .shadow-lg.shadow-emerald-200,
+body.classic-print-active .shadow-sm {
+  box-shadow: none !important;
+}
+body.classic-print-active .bg-slate-600 {
+  background: #1f2937 !important;
+  background-color: #1f2937 !important;
+}
+body.classic-print-active .text-2xl {
+  font-size: 1.2rem !important;
+}
+
+/* Classic print media: hide non-essential elements */
+@media print {
+  body.classic-print-active .no-classic-print {
+    display: none !important;
+  }
+  body.classic-print-active .print-classic-container {
+    position: static !important;
+    max-width: 100% !important;
+    max-height: none !important;
+    overflow: visible !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    width: 100% !important;
+  }
+  body.classic-print-active .print-classic-container .flex-1 {
+    overflow: visible !important;
+    max-height: none !important;
+  }
+}
