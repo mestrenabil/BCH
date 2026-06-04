@@ -275,3 +275,91 @@ Stage Summary:
 - Added Quick Print button that opens print preview directly
 - Phone/fax/email fields display correctly with LTR direction
 - Lint passes clean, no server errors
+
+---
+Task ID: 2
+Agent: full-stack-developer
+Task: Improve print output - make ALL print content black/gray administrative style and remove stamp circles
+
+Work Log:
+- Read worklog.md to understand previous agents' work on the print system
+- Read globals.css (existing classic-print-active CSS was incomplete, only covered some emerald/teal elements)
+- Read print-document.tsx (1501 lines) to identify all colored elements needing conversion
+- Verified no stamp circles exist in the current code (user previously insisted on removing them - already done)
+- **globals.css changes**: Completely rewrote the `body.classic-print-active` CSS section with comprehensive overrides:
+  - 1. Dark backgrounds (emerald-600/700/800, teal-600/700/800, slate-600) → dark gray #1f2937
+  - 2. Light backgrounds (emerald-50/100, teal-50, amber-50/100, red-50/100, green-50/100, blue-50/100) → light gray #f3f4f6
+  - 3. Gradient backgrounds (from-*, via-*, to-*, bg-gradient) → solid dark gray #1f2937 with background-image:none
+  - 4. Gradient bars (h-1, h-px, h-0.5, absolute positioned) → medium gray #374151
+  - 5. Dark text (emerald-700/800/900, teal-700/800/900) → near-black #111827
+  - 6. Medium text (emerald-500/600, teal-500/600, amber-500/600/700, red-500/600, green-500/600, blue-500/600) → dark gray #374151
+  - 7. Light text (emerald-300/400, teal-300/400, amber-300/400, etc.) → medium gray #6b7280
+  - 8. Borders (border-emerald, border-teal, border-amber) → gray #d1d5db
+  - 9. Right-accent borders (border-r-4 border-emerald-500/amber-500) → dark gray #374151
+  - 10. Inline style overrides via data attributes: [data-print-badge] → #374151 bg, [data-print-sig-border] → #374151 border-top, [data-print-header-border] → #1f2937 border-bottom
+  - 11. Remove all shadows: `* { box-shadow: none !important }`
+  - 12. Hide emojis in print: `.print-emoji { display: none !important }`
+  - 13. Ring/focus color cleanup
+- **print-document.tsx changes**:
+  - Added `data-print-badge="type"` attribute to TYPE_COLORS badge spans (line 1267)
+  - Added `data-print-badge="statut"` attribute to STATUT_COLORS badge spans (line 1274)
+  - Added `data-print-header-border` attribute to the header bottom border div (line 1148)
+  - Added `data-print-sig-border` attribute to all 3 signature box divs (lines 1305, 1316, 1327)
+  - Wrapped emojis in `<span className="print-emoji">` for CSS hiding in classic print:
+    - 🏛️ in en-tête center (line 1157)
+    - 📍 in address field (line 1173)
+    - 📞 in phone field (line 1174)
+    - 📠 in fax field (line 1175)
+    - ✉ in email field (line 1176)
+    - 📅 in date field (line 1190)
+    - 🏛️ in commune name badge (line 1200)
+  - Confirmed no stamp circles exist (verified via grep for stamp/cachet/circle patterns)
+- Lint check passes with zero errors
+- Dev server compiles successfully
+
+Stage Summary:
+- Comprehensive black/gray administrative print style for classic print mode
+- ALL colored elements (emerald, teal, amber, red, green, blue) converted to gray shades
+- Inline-style colored badges and borders now properly overridden via data attributes
+- Emojis hidden in print output (they print poorly on paper)
+- No stamp circles exist (already removed from previous iterations)
+- handlePrint (new window) already uses black/gray colors - verified intact
+
+---
+Task ID: 2
+Agent: Main Agent + Fullstack Developer Subagent
+Task: Improve print output - make ALL print content black/gray administrative style, remove stamp circles
+
+Work Log:
+- Analyzed current print system: two methods (handleClassicPrint with CSS overrides, handlePrint with separate HTML window)
+- Identified incomplete CSS overrides in globals.css for classic print mode
+- Found that many elements (gradients, badges with inline styles, borders, text colors) were not covered
+- Enhanced globals.css with comprehensive 13-section classic print CSS override system:
+  1. Dark backgrounds (emerald-600/700/800, teal-600/700/800) → #1f2937
+  2. Light backgrounds (emerald-50/100, amber-50/100, red-50/100, etc.) → #f3f4f6
+  3. Gradient backgrounds → solid dark gray with background-image:none
+  4. Gradient bars and absolute positioned elements → #374151
+  5. Dark text (emerald-700/800/900, teal-700/800/900) → #111827
+  6. Medium text (all 500/600 level colored text) → #374151
+  7. Light text (300/400 level colored text) → #6b7280
+  8. Borders (emerald, teal, amber) → #d1d5db
+  9. Right-accent borders → #374151
+  10. Inline style overrides via data attributes (data-print-badge, data-print-sig-border, data-print-header-border)
+  11. Shadow removal (all elements → box-shadow: none)
+  12. Emoji hiding (.print-emoji → display: none)
+  13. Ring/focus cleanup
+- Added data attributes to print-document.tsx for CSS override of inline styles:
+  - data-print-badge="type" and data-print-badge="statut" on TYPE/STATUT color badge spans
+  - data-print-header-border on the header bottom border div
+  - data-print-sig-border on all 3 signature box divs
+- Added print-emoji class wrapper around 7 emojis (🏛️, 📍, 📞, 📠, ✉, 📅) to hide in print
+- Verified no stamp circles exist in current code (removed in previous iterations)
+- Lint passes, dev server runs without errors
+- Browser tested: export view loads, print dialog opens, preview renders correctly
+
+Stage Summary:
+- Comprehensive black/gray CSS overrides for classic print mode (13 sections, ~160 lines)
+- Data attributes for inline style CSS overrides
+- Emojis hidden in print for cleaner output
+- handlePrint (new window) already uses black/gray colors - no changes needed
+- No stamp circles exist in the codebase

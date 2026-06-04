@@ -1145,7 +1145,7 @@ export default function PrintDocument({
               {/* Ornamental bar */}
               <div className="h-1 bg-gradient-to-l from-emerald-600 via-amber-500 to-emerald-600 mx-2 mt-2 rounded-full" />
 
-              <div className="p-4 border-b-2 border-emerald-600" style={{ borderBottomWidth: '3px', borderBottomColor: '#059669' }}>
+              <div className="p-4 border-b-2 border-emerald-600" data-print-header-border style={{ borderBottomWidth: '3px', borderBottomColor: '#059669' }}>
                 <div className="flex justify-between items-start">
                   <div className="text-right">
                     <div className="inline-block bg-emerald-600 text-white text-[8px] font-bold px-2 py-0.5 rounded shadow-sm">المملكة المغربية</div>
@@ -1154,7 +1154,7 @@ export default function PrintDocument({
                     <div className="text-[7px] text-slate-400 italic">Préfecture de Salé — Service d&apos;Hygiène</div>
                   </div>
                   <div className="text-center">
-                    <div className="text-2xl">🏛️</div>
+                    <div className="text-2xl"><span className="print-emoji">🏛️</span></div>
                     <div className="text-[12px] font-extrabold text-emerald-700">مكتب حفظ الصحة الجماعي</div>
                     <div className="text-[8px] text-slate-400 italic">Bureau Communal de l&apos;Hygiène</div>
                     <div className="inline-block mt-1 bg-emerald-50 rounded-full px-2 py-0.5 border border-teal-300 text-[9px] font-bold text-teal-700">
@@ -1170,10 +1170,10 @@ export default function PrintDocument({
                 </div>
                 {/* Contact bar */}
                 <div className="flex justify-center items-center gap-2 mt-2 bg-slate-50 rounded-md px-2 py-1 border border-slate-100">
-                  {communeAddress && <><span dir="rtl" className="text-[7px] text-slate-400">📍 {communeAddress}</span><span className="text-[7px] text-slate-300">|</span></>}
-                  {communePhone && <><span className="text-[7px] text-slate-300">|</span><span dir="ltr" className="text-[7px] text-slate-400">📞 {communePhone}</span></>}
-                  {communeFax && <><span className="text-[7px] text-slate-300">|</span><span dir="ltr" className="text-[7px] text-slate-400">📠 {communeFax}</span></>}
-                  {communeEmail && <><span className="text-[7px] text-slate-300">|</span><span dir="ltr" className="text-[7px] text-slate-400">✉ {communeEmail}</span></>}
+                  {communeAddress && <><span dir="rtl" className="text-[7px] text-slate-400"><span className="print-emoji">📍</span> {communeAddress}</span><span className="text-[7px] text-slate-300">|</span></>}
+                  {communePhone && <><span className="text-[7px] text-slate-300">|</span><span dir="ltr" className="text-[7px] text-slate-400"><span className="print-emoji">📞</span> {communePhone}</span></>}
+                  {communeFax && <><span className="text-[7px] text-slate-300">|</span><span dir="ltr" className="text-[7px] text-slate-400"><span className="print-emoji">📠</span> {communeFax}</span></>}
+                  {communeEmail && <><span className="text-[7px] text-slate-300">|</span><span dir="ltr" className="text-[7px] text-slate-400"><span className="print-emoji">✉</span> {communeEmail}</span></>}
                 </div>
               </div>
               {/* Second border line */}
@@ -1187,7 +1187,7 @@ export default function PrintDocument({
               </div>
               <div className="flex items-center gap-3" dir="rtl">
                 <span dir="rtl" className="text-[8px] text-emerald-700"><span className="font-bold">حرر في</span> : / <span dir="ltr" className="text-emerald-600">Rédigé à :</span> {communeNameAr || communeDisplay}</span>
-                <span dir="rtl" className="text-[8px] text-emerald-700"><span className="font-bold">التاريخ</span> : / <span dir="ltr" className="text-emerald-600">Date :</span> 📅 {docDate}</span>
+                <span dir="rtl" className="text-[8px] text-emerald-700"><span className="font-bold">التاريخ</span> : / <span dir="ltr" className="text-emerald-600">Date :</span> <span className="print-emoji">📅</span> {docDate}</span>
                 <span dir="ltr" className="text-[7px] text-slate-400 italic">{docDateFr}</span>
               </div>
             </div>
@@ -1197,7 +1197,7 @@ export default function PrintDocument({
               <div className="text-[13px] font-extrabold text-emerald-700">{getReportTitle()}</div>
               <div className="text-[9px] text-slate-400 italic">{getReportTitleFr()}</div>
               <div className="inline-block mt-1 bg-white rounded-full px-3 py-0.5 border border-teal-300 text-[9px] font-bold text-teal-800">
-                🏛️ {communeDisplay} — {communeNameFr}
+                <span className="print-emoji">🏛️</span> {communeDisplay} — {communeNameFr}
               </div>
             </div>
 
@@ -1264,14 +1264,14 @@ export default function PrintDocument({
                             <td className="px-1.5 py-0.5 text-slate-400">{i + 1}</td>
                             <td className="px-1.5 py-0.5 text-center font-mono text-slate-600">{int.reference}</td>
                             <td className="px-1.5 py-0.5 text-center">
-                              <span className="text-white text-[7px] font-bold px-1 py-0.5 rounded" style={{ backgroundColor: TYPE_COLORS[int.type] }}>
+                              <span data-print-badge="type" className="text-white text-[7px] font-bold px-1 py-0.5 rounded" style={{ backgroundColor: TYPE_COLORS[int.type] }}>
                                 {TYPE_LABELS[int.type]}
                               </span>
                             </td>
                             <td className="px-1.5 py-0.5 text-center text-slate-600">{new Date(int.date).toLocaleDateString('fr-FR')}</td>
                             <td className="px-1.5 py-0.5 text-right text-slate-600">{int.quartier}</td>
                             <td className="px-1.5 py-0.5 text-center">
-                              <span className="text-white text-[7px] font-bold px-1 py-0.5 rounded" style={{ backgroundColor: STATUT_COLORS[int.statut] }}>
+                              <span data-print-badge="statut" className="text-white text-[7px] font-bold px-1 py-0.5 rounded" style={{ backgroundColor: STATUT_COLORS[int.statut] }}>
                                 {STATUT_LABELS[int.statut]}
                               </span>
                             </td>
@@ -1302,7 +1302,7 @@ export default function PrintDocument({
 
                 <div className="flex justify-between gap-3">
                   {/* Président - الأول */}
-                  <div className="text-center flex-1 border-1.5 border-slate-200 rounded-lg p-3 bg-white relative overflow-hidden" style={{ borderTop: '3px solid #d97706' }}>
+                  <div className="text-center flex-1 border-1.5 border-slate-200 rounded-lg p-3 bg-white relative overflow-hidden" data-print-sig-border style={{ borderTop: '3px solid #d97706' }}>
                     <div className="text-[10px] font-extrabold text-emerald-700">الرئيس</div>
                     <div className="text-[7px] text-slate-400 italic">Le Président</div>
                     <div className="border-t border-slate-600 mt-2 w-4/5 mx-auto" />
@@ -1313,7 +1313,7 @@ export default function PrintDocument({
                   </div>
 
                   {/* Directeur des Services - الثاني */}
-                  <div className="text-center flex-1 border-1.5 border-slate-200 rounded-lg p-3 bg-white relative overflow-hidden" style={{ borderTop: '3px solid #059669' }}>
+                  <div className="text-center flex-1 border-1.5 border-slate-200 rounded-lg p-3 bg-white relative overflow-hidden" data-print-sig-border style={{ borderTop: '3px solid #059669' }}>
                     <div className="text-[10px] font-extrabold text-emerald-700">المدير</div>
                     <div className="text-[7px] text-slate-400 italic">Directeur des Services</div>
                     <div className="border-t border-slate-600 mt-2 w-4/5 mx-auto" />
@@ -1324,7 +1324,7 @@ export default function PrintDocument({
                   </div>
 
                   {/* Responsable Hygiène - الثالث */}
-                  <div className="text-center flex-1 border-1.5 border-slate-200 rounded-lg p-3 bg-white relative overflow-hidden" style={{ borderTop: '3px solid #059669' }}>
+                  <div className="text-center flex-1 border-1.5 border-slate-200 rounded-lg p-3 bg-white relative overflow-hidden" data-print-sig-border style={{ borderTop: '3px solid #059669' }}>
                     <div className="text-[10px] font-extrabold text-emerald-700">مسؤول حفظ الصحة</div>
                     <div className="text-[7px] text-slate-400 italic">Responsable d'Hygiène</div>
                     <div className="border-t border-slate-600 mt-2 w-4/5 mx-auto" />

@@ -226,86 +226,164 @@ html {
   }
 }
 
-/* Classic Print Mode — Administrative black/gray style */
-body.classic-print-active {
-  /* Override all emerald/teal/amber/green/red colors to black/gray */
-}
-body.classic-print-active .bg-gradient-to-l.from-emerald-600.via-teal-500,
-body.classic-print-active .bg-gradient-to-l.from-emerald-800,
-body.classic-print-active [class*="bg-emerald"],
-body.classic-print-active [class*="bg-teal"],
-body.classic-print-active [class*="bg-amber-50"],
-body.classic-print-active [class*="bg-red-50"],
-body.classic-print-active [class*="bg-green-50"] {
-  background: #f9fafb !important;
-  background-color: #f9fafb !important;
-}
+/* ===================================================================
+   Classic Print Mode — Administrative black/gray style
+   Comprehensively converts ALL colored elements to black/gray palette
+   =================================================================== */
+
+/* === 1. DARK BACKGROUNDS → dark gray (#1f2937) === */
 body.classic-print-active [class*="bg-emerald-600"],
 body.classic-print-active [class*="bg-emerald-700"],
-body.classic-print-active [class*="bg-emerald-800"] {
+body.classic-print-active [class*="bg-emerald-800"],
+body.classic-print-active [class*="bg-teal-600"],
+body.classic-print-active [class*="bg-teal-700"],
+body.classic-print-active [class*="bg-teal-800"],
+body.classic-print-active [class*="bg-slate-600"] {
   background: #1f2937 !important;
   background-color: #1f2937 !important;
 }
+
+/* === 2. LIGHT BACKGROUNDS → light gray (#f3f4f6) === */
 body.classic-print-active [class*="bg-emerald-50"],
-body.classic-print-active [class*="bg-emerald-50/50"] {
+body.classic-print-active [class*="bg-emerald-100"],
+body.classic-print-active [class*="bg-teal-50"],
+body.classic-print-active [class*="bg-amber-50"],
+body.classic-print-active [class*="bg-amber-100"],
+body.classic-print-active [class*="bg-red-50"],
+body.classic-print-active [class*="bg-red-100"],
+body.classic-print-active [class*="bg-green-50"],
+body.classic-print-active [class*="bg-green-100"],
+body.classic-print-active [class*="bg-blue-50"],
+body.classic-print-active [class*="bg-blue-100"] {
   background: #f3f4f6 !important;
   background-color: #f3f4f6 !important;
 }
-body.classic-print-active [class*="text-emerald-700"],
-body.classic-print-active [class*="text-emerald-800"] {
-  color: #111827 !important;
+
+/* === 3. GRADIENT BACKGROUNDS → solid dark gray === */
+body.classic-print-active [class*="from-emerald"],
+body.classic-print-active [class*="from-teal"],
+body.classic-print-active [class*="from-amber"],
+body.classic-print-active [class*="via-emerald"],
+body.classic-print-active [class*="via-teal"],
+body.classic-print-active [class*="via-amber"],
+body.classic-print-active [class*="to-emerald"],
+body.classic-print-active [class*="to-teal"],
+body.classic-print-active [class*="to-amber"],
+body.classic-print-active [class*="bg-gradient"] {
+  background: #1f2937 !important;
+  background-color: #1f2937 !important;
+  background-image: none !important;
 }
-body.classic-print-active [class*="text-emerald-600"],
-body.classic-print-active [class*="text-emerald-500"] {
-  color: #374151 !important;
-}
-body.classic-print-active [class*="border-emerald"] {
-  border-color: #d1d5db !important;
-}
-body.classic-print-active [class*="border-r-4"].border-emerald-500,
-body.classic-print-active [class*="border-r-4"].border-amber-500 {
-  border-right-color: #374151 !important;
-}
-body.classic-print-active [class*="text-amber-700"],
-body.classic-print-active [class*="text-amber-500"] {
-  color: #374151 !important;
-}
-body.classic-print-active [class*="text-red-500"],
-body.classic-print-active [class*="text-red-600"] {
-  color: #374151 !important;
-}
-body.classic-print-active [class*="text-green-500"],
-body.classic-print-active [class*="text-green-600"] {
-  color: #374151 !important;
-}
-body.classic-print-active [class*="text-teal-700"],
-body.classic-print-active [class*="text-teal-800"] {
-  color: #1f2937 !important;
-}
-body.classic-print-active [class*="border-teal"] {
-  border-color: #9ca3af !important;
-}
+
+/* Gradient bars that should be medium gray */
 body.classic-print-active [class*="h-1"][class*="bg-gradient"],
 body.classic-print-active [class*="h-1."][class*="bg-gradient"],
 body.classic-print-active .h-px[class*="bg-gradient"],
 body.classic-print-active .h-px[class*="bg-emerald"],
+body.classic-print-active [class*="h-0.5"][class*="bg-"],
 body.classic-print-active .absolute[class*="bg-emerald"],
 body.classic-print-active .absolute[class*="bg-red"],
 body.classic-print-active .absolute[class*="bg-amber"],
 body.classic-print-active .absolute[class*="bg-green"] {
   background: #374151 !important;
   background-color: #374151 !important;
+  background-image: none !important;
 }
-body.classic-print-active .shadow-lg.shadow-emerald-200,
-body.classic-print-active .shadow-sm {
+
+/* === 4. DARK TEXT → near-black (#111827) or dark gray (#1f2937) === */
+body.classic-print-active [class*="text-emerald-700"],
+body.classic-print-active [class*="text-emerald-800"],
+body.classic-print-active [class*="text-emerald-900"],
+body.classic-print-active [class*="text-teal-700"],
+body.classic-print-active [class*="text-teal-800"],
+body.classic-print-active [class*="text-teal-900"] {
+  color: #111827 !important;
+}
+
+/* === 5. MEDIUM TEXT → dark gray (#374151) === */
+body.classic-print-active [class*="text-emerald-500"],
+body.classic-print-active [class*="text-emerald-600"],
+body.classic-print-active [class*="text-teal-500"],
+body.classic-print-active [class*="text-teal-600"],
+body.classic-print-active [class*="text-amber-500"],
+body.classic-print-active [class*="text-amber-600"],
+body.classic-print-active [class*="text-amber-700"],
+body.classic-print-active [class*="text-red-500"],
+body.classic-print-active [class*="text-red-600"],
+body.classic-print-active [class*="text-green-500"],
+body.classic-print-active [class*="text-green-600"],
+body.classic-print-active [class*="text-blue-500"],
+body.classic-print-active [class*="text-blue-600"] {
+  color: #374151 !important;
+}
+
+/* === 6. LIGHT/COLORED TEXT ON WHITE → medium gray (#6b7280) === */
+body.classic-print-active [class*="text-emerald-300"],
+body.classic-print-active [class*="text-emerald-400"],
+body.classic-print-active [class*="text-teal-300"],
+body.classic-print-active [class*="text-teal-400"],
+body.classic-print-active [class*="text-amber-300"],
+body.classic-print-active [class*="text-amber-400"],
+body.classic-print-active [class*="text-red-300"],
+body.classic-print-active [class*="text-red-400"],
+body.classic-print-active [class*="text-green-300"],
+body.classic-print-active [class*="text-green-400"] {
+  color: #6b7280 !important;
+}
+
+/* === 7. BORDERS → gray shades === */
+body.classic-print-active [class*="border-emerald"],
+body.classic-print-active [class*="border-teal"],
+body.classic-print-active [class*="border-amber"] {
+  border-color: #d1d5db !important;
+}
+
+/* Right-accent borders → dark gray */
+body.classic-print-active [class*="border-r-4"].border-emerald-500,
+body.classic-print-active [class*="border-r-4"].border-amber-500,
+body.classic-print-active [class*="border-r-4"][class*="border-emerald"],
+body.classic-print-active [class*="border-r-4"][class*="border-amber"] {
+  border-right-color: #374151 !important;
+}
+
+/* === 8. INLINE STYLE OVERRIDES (data attributes) === */
+/* Badge backgrounds with inline style */
+body.classic-print-active [data-print-badge] {
+  background-color: #374151 !important;
+  color: white !important;
+}
+
+/* Signature box top borders with inline style */
+body.classic-print-active [data-print-sig-border] {
+  border-top-color: #374151 !important;
+}
+
+/* Header bottom border with inline style */
+body.classic-print-active [data-print-header-border] {
+  border-bottom-color: #1f2937 !important;
+}
+
+/* === 9. REMOVE ALL SHADOWS === */
+body.classic-print-active * {
   box-shadow: none !important;
 }
-body.classic-print-active .bg-slate-600 {
-  background: #1f2937 !important;
-  background-color: #1f2937 !important;
+
+/* === 10. HIDE EMOJIS IN PRINT (they print poorly) === */
+body.classic-print-active .print-emoji {
+  display: none !important;
 }
+
+/* === 11. MISC CLEANUP === */
 body.classic-print-active .text-2xl {
   font-size: 1.2rem !important;
+}
+
+/* Ring/focus colors in print */
+body.classic-print-active [class*="ring-emerald"],
+body.classic-print-active [class*="focus:ring-emerald"],
+body.classic-print-active [class*="focus:border-emerald"] {
+  --tw-ring-color: transparent !important;
+  border-color: #d1d5db !important;
 }
 
 /* Classic print media: hide non-essential elements */
