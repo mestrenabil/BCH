@@ -94,7 +94,6 @@ export default function PrintDocument({
   const [communeFax, setCommuneFax] = useState(settings.communeFax || '')
   const [communeEmail, setCommuneEmail] = useState(settings.communeEmail || '')
   const [showWatermark, setShowWatermark] = useState(settings.showWatermark || false)
-  const [showCachetCircles, setShowCachetCircles] = useState(true)
 
   // Auto-save settings
   const saveAllSettings = useCallback(async () => {
@@ -327,7 +326,7 @@ export default function PrintDocument({
           <tbody>${tableRows}</tbody>
         </table>
 
-        ${pageIdx === pages.length - 1 ? buildSignatureBlock(presidentName, responsableName, chefServiceName, showCachetCircles) : ''}
+        ${pageIdx === pages.length - 1 ? buildSignatureBlock(presidentName, responsableName, chefServiceName) : ''}
 
         <!-- Page footer -->
         <div class="page-footer">
@@ -876,47 +875,6 @@ export default function PrintDocument({
       font-style: italic;
       margin-bottom: 8px;
     }
-    .signature-stamp-circle {
-      width: 100px;
-      height: 100px;
-      border: 2.5px dashed #d97706;
-      border-radius: 50%;
-      margin: 8px auto 10px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      flex-direction: column;
-      font-size: 9px;
-      color: #92400e;
-      background: radial-gradient(circle, rgba(217,119,6,0.03) 0%, transparent 70%);
-      position: relative;
-    }
-    .signature-stamp-circle::after {
-      content: '';
-      position: absolute;
-      top: 4px;
-      left: 4px;
-      right: 4px;
-      bottom: 4px;
-      border: 1px dotted rgba(217,119,6,0.3);
-      border-radius: 50%;
-    }
-    .stamp-text-ar {
-      font-size: 10px;
-      font-weight: 700;
-      color: #92400e;
-    }
-    .stamp-text-fr {
-      font-size: 7.5px;
-      font-style: italic;
-      color: #b45309;
-      margin-top: 1px;
-    }
-    .stamp-icon {
-      font-size: 14px;
-      margin-bottom: 2px;
-      opacity: 0.4;
-    }
     .signature-line {
       border-top: 1px solid #374151;
       margin-top: 12px;
@@ -1120,7 +1078,7 @@ export default function PrintDocument({
     ` : ''}
 
     <!-- SIGNATURE BLOCK -->
-    ${buildSignatureBlock(presidentName, responsableName, chefServiceName, showCachetCircles)}
+    ${buildSignatureBlock(presidentName, responsableName, chefServiceName)}
 
     <!-- Page footer -->
     <div class="page-footer">
@@ -1148,7 +1106,7 @@ export default function PrintDocument({
     printWindow.document.write(html)
     printWindow.document.close()
     setTimeout(() => { printWindow.print() }, 1200)
-  }, [interventions, statsData, exportType, filterCommune, filterYear, filterType, filterStatut, filterFrom, filterTo, presidentName, responsableName, chefServiceName, communeDisplay, communeNameFr, communeNameAr, docReference, docDate, docDateFr, showWatermark, showCachetCircles, settings.watermarkText, communeAddress, communePhone, communeFax, communeEmail, communeDefaults])
+  }, [interventions, statsData, exportType, filterCommune, filterYear, filterType, filterStatut, filterFrom, filterTo, presidentName, responsableName, chefServiceName, communeDisplay, communeNameFr, communeNameAr, docReference, docDate, docDateFr, showWatermark, settings.watermarkText, communeAddress, communePhone, communeFax, communeEmail, communeDefaults])
 
   if (!isOpen) return null
 
@@ -1347,14 +1305,6 @@ export default function PrintDocument({
                   <div className="text-center flex-1 border-1.5 border-slate-200 rounded-lg p-3 bg-white relative overflow-hidden" style={{ borderTop: '3px solid #d97706' }}>
                     <div className="text-[10px] font-extrabold text-emerald-700">الرئيس</div>
                     <div className="text-[7px] text-slate-400 italic">Le Président</div>
-                    {showCachetCircles && (
-                      <div className="w-[60px] h-[60px] border-2 border-dashed border-amber-400 rounded-full mx-auto my-2 flex items-center justify-center flex-col relative bg-amber-50/20"
-                        style={{ borderWidth: '2.5px' }}>
-                        <div className="absolute inset-1 border border-dotted border-amber-300/50 rounded-full" />
-                        <span className="text-[8px] font-bold text-amber-700">ختم</span>
-                        <span className="text-[6px] italic text-amber-600">Cachet</span>
-                      </div>
-                    )}
                     <div className="border-t border-slate-600 mt-2 w-4/5 mx-auto" />
                     <div className="text-[8px] font-bold text-slate-800 mt-1">{presidentName || '...........................'}</div>
                     <div className="text-[7px] text-slate-400 mt-0.5">
@@ -1366,14 +1316,6 @@ export default function PrintDocument({
                   <div className="text-center flex-1 border-1.5 border-slate-200 rounded-lg p-3 bg-white relative overflow-hidden" style={{ borderTop: '3px solid #059669' }}>
                     <div className="text-[10px] font-extrabold text-emerald-700">المدير</div>
                     <div className="text-[7px] text-slate-400 italic">Directeur des Services</div>
-                    {showCachetCircles && (
-                      <div className="w-[60px] h-[60px] border-2 border-dashed border-amber-400 rounded-full mx-auto my-2 flex items-center justify-center flex-col relative bg-amber-50/20"
-                        style={{ borderWidth: '2.5px' }}>
-                        <div className="absolute inset-1 border border-dotted border-amber-300/50 rounded-full" />
-                        <span className="text-[8px] font-bold text-amber-700">ختم</span>
-                        <span className="text-[6px] italic text-amber-600">Cachet</span>
-                      </div>
-                    )}
                     <div className="border-t border-slate-600 mt-2 w-4/5 mx-auto" />
                     <div className="text-[8px] font-bold text-slate-800 mt-1">{chefServiceName || '...........................'}</div>
                     <div className="text-[7px] text-slate-400 mt-0.5">
@@ -1385,14 +1327,6 @@ export default function PrintDocument({
                   <div className="text-center flex-1 border-1.5 border-slate-200 rounded-lg p-3 bg-white relative overflow-hidden" style={{ borderTop: '3px solid #059669' }}>
                     <div className="text-[10px] font-extrabold text-emerald-700">مسؤول حفظ الصحة</div>
                     <div className="text-[7px] text-slate-400 italic">Responsable d'Hygiène</div>
-                    {showCachetCircles && (
-                      <div className="w-[60px] h-[60px] border-2 border-dashed border-amber-400 rounded-full mx-auto my-2 flex items-center justify-center flex-col relative bg-amber-50/20"
-                        style={{ borderWidth: '2.5px' }}>
-                        <div className="absolute inset-1 border border-dotted border-amber-300/50 rounded-full" />
-                        <span className="text-[8px] font-bold text-amber-700">ختم</span>
-                        <span className="text-[6px] italic text-amber-600">Cachet</span>
-                      </div>
-                    )}
                     <div className="border-t border-slate-600 mt-2 w-4/5 mx-auto" />
                     <div className="text-[8px] font-bold text-slate-800 mt-1">{responsableName || '...........................'}</div>
                     <div className="text-[7px] text-slate-400 mt-0.5">
@@ -1525,14 +1459,7 @@ export default function PrintDocument({
 }
 
 // ===== HELPER: Build ENHANCED signature block HTML for print =====
-function buildSignatureBlock(presidentName: string, responsableName: string, chefServiceName: string, showCachets: boolean): string {
-  const cachetCircle = showCachets ? `
-    <div class="signature-stamp-circle">
-      <div class="stamp-icon">🔘</div>
-      <div class="stamp-text-ar">ختم</div>
-      <div class="stamp-text-fr">Cachet</div>
-    </div>` : ''
-
+function buildSignatureBlock(presidentName: string, responsableName: string, chefServiceName: string): string {
   return `
   <div class="signature-section">
     <div class="signature-decorative-border">
@@ -1543,7 +1470,6 @@ function buildSignatureBlock(presidentName: string, responsableName: string, che
         <div class="signature-box">
           <div class="signature-role">الرئيس</div>
           <div class="signature-role-fr">Le Président</div>
-          ${cachetCircle}
           <div class="signature-line"></div>
           <div class="signature-name">${presidentName || '...........................'}</div>
           <div class="signature-date">
@@ -1553,7 +1479,6 @@ function buildSignatureBlock(presidentName: string, responsableName: string, che
         <div class="signature-box">
           <div class="signature-role">المدير</div>
           <div class="signature-role-fr">Directeur des Services</div>
-          ${cachetCircle}
           <div class="signature-line"></div>
           <div class="signature-name">${chefServiceName || '...........................'}</div>
           <div class="signature-date">
@@ -1563,7 +1488,6 @@ function buildSignatureBlock(presidentName: string, responsableName: string, che
         <div class="signature-box">
           <div class="signature-role">مسؤول حفظ الصحة</div>
           <div class="signature-role-fr">Responsable d'Hygiène</div>
-          ${cachetCircle}
           <div class="signature-line"></div>
           <div class="signature-name">${responsableName || '...........................'}</div>
           <div class="signature-date">
