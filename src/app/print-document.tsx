@@ -272,8 +272,8 @@ export default function PrintDocument({
       const tableRows = pageRows.map((int, i) => {
         const globalIdx = pageIdx * pageSize + i
         const dateFormatted = new Date(int.date).toLocaleDateString('fr-FR')
-        const typeBgColor = TYPE_COLORS[int.type] || '#64748b'
-        const statutBgColor = STATUT_COLORS[int.statut] || '#64748b'
+        const typeBgColor = '#374151'
+        const statutBgColor = '#6b7280'
         return `<tr style="border-bottom:1px solid #e2e8f0;">
           <td style="padding:6px 8px;text-align:center;font-size:10px;color:#64748b;">${globalIdx + 1}</td>
           <td style="padding:6px 8px;text-align:center;font-size:10px;font-family:monospace;color:#334155;"><span class="bidi-ref" style="font-size:10px;">${int.reference}</span></td>
@@ -293,11 +293,11 @@ export default function PrintDocument({
         <div class="mini-header">
           <table cellpadding="0" cellspacing="0" style="width:100%;"><tr>
             <td style="text-align:right;width:33%;">
-              <span style="font-size:10px;font-weight:700;color:#047857;">المملكة المغربية</span><br>
+              <span style="font-size:10px;font-weight:700;color:#1f2937;">المملكة المغربية</span><br>
               <span style="font-size:9px;color:#6b7280;">عمالة سلا — قسم حفظ الصحة</span>
             </td>
             <td style="text-align:center;width:34%;">
-              <span style="font-size:11px;font-weight:800;color:#047857;">مكتب حفظ الصحة الجماعي</span><br>
+              <span style="font-size:11px;font-weight:800;color:#1f2937;">مكتب حفظ الصحة الجماعي</span><br>
               <span style="font-size:8px;color:#9ca3af;font-style:italic;">Bureau Communal de l'Hygiène</span>
             </td>
             <td style="text-align:left;width:33%;">
@@ -307,7 +307,7 @@ export default function PrintDocument({
           </tr></table>
         </div>
 
-        <div style="font-size:11px;font-weight:700;color:#047857;margin:10px 0;">📋 تفصيل التدخلات — ${pageIdx === 0 ? `${totalInterventions} تدخل` : `تتمة (${pageIdx + 1}/${pages.length})`}</div>
+        <div style="font-size:11px;font-weight:700;color:#1f2937;margin:10px 0;">📋 تفصيل التدخلات — ${pageIdx === 0 ? `${totalInterventions} تدخل` : `تتمة (${pageIdx + 1}/${pages.length})`}</div>
         <table class="data-table">
           <thead>
             <tr>
@@ -345,9 +345,9 @@ export default function PrintDocument({
           return `<tr style="border-bottom:1px solid #e2e8f0;">
             <td style="padding:8px 12px;text-align:right;font-weight:600;color:#334155;">${COMMUNE_LABELS[name] || name}</td>
             <td style="padding:8px 12px;text-align:center;font-weight:700;color:#334155;">${data.total}</td>
-            <td style="padding:8px 12px;text-align:center;color:#ef4444;font-weight:600;">${data.DERATISATION}</td>
-            <td style="padding:8px 12px;text-align:center;color:#f59e0b;font-weight:600;">${data.DESINSECTISATION}</td>
-            <td style="padding:8px 12px;text-align:center;color:#10b981;font-weight:600;">${data.DESINFECTION}</td>
+            <td style="padding:8px 12px;text-align:center;color:#374151;font-weight:600;">${data.DERATISATION}</td>
+            <td style="padding:8px 12px;text-align:center;color:#374151;font-weight:600;">${data.DESINSECTISATION}</td>
+            <td style="padding:8px 12px;text-align:center;color:#374151;font-weight:600;">${data.DESINFECTION}</td>
           </tr>`
         }).join('')
       : ''
@@ -389,7 +389,7 @@ export default function PrintDocument({
       transform: translate(-50%, -50%) rotate(-35deg);
       font-size: 100px;
       font-weight: 900;
-      color: rgba(5, 150, 105, 0.04);
+      color: rgba(31, 41, 55, 0.04);
       pointer-events: none;
       z-index: 0;
       white-space: nowrap;
@@ -412,7 +412,7 @@ export default function PrintDocument({
       right: 0;
       left: 0;
       height: 5px;
-      background: linear-gradient(90deg, #059669, #0d9488, #059669, #0d9488, #059669);
+      background: linear-gradient(90deg, #1f2937, #374151, #1f2937, #374151, #1f2937);
       border-radius: 0 0 2px 2px;
     }
     .page::after {
@@ -422,7 +422,7 @@ export default function PrintDocument({
       right: 0;
       left: 0;
       height: 2px;
-      background: linear-gradient(90deg, rgba(5,150,105,0.3), rgba(5,150,105,0.5), rgba(5,150,105,0.3));
+      background: linear-gradient(90deg, rgba(31,41,55,0.3), rgba(31,41,55,0.5), rgba(31,41,55,0.3));
     }
 
     /* ===== EN-TÊTE / HEADER ===== */
@@ -432,7 +432,7 @@ export default function PrintDocument({
       position: relative;
     }
     .doc-header-border {
-      border-bottom: 3px solid #059669;
+      border-bottom: 3px solid #1f2937;
       position: relative;
     }
     .doc-header-border::after {
@@ -442,11 +442,11 @@ export default function PrintDocument({
       left: 0;
       right: 0;
       height: 1.5px;
-      background: #059669;
+      background: #1f2937;
     }
     .header-ornament {
       height: 6px;
-      background: linear-gradient(90deg, #059669 0%, #10b981 20%, #059669 40%, #d97706 50%, #059669 60%, #10b981 80%, #059669 100%);
+      background: linear-gradient(90deg, #1f2937 0%, #374151 20%, #1f2937 40%, #6b7280 50%, #1f2937 60%, #374151 80%, #1f2937 100%);
       border-radius: 3px;
       margin-bottom: 10px;
     }
@@ -466,19 +466,19 @@ export default function PrintDocument({
     /* Kingdom badge - Arabic */
     .kingdom-badge-ar {
       display: inline-block;
-      background: linear-gradient(135deg, #059669, #047857);
+      background: linear-gradient(135deg, #1f2937, #111827);
       color: white;
       padding: 4px 14px;
       border-radius: 4px;
       font-size: 10px;
       font-weight: 700;
       letter-spacing: 0.3px;
-      box-shadow: 0 1px 3px rgba(5,150,105,0.3);
+      box-shadow: 0 1px 3px rgba(31,41,55,0.3);
     }
     .wilaya-name {
       font-size: 13px;
       font-weight: 700;
-      color: #047857;
+      color: #1f2937;
       margin-top: 5px;
       line-height: 1.3;
     }
@@ -501,7 +501,7 @@ export default function PrintDocument({
     .logo-title-ar {
       font-size: 15px;
       font-weight: 900;
-      color: #047857;
+      color: #1f2937;
       letter-spacing: -0.2px;
       line-height: 1.3;
     }
@@ -514,13 +514,13 @@ export default function PrintDocument({
     .logo-commune {
       font-size: 11px;
       font-weight: 700;
-      color: #0d9488;
+      color: #374151;
       margin-top: 3px;
       padding: 2px 10px;
-      background: #f0fdf4;
+      background: #f3f4f6;
       border-radius: 12px;
       display: inline-block;
-      border: 1px solid #bbf7d0;
+      border: 1px solid #d1d5db;
     }
 
     /* Kingdom badge - French */
@@ -563,15 +563,15 @@ export default function PrintDocument({
       justify-content: space-between;
       align-items: flex-start;
       direction: rtl;
-      background: linear-gradient(135deg, #f0fdf4, #ecfdf5);
-      border: 1px solid #bbf7d0;
+      background: linear-gradient(135deg, #f3f4f6, #f9fafb);
+      border: 1px solid #d1d5db;
       border-radius: 8px;
       padding: 10px 16px;
       margin-bottom: 14px;
     }
     .doc-ref {
       font-size: 10px;
-      color: #166534;
+      color: #1f2937;
       font-weight: 600;
       direction: rtl;
       text-align: right;
@@ -581,7 +581,7 @@ export default function PrintDocument({
       background: white;
       padding: 1px 8px;
       border-radius: 3px;
-      border: 1px solid #bbf7d0;
+      border: 1px solid #d1d5db;
       font-size: 10px;
     }
     /* ===== BIDI HELPERS ===== */
@@ -591,7 +591,7 @@ export default function PrintDocument({
     .bidi-ltr-block { direction: ltr; text-align: left; }
     .doc-date {
       font-size: 10px;
-      color: #166534;
+      color: #1f2937;
       font-weight: 500;
     }
     .doc-date-fields {
@@ -608,7 +608,7 @@ export default function PrintDocument({
     }
     .doc-date-field-label {
       font-weight: 700;
-      color: #047857;
+      color: #1f2937;
     }
 
     /* ===== REPORT TITLE SECTION ===== */
@@ -616,9 +616,9 @@ export default function PrintDocument({
       text-align: center;
       margin-bottom: 16px;
       padding: 14px 16px;
-      background: linear-gradient(135deg, #ecfdf5, #f0fdf4);
+      background: linear-gradient(135deg, #f3f4f6, #f9fafb);
       border-radius: 10px;
-      border: 1.5px solid #a7f3d0;
+      border: 1.5px solid #d1d5db;
       position: relative;
     }
     .report-title-section::before {
@@ -630,14 +630,14 @@ export default function PrintDocument({
         45deg,
         transparent,
         transparent 10px,
-        rgba(5,150,105,0.02) 10px,
-        rgba(5,150,105,0.02) 11px
+        rgba(31,41,55,0.02) 10px,
+        rgba(31,41,55,0.02) 11px
       );
     }
     .report-title-ar {
       font-size: 18px;
       font-weight: 900;
-      color: #047857;
+      color: #1f2937;
       margin-bottom: 2px;
       position: relative;
     }
@@ -650,13 +650,13 @@ export default function PrintDocument({
     .report-commune {
       font-size: 13px;
       font-weight: 700;
-      color: #0f766e;
+      color: #374151;
       margin-top: 6px;
       padding: 3px 16px;
       background: white;
       border-radius: 20px;
       display: inline-block;
-      border: 1.5px solid #99f6e4;
+      border: 1.5px solid #d1d5db;
       position: relative;
     }
     .report-filters {
@@ -678,7 +678,7 @@ export default function PrintDocument({
       margin-bottom: 8px;
       padding: 6px 14px;
       background: #fff;
-      border-right: 4px solid #059669;
+      border-right: 4px solid #374151;
       border-radius: 0 6px 6px 0;
     }
     .object-label {
@@ -699,12 +699,12 @@ export default function PrintDocument({
       margin-bottom: 14px;
       padding: 6px 14px;
       background: #fafafa;
-      border-right: 4px solid #d97706;
+      border-right: 4px solid #6b7280;
       border-radius: 0 6px 6px 0;
     }
     .ref-label {
       font-size: 9px;
-      color: #92400e;
+      color: #374151;
       font-weight: 600;
       letter-spacing: 0.5px;
     }
@@ -753,7 +753,7 @@ export default function PrintDocument({
       font-size: 10px;
     }
     .data-table thead tr {
-      background: linear-gradient(135deg, #059669, #0d9488);
+      background: linear-gradient(135deg, #1f2937, #374151);
     }
     .data-table thead th {
       padding: 7px 6px;
@@ -766,7 +766,7 @@ export default function PrintDocument({
     }
     .data-table thead th:first-child { border-left: none; }
     .data-table tbody tr:nth-child(even) { background: #f8fafc; }
-    .data-table tbody tr:hover { background: #ecfdf5; }
+    .data-table tbody tr:hover { background: #f3f4f6; }
 
     /* ===== COMMUNE STATS TABLE ===== */
     .stats-table {
@@ -777,13 +777,13 @@ export default function PrintDocument({
       overflow: hidden;
       margin-bottom: 12px;
     }
-    .stats-table thead tr { background: linear-gradient(135deg, #0d9488, #059669); }
+    .stats-table thead tr { background: linear-gradient(135deg, #374151, #1f2937); }
     .stats-table thead th { padding: 7px 10px; color: white; font-size: 9px; font-weight: 700; }
 
     /* ===== MINI HEADER (repeated on subsequent pages) ===== */
     .mini-header {
       width: 100%;
-      border-bottom: 2px solid #059669;
+      border-bottom: 2px solid #1f2937;
       padding-bottom: 6px;
       margin-bottom: 10px;
       position: relative;
@@ -795,7 +795,7 @@ export default function PrintDocument({
       left: 0;
       right: 0;
       height: 1px;
-      background: #059669;
+      background: #1f2937;
     }
 
     /* ===== ENHANCED SIGNATURE BLOCK ===== */
@@ -818,7 +818,7 @@ export default function PrintDocument({
       left: 10%;
       right: 10%;
       height: 2px;
-      background: linear-gradient(90deg, transparent, #059669, #d97706, #059669, transparent);
+      background: linear-gradient(90deg, transparent, #1f2937, #6b7280, #1f2937, transparent);
       border-radius: 1px;
     }
     .signature-main-title {
@@ -828,10 +828,10 @@ export default function PrintDocument({
       font-weight: 800;
       margin-bottom: 20px;
       padding: 5px 20px;
-      background: #f0fdf4;
+      background: #f3f4f6;
       border-radius: 20px;
       display: inline-block;
-      border: 1.5px solid #a7f3d0;
+      border: 1.5px solid #d1d5db;
       letter-spacing: 0.5px;
     }
     .signature-title-center {
@@ -859,13 +859,13 @@ export default function PrintDocument({
       left: 0;
       right: 0;
       height: 3px;
-      background: linear-gradient(90deg, #059669, #d97706);
+      background: linear-gradient(90deg, #374151, #6b7280);
       border-radius: 10px 10px 0 0;
     }
     .signature-role {
       font-size: 11px;
       font-weight: 800;
-      color: #047857;
+      color: #1f2937;
       margin-bottom: 1px;
       letter-spacing: 0.3px;
     }
@@ -971,14 +971,14 @@ export default function PrintDocument({
     <!-- DOCUMENT INFO BAR -->
     <div class="doc-info-bar" dir="rtl">
       <div style="display:flex;flex-direction:column;gap:4px;direction:rtl;">
-        <div class="doc-ref" dir="rtl"><span class="bidi-ar">المرجع</span> : / <span class="bidi-fr">Réf :</span> <span class="bidi-ref" style="background:white;padding:1px 8px;border-radius:3px;border:1px solid #bbf7d0;">${docReference}</span></div>
+        <div class="doc-ref" dir="rtl"><span class="bidi-ar">المرجع</span> : / <span class="bidi-fr">Réf :</span> <span class="bidi-ref" style="background:white;padding:1px 8px;border-radius:3px;border:1px solid #d1d5db;">${docReference}</span></div>
       </div>
       <div class="doc-date-fields" dir="rtl">
         <div class="doc-date-field" dir="rtl">
-          <span class="bidi-ar doc-date-field-label">حرر في</span> : / <span class="bidi-fr" style="font-weight:700;color:#047857;">Rédigé à :</span> <span class="bidi-ar">${communeNameAr || communeDisplay}</span>
+          <span class="bidi-ar doc-date-field-label">حرر في</span> : / <span class="bidi-fr" style="font-weight:700;color:#1f2937;">Rédigé à :</span> <span class="bidi-ar">${communeNameAr || communeDisplay}</span>
         </div>
         <div class="doc-date-field" dir="rtl">
-          <span class="bidi-ar doc-date-field-label">التاريخ</span> : / <span class="bidi-fr" style="font-weight:700;color:#047857;">Date :</span> <span class="bidi-ar">${docDate}</span>
+          <span class="bidi-ar doc-date-field-label">التاريخ</span> : / <span class="bidi-fr" style="font-weight:700;color:#1f2937;">Date :</span> <span class="bidi-ar">${docDate}</span>
         </div>
         <div class="doc-date-field" style="font-size:8px;color:#94a3b8;font-style:italic;direction:ltr;text-align:left;">
           <span class="bidi-fr">${docDateFr}</span>
@@ -1006,30 +1006,30 @@ export default function PrintDocument({
 
     <!-- REF LINE -->
     <div class="ref-line">
-      <div class="ref-label"><span class="bidi-ar">المرجع</span> / <span class="bidi-fr" style="color:#92400e;font-weight:600;letter-spacing:0.5px;">Référence</span></div>
+      <div class="ref-label"><span class="bidi-ar">المرجع</span> / <span class="bidi-fr" style="color:#374151;font-weight:600;letter-spacing:0.5px;">Référence</span></div>
       <div class="ref-value bidi-ref">${docReference}</div>
     </div>
 
     <!-- SUMMARY CARDS — Types -->
     <div class="summary-grid">
-      <div class="summary-card" style="background:#f0fdf4;">
-        <div style="position:absolute;top:0;left:0;right:0;height:3px;background:#059669;border-radius:6px 6px 0 0;"></div>
-        <div class="summary-card-value" style="color:#059669;">${totalInterventions}</div>
+      <div class="summary-card" style="background:#f3f4f6;">
+        <div style="position:absolute;top:0;left:0;right:0;height:3px;background:#374151;border-radius:6px 6px 0 0;"></div>
+        <div class="summary-card-value" style="color:#1f2937;">${totalInterventions}</div>
         <div class="summary-card-label"><span class="bidi-ar">إجمالي التدخلات</span> / <span class="bidi-fr" style="font-size:8px;color:#64748b;">Total</span></div>
       </div>
-      <div class="summary-card" style="background:#fef2f2;">
-        <div style="position:absolute;top:0;left:0;right:0;height:3px;background:#ef4444;border-radius:6px 6px 0 0;"></div>
-        <div class="summary-card-value" style="color:#ef4444;">${deratisation}</div>
+      <div class="summary-card" style="background:#f3f4f6;">
+        <div style="position:absolute;top:0;left:0;right:0;height:3px;background:#374151;border-radius:6px 6px 0 0;"></div>
+        <div class="summary-card-value" style="color:#1f2937;">${deratisation}</div>
         <div class="summary-card-label"><span class="bidi-ar">مكافحة القوارض</span> / <span class="bidi-fr" style="font-size:8px;color:#64748b;">Dératisation</span></div>
       </div>
-      <div class="summary-card" style="background:#fffbeb;">
-        <div style="position:absolute;top:0;left:0;right:0;height:3px;background:#f59e0b;border-radius:6px 6px 0 0;"></div>
-        <div class="summary-card-value" style="color:#f59e0b;">${desinsectisation}</div>
+      <div class="summary-card" style="background:#f3f4f6;">
+        <div style="position:absolute;top:0;left:0;right:0;height:3px;background:#374151;border-radius:6px 6px 0 0;"></div>
+        <div class="summary-card-value" style="color:#1f2937;">${desinsectisation}</div>
         <div class="summary-card-label"><span class="bidi-ar">مكافحة الحشرات</span> / <span class="bidi-fr" style="font-size:8px;color:#64748b;">Désinsectisation</span></div>
       </div>
-      <div class="summary-card" style="background:#ecfdf5;">
-        <div style="position:absolute;top:0;left:0;right:0;height:3px;background:#10b981;border-radius:6px 6px 0 0;"></div>
-        <div class="summary-card-value" style="color:#10b981;">${desinfection}</div>
+      <div class="summary-card" style="background:#f3f4f6;">
+        <div style="position:absolute;top:0;left:0;right:0;height:3px;background:#374151;border-radius:6px 6px 0 0;"></div>
+        <div class="summary-card-value" style="color:#1f2937;">${desinfection}</div>
         <div class="summary-card-label"><span class="bidi-ar">التطهير</span> / <span class="bidi-fr" style="font-size:8px;color:#64748b;">Désinfection</span></div>
       </div>
     </div>
@@ -1037,18 +1037,18 @@ export default function PrintDocument({
     <!-- SUMMARY CARDS — Status -->
     <div class="summary-grid">
       <div class="summary-card">
-        <div style="position:absolute;top:0;left:0;right:0;height:3px;background:#3b82f6;border-radius:6px 6px 0 0;"></div>
-        <div class="summary-card-value" style="color:#3b82f6;">${planifiee}</div>
+        <div style="position:absolute;top:0;left:0;right:0;height:3px;background:#374151;border-radius:6px 6px 0 0;"></div>
+        <div class="summary-card-value" style="color:#1f2937;">${planifiee}</div>
         <div class="summary-card-label"><span class="bidi-ar">مبرمجة</span> / <span class="bidi-fr" style="font-size:8px;color:#64748b;">Planifiée</span></div>
       </div>
       <div class="summary-card">
-        <div style="position:absolute;top:0;left:0;right:0;height:3px;background:#f59e0b;border-radius:6px 6px 0 0;"></div>
-        <div class="summary-card-value" style="color:#f59e0b;">${enCours}</div>
+        <div style="position:absolute;top:0;left:0;right:0;height:3px;background:#374151;border-radius:6px 6px 0 0;"></div>
+        <div class="summary-card-value" style="color:#1f2937;">${enCours}</div>
         <div class="summary-card-label"><span class="bidi-ar">جارية</span> / <span class="bidi-fr" style="font-size:8px;color:#64748b;">En cours</span></div>
       </div>
       <div class="summary-card">
-        <div style="position:absolute;top:0;left:0;right:0;height:3px;background:#10b981;border-radius:6px 6px 0 0;"></div>
-        <div class="summary-card-value" style="color:#10b981;">${terminee}</div>
+        <div style="position:absolute;top:0;left:0;right:0;height:3px;background:#374151;border-radius:6px 6px 0 0;"></div>
+        <div class="summary-card-value" style="color:#1f2937;">${terminee}</div>
         <div class="summary-card-label"><span class="bidi-ar">منجزة</span> / <span class="bidi-fr" style="font-size:8px;color:#64748b;">Terminée</span></div>
       </div>
       <div class="summary-card">
@@ -1061,7 +1061,7 @@ export default function PrintDocument({
     <!-- Commune breakdown table -->
     ${communeStatsRows ? `
     <div style="margin-top:8px;">
-      <div style="font-size:11px;font-weight:700;color:#047857;margin-bottom:6px;"><span class="bidi-ar">📊 التوزيع حسب الجماعة</span> / <span class="bidi-fr" style="font-size:10px;color:#047857;">Répartition par Commune</span></div>
+      <div style="font-size:11px;font-weight:700;color:#1f2937;margin-bottom:6px;"><span class="bidi-ar">📊 التوزيع حسب الجماعة</span> / <span class="bidi-fr" style="font-size:10px;color:#1f2937;">Répartition par Commune</span></div>
       <table class="stats-table">
         <thead>
           <tr>
