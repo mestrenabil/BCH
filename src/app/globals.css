@@ -285,14 +285,14 @@ body.classic-print-active [class*="text-teal-800"] {
 body.classic-print-active [class*="border-teal"] {
   border-color: #9ca3af !important;
 }
-body.classic-print-active .h-1\\.5,
-body.classic-print-active .h-1.bg-gradient-to-l,
-body.classic-print-active .h-px.bg-gradient-to-l,
-body.classic-print-active .h-px.bg-emerald-600,
-body.classic-print-active .absolute.top-0[class*="bg-emerald"],
-body.classic-print-active .absolute.top-0[class*="bg-red"],
-body.classic-print-active .absolute.top-0[class*="bg-amber"],
-body.classic-print-active .absolute.top-0[class*="bg-green"] {
+body.classic-print-active [class*="h-1"][class*="bg-gradient"],
+body.classic-print-active [class*="h-1."][class*="bg-gradient"],
+body.classic-print-active .h-px[class*="bg-gradient"],
+body.classic-print-active .h-px[class*="bg-emerald"],
+body.classic-print-active .absolute[class*="bg-emerald"],
+body.classic-print-active .absolute[class*="bg-red"],
+body.classic-print-active .absolute[class*="bg-amber"],
+body.classic-print-active .absolute[class*="bg-green"] {
   background: #374151 !important;
   background-color: #374151 !important;
 }
