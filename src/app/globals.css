@@ -207,4 +207,21 @@ html {
     margin: 0 !important;
     padding: 0 !important;
   }
+  /* Classic print: hide settings, buttons, header bar */
+  .no-classic-print {
+    display: none !important;
+  }
+  .print-classic-container {
+    position: static !important;
+    max-width: 100% !important;
+    max-height: none !important;
+    overflow: visible !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    width: 100% !important;
+  }
+  .print-classic-container .flex-1 {
+    overflow: visible !important;
+    max-height: none !important;
+  }
 }

@@ -1143,15 +1143,15 @@ export default function PrintDocument({
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4" dir="rtl">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4 no-classic-print" dir="rtl">
       <motion.div
         initial={{ opacity: 0, scale: 0.95, y: 20 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.95, y: 20 }}
-        className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[92vh] overflow-hidden flex flex-col"
+        className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[92vh] overflow-hidden flex flex-col print-classic-container"
       >
         {/* Header */}
-        <div className="bg-gradient-to-l from-emerald-800 via-emerald-700 to-teal-700 text-white p-4">
+        <div className="bg-gradient-to-l from-emerald-800 via-emerald-700 to-teal-700 text-white p-4 no-classic-print">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-white/15 flex items-center justify-center text-xl">🖨️</div>
@@ -1402,7 +1402,7 @@ export default function PrintDocument({
           </div>
 
           {/* ===== SIGNATURE & COMMUNE SETTINGS ===== */}
-          <div className="bg-slate-50 rounded-xl p-4 border border-slate-200">
+          <div className="bg-slate-50 rounded-xl p-4 border border-slate-200 no-classic-print">
             <h3 className="text-xs font-bold text-slate-500 mb-3 flex items-center gap-2">
               ✏️ إعدادات التوقيع والمعلومات الإدارية
               <span className="text-[9px] font-normal text-slate-400">— يتم حفظها تلقائياً في إعدادات الجماعة</span>
@@ -1484,13 +1484,24 @@ export default function PrintDocument({
         </div>
 
         {/* Actions */}
-        <div className="border-t border-slate-100 p-3 flex items-center gap-2 justify-end bg-slate-50/50">
+        <div className="border-t border-slate-100 p-3 flex items-center gap-2 justify-end bg-slate-50/50 no-classic-print">
           <button
             onClick={onClose}
             className="px-4 py-2 rounded-xl text-sm font-medium border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 transition-all"
           >
             إغلاق
           </button>
+          <motion.button
+            onClick={() => window.print()}
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            className="px-5 py-2.5 rounded-xl font-bold border-2 border-slate-200 bg-white text-slate-600 hover:bg-slate-50 flex items-center gap-2 text-sm transition-all"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+              <path fillRule="evenodd" d="M5 4v3H4a2 2 0 00-2 2v3a2 2 0 002 2h1v2a2 2 0 002 2h6a2 2 0 002-2v-2h1a2 2 0 002-2V9a2 2 0 00-2-2h-1V4a2 2 0 00-2-2H7a2 2 0 00-2 2zm8 0H7v3h6V4zm0 8H7v4h6v-4z" clipRule="evenodd" />
+            </svg>
+            طباعة كلاسيكية
+          </motion.button>
           <motion.button
             onClick={handlePrint}
             whileHover={{ scale: 1.02 }}
