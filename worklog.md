@@ -393,3 +393,113 @@ Stage Summary:
 - Black/gray print CSS overrides are comprehensive
 - App is fully functional with all features working
 - Dev server running without errors
+
+---
+Task ID: 4
+Agent: full-stack-developer
+Task: Link documents with interventions
+
+Work Log:
+- Read worklog.md to understand previous work and existing codebase structure
+- Read Prisma schema — confirmed InterventionDocument junction table exists with `documents` on Intervention and `interventions` on Document
+- Read existing API routes (interventions, documents, interventions/[id], auth) to understand patterns
+- Read page.tsx InterventionsView component — found it had no detail panel, just list with edit/delete buttons
+- Read documents-view.tsx — found it had a detail panel (detailDoc) but no linked interventions section
+- Created `/api/interventions/[id]/documents/route.ts` with GET, POST, DELETE handlers for document-intervention linking
+  - GET: Returns all documents linked to an intervention with document details, auth check, commune access check
+  - POST: Links a document to an intervention using upsert to avoid duplicates, validates intervention and document exist
+  - DELETE: Unlinks a document from an intervention, auth check and commune access check
+- Created `/api/documents/[id]/interventions/route.ts` with GET handler for intervention-document linking
+  - GET: Returns all interventions linked to a document with intervention details, auth check, commune filtering
+- Updated `/api/interventions/route.ts` GET handler — added `documents: { include: { document: { select: {...} } } }` to include option
+- Updated `/api/interventions/[id]/route.ts` GET handler — added same documents include
+- Updated `/api/documents/route.ts` GET handler — added `interventions: { include: { intervention: { select: {...} } } }` to include option
+- Added `InterventionDocument` interface to page.tsx
+- Updated `Intervention` interface to include `documents?: InterventionDocument[]`
+- Completely rewrote `InterventionsView` in page.tsx with:
+  - Added `detailIntervention` state for detail panel
+  - Added `showDocPicker` state for document picker dialog
+  - Added `linkedDocs` state and `fetchLinkedDocs` callback
+  - Made intervention cards clickable to show detail panel
+  - Added document count badge (📎 N) on intervention cards
+  - Added intervention detail panel with full details (header, info grid, materials, linked documents)
+  - Added "المستندات المرفقة" (Attached Documents) section with list, download, and unlink buttons
+  - Added "إرفاق مستند" (Attach Document) button opening DocumentPickerDialog
+- Created `DocumentPickerDialog` component in page.tsx:
+  - Fetches available documents from /api/documents filtered by commune
+  - Searchable list excluding already-linked documents
+  - Multi-select with visual checkmarks
+  - On confirm, calls POST /api/interventions/[id]/documents for each selected document
+  - After linking, refreshes the linked documents list
+- Updated `DocumentRecord` interface in documents-view.tsx to include `interventions` relation
+- Added TYPE_LABELS, STATUT_LABELS, TYPE_COLORS, STATUT_COLORS constants to documents-view.tsx
+- Added `showInterventionPicker` state to DocumentsView
+- Updated document detail panel in documents-view.tsx with:
+  - "التدخلات المرتبطة" (Linked Interventions) section with list and unlink buttons
+  - "ربط بتدخل" (Link to Intervention) button
+  - Detail panel now has max-h-[90vh] overflow-y-auto for long content
+- Created `InterventionPickerDialog` component in documents-view.tsx:
+  - Fetches available interventions from /api/interventions filtered by commune
+  - Searchable list excluding already-linked interventions
+  - Multi-select with visual checkmarks
+  - On confirm, calls POST /api/interventions/[id]/documents for each selected intervention
+- Regenerated Prisma client with `bun run db:push` and `npx prisma generate`
+- Ran ESLint — zero errors
+- Cleared .next cache and restarted dev server to pick up new Prisma client
+
+Stage Summary:
+- Full bidirectional document-intervention linking system implemented
+- 4 new API routes: GET/POST/DELETE /api/interventions/[id]/documents and GET /api/documents/[id]/interventions
+- Updated existing API routes to include linked records in responses
+- Intervention detail panel added with linked documents management
+- Document detail panel enhanced with linked interventions management
+- DocumentPickerDialog and InterventionPickerDialog components for easy linking
+- All features respect commune-based access control
+- ESLint passes with zero errors
+
+---
+Task ID: 4
+Agent: Main Agent + Full-stack Developer Subagent
+Task: Link documents with interventions (ربط المستندات مع التدخلات)
+
+Work Log:
+- Read Prisma schema, store.ts, documents-view.tsx, page.tsx, and all relevant API routes
+- Updated Prisma schema with InterventionDocument junction table:
+  - id, interventionId, documentId, createdAt fields
+  - Relations to Intervention (Cascade) and Document (Cascade)
+  - @@unique([interventionId, documentId]) constraint
+- Added `documents InterventionDocument[]` to Intervention model
+- Added `interventions InterventionDocument[]` to Document model
+- Ran `bun run db:push` successfully to sync database
+- Created API route `/api/interventions/[id]/documents/route.ts`:
+  - GET: List all documents linked to an intervention (with auth + commune check)
+  - POST: Link a document to an intervention (upsert to avoid duplicates)
+  - DELETE: Unlink a document from an intervention
+- Created API route `/api/documents/[id]/interventions/route.ts`:
+  - GET: List all interventions linked to a document (with auth + commune filter)
+- Updated `/api/interventions/route.ts` GET handler to include `documents: { include: { document: true } }`
+- Updated `/api/interventions/[id]/route.ts` GET handler to include `documents: { include: { document: true } }`
+- Updated `/api/documents/route.ts` GET handler to include `interventions: { include: { intervention: true } }`
+- Updated page.tsx:
+  - Added InterventionDocument interface and documents field to Intervention interface
+  - Added linked documents section in intervention detail panel
+  - Added DocumentPickerDialog component for attaching documents to interventions
+  - Added document count badge (📎 N) on intervention cards
+  - Fetches and displays linked documents with download/unlink options
+- Updated documents-view.tsx:
+  - Updated DocumentRecord interface with interventions relation
+  - Added InterventionPickerDialog component for linking interventions to documents
+  - Added "التدخلات المرتبطة" (Linked Interventions) section in document detail panel
+  - Added link/unlink functionality for interventions
+- Fixed ChunkLoadError by restarting dev server and clearing .next/cache
+- ESLint passes with zero errors
+- Dev server running without errors
+
+Stage Summary:
+- Full document-intervention linking system implemented
+- Junction table InterventionDocument with proper relations and constraints
+- API routes for GET/POST/DELETE linking operations with auth and commune checks
+- Intervention detail panel shows "المستندات المرفقة" section with attach/unlink
+- Document detail panel shows "التدخلات المرتبطة" section with link/unlink
+- DocumentPickerDialog and InterventionPickerDialog for selecting items to link
+- All features respect Arabic RTL interface and commune-based access control

@@ -25,6 +25,20 @@ interface DocumentRecord {
   uploadedBy: string
   createdAt: string
   updatedAt: string
+  interventions?: {
+    id: string
+    interventionId: string
+    documentId: string
+    intervention: {
+      id: string
+      reference: string
+      type: string
+      date: string
+      statut: string
+      quartier: string
+      commune: string
+    }
+  }[]
 }
 
 interface CategoryCount {
@@ -44,6 +58,19 @@ const CATEGORIES = [
   { id: 'صحي', label: 'صحي', icon: '🏥', color: '#ec4899' },
   { id: 'أخرى', label: 'أخرى', icon: '📎', color: '#84cc16' },
 ]
+
+const TYPE_LABELS: Record<string, string> = {
+  DERATISATION: 'مكافحة القوارض', DESINSECTISATION: 'مكافحة الحشرات', DESINFECTION: 'التطهير والتعقيم',
+}
+const STATUT_LABELS: Record<string, string> = {
+  PLANIFIEE: 'مبرمجة', EN_COURS: 'جارية', TERMINEE: 'منجزة', ANNULEE: 'ملغاة',
+}
+const TYPE_COLORS: Record<string, string> = {
+  DERATISATION: '#ef4444', DESINSECTISATION: '#f59e0b', DESINFECTION: '#10b981',
+}
+const STATUT_COLORS: Record<string, string> = {
+  PLANIFIEE: '#3b82f6', EN_COURS: '#f59e0b', TERMINEE: '#10b981', ANNULEE: '#6b7280',
+}
 
 const SORT_OPTIONS = [
   { id: 'newest', label: 'الأحدث أولاً', icon: '🕐' },
@@ -183,6 +210,7 @@ export default function DocumentsView() {
 
   // Delete confirmation
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [showInterventionPicker, setShowInterventionPicker] = useState(false)
 
   // Detail panel
   const [detailDoc, setDetailDoc] = useState<DocumentRecord | null>(null)
@@ -791,7 +819,7 @@ export default function DocumentsView() {
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden"
+              className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto"
               onClick={(e) => e.stopPropagation()}
               dir="rtl"
             >
@@ -850,6 +878,83 @@ export default function DocumentsView() {
                   <span>بواسطة: {detailDoc.uploadedBy || '—'}</span>
                   <span>•</span>
                   <span>{formatDate(detailDoc.dateDocument || detailDoc.createdAt)}</span>
+                </div>
+
+                {/* ===== LINKED INTERVENTIONS SECTION ===== */}
+                <div className="border-t border-slate-100 pt-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <h4 className="text-sm font-bold text-slate-700 flex items-center gap-2">
+                      <span>📋</span> التدخلات المرتبطة
+                      <span className="text-[10px] font-medium text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">{detailDoc.interventions?.length || 0}</span>
+                    </h4>
+                    <motion.button
+                      whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+                      onClick={() => setShowInterventionPicker(true)}
+                      className="text-[11px] font-medium px-3 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-colors flex items-center gap-1"
+                    >
+                      <span>+</span> ربط بتدخل
+                    </motion.button>
+                  </div>
+
+                  {!detailDoc.interventions || detailDoc.interventions.length === 0 ? (
+                    <div className="bg-slate-50 rounded-xl p-6 text-center">
+                      <p className="text-3xl mb-2">📋</p>
+                      <p className="text-xs text-slate-400">لا توجد تدخلات مرتبطة بهذا المستند</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2 max-h-60 overflow-y-auto">
+                      {detailDoc.interventions.map((link) => (
+                        <div key={link.id} className="flex items-center gap-3 bg-slate-50 rounded-xl p-3 group/link hover:bg-slate-100 transition-colors">
+                          <div className="w-9 h-9 rounded-lg flex items-center justify-center text-lg shrink-0"
+                            style={{ backgroundColor: (TYPE_COLORS[link.intervention.type] || '#64748b') + '12' }}>
+                            {link.intervention.type === 'DERATISATION' ? '🐀' : link.intervention.type === 'DESINSECTISATION' ? '🦟' : '🧴'}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-bold text-slate-700 font-mono">{link.intervention.reference}</p>
+                            <div className="flex items-center gap-1.5 mt-0.5">
+                              <span className="text-[10px] px-1.5 py-0.5 rounded-full font-bold"
+                                style={{ backgroundColor: (TYPE_COLORS[link.intervention.type] || '#64748b') + '15', color: TYPE_COLORS[link.intervention.type] || '#64748b' }}>
+                                {TYPE_LABELS[link.intervention.type] || link.intervention.type}
+                              </span>
+                              <span className="text-[10px] px-1.5 py-0.5 rounded-full font-bold"
+                                style={{ backgroundColor: (STATUT_COLORS[link.intervention.statut] || '#6b7280') + '15', color: STATUT_COLORS[link.intervention.statut] || '#6b7280' }}>
+                                {STATUT_LABELS[link.intervention.statut] || link.intervention.statut}
+                              </span>
+                            </div>
+                            <p className="text-[10px] text-slate-400 mt-0.5">{link.intervention.quartier} — {new Date(link.intervention.date).toLocaleDateString('ar-MA')}</p>
+                          </div>
+                          <button
+                            onClick={async () => {
+                              try {
+                                const res = await fetch(`/api/interventions/${link.interventionId}/documents`, {
+                                  method: 'DELETE',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({ documentId: detailDoc.id }),
+                                })
+                                if (res.ok) {
+                                  toast.success('تم فك الارتباط بنجاح')
+                                  fetchDocuments()
+                                  // Refresh the detail doc
+                                  const freshRes = await fetch(`/api/documents/${detailDoc.id}`)
+                                  if (freshRes.ok) {
+                                    const freshData = await freshRes.json()
+                                    setDetailDoc(freshData)
+                                  }
+                                }
+                              } catch {
+                                toast.error('حدث خطأ')
+                              }
+                            }}
+                            className="p-1.5 hover:bg-red-100 rounded-lg transition-colors opacity-0 group-hover/link:opacity-100" title="فك الارتباط"
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-red-500" viewBox="0 0 20 20" fill="currentColor">
+                              <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                            </svg>
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 <div className="flex gap-2 pt-1">
@@ -1163,6 +1268,184 @@ export default function DocumentsView() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* ===== INTERVENTION PICKER DIALOG ===== */}
+      {showInterventionPicker && detailDoc && (
+        <InterventionPickerDialog
+          documentId={detailDoc.id}
+          commune={detailDoc.commune}
+          existingInterventionIds={(detailDoc.interventions || []).map(i => i.interventionId)}
+          onSelect={async (interventionIds) => {
+            try {
+              for (const intId of interventionIds) {
+                await fetch(`/api/interventions/${intId}/documents`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ documentId: detailDoc.id }),
+                })
+              }
+              toast.success(`تم ربط المستند بـ ${interventionIds.length} تدخل بنجاح`)
+              setShowInterventionPicker(false)
+              fetchDocuments()
+              // Refresh the detail doc
+              const freshRes = await fetch(`/api/documents/${detailDoc.id}`)
+              if (freshRes.ok) {
+                const freshData = await freshRes.json()
+                setDetailDoc(freshData)
+              }
+            } catch {
+              toast.error('حدث خطأ أثناء ربط التدخلات')
+            }
+          }}
+          onClose={() => setShowInterventionPicker(false)}
+        />
+      )}
     </div>
+  )
+}
+
+// ===== INTERVENTION PICKER DIALOG =====
+function InterventionPickerDialog({ documentId, commune, existingInterventionIds, onSelect, onClose }: {
+  documentId: string; commune: string; existingInterventionIds: string[]
+  onSelect: (interventionIds: string[]) => void; onClose: () => void
+}) {
+  const [interventions, setInterventions] = useState<{ id: string; reference: string; type: string; date: string; statut: string; quartier: string; commune: string }[]>([])
+  const [selected, setSelected] = useState<string[]>([])
+  const [search, setSearch] = useState('')
+  const [isLoading, setIsLoading] = useState(true)
+
+  useEffect(() => {
+    const fetchInterventions = async () => {
+      try {
+        const params = new URLSearchParams()
+        if (commune) params.set('commune', commune)
+        params.set('limit', '100')
+        const res = await fetch(`/api/interventions?${params.toString()}`)
+        if (res.ok) {
+          const data = await res.json()
+          setInterventions(data.interventions || [])
+        }
+      } catch { /* ignore */ }
+      setIsLoading(false)
+    }
+    fetchInterventions()
+  }, [commune])
+
+  const filteredInterventions = interventions.filter(i =>
+    !existingInterventionIds.includes(i.id) &&
+    (i.reference.includes(search) || i.quartier.includes(search) || i.type.includes(search))
+  )
+
+  const toggleSelect = (id: string) => {
+    setSelected(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id])
+  }
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[60] flex items-center justify-center p-4"
+      onClick={onClose}
+    >
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95, y: 20 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.95, y: 20 }}
+        className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[80vh] overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+        dir="rtl"
+      >
+        <div className="p-5 border-b border-slate-100">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-base font-bold text-slate-800 flex items-center gap-2">
+              <span>📋</span> ربط بتدخل
+            </h3>
+            <button onClick={onClose} className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-slate-400" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+              </svg>
+            </button>
+          </div>
+          <div className="relative">
+            <svg xmlns="http://www.w3.org/2000/svg" className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" viewBox="0 0 20 20" fill="currentColor">
+              <path fillRule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clipRule="evenodd" />
+            </svg>
+            <input type="text" placeholder="البحث في التدخلات..." value={search} onChange={(e) => setSearch(e.target.value)}
+              className="w-full pr-10 pl-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50/50 text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-300 transition-all" />
+          </div>
+          {selected.length > 0 && (
+            <p className="text-[11px] text-emerald-600 font-medium mt-2">تم اختيار {selected.length} تدخل</p>
+          )}
+        </div>
+
+        <div className="overflow-y-auto max-h-[50vh] p-3">
+          {isLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <div className="w-8 h-8 border-3 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+            </div>
+          ) : filteredInterventions.length === 0 ? (
+            <div className="text-center py-12">
+              <p className="text-4xl mb-2">📋</p>
+              <p className="text-sm text-slate-400">لا توجد تدخلات متاحة للربط</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {filteredInterventions.map((intervention) => (
+                <button key={intervention.id}
+                  onClick={() => toggleSelect(intervention.id)}
+                  className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all text-right ${
+                    selected.includes(intervention.id)
+                      ? 'bg-emerald-50 border-2 border-emerald-300'
+                      : 'bg-slate-50 border-2 border-transparent hover:bg-slate-100'
+                  }`}
+                >
+                  <div className="w-8 h-8 rounded-lg flex items-center justify-center text-base shrink-0"
+                    style={{ backgroundColor: (TYPE_COLORS[intervention.type] || '#64748b') + '12' }}>
+                    {intervention.type === 'DERATISATION' ? '🐀' : intervention.type === 'DESINSECTISATION' ? '🦟' : '🧴'}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-bold text-slate-700 font-mono">{intervention.reference}</p>
+                    <div className="flex items-center gap-1.5 mt-0.5">
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-full font-bold"
+                        style={{ backgroundColor: (TYPE_COLORS[intervention.type] || '#64748b') + '15', color: TYPE_COLORS[intervention.type] || '#64748b' }}>
+                        {TYPE_LABELS[intervention.type] || intervention.type}
+                      </span>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-full font-bold"
+                        style={{ backgroundColor: (STATUT_COLORS[intervention.statut] || '#6b7280') + '15', color: STATUT_COLORS[intervention.statut] || '#6b7280' }}>
+                        {STATUT_LABELS[intervention.statut] || intervention.statut}
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-slate-400 mt-0.5">{intervention.quartier} — {new Date(intervention.date).toLocaleDateString('ar-MA')}</p>
+                  </div>
+                  {selected.includes(intervention.id) && (
+                    <div className="w-5 h-5 bg-emerald-500 rounded-full flex items-center justify-center shrink-0">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 text-white" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                      </svg>
+                    </div>
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="p-4 border-t border-slate-100 flex gap-2">
+          <motion.button
+            whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+            onClick={() => onSelect(selected)}
+            disabled={selected.length === 0}
+            className="flex-1 bg-gradient-to-l from-emerald-600 to-teal-600 text-white px-4 py-2.5 rounded-xl font-medium shadow-lg shadow-emerald-200 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+          >
+            ربط {selected.length > 0 ? `(${selected.length})` : ''}
+          </motion.button>
+          <button onClick={onClose}
+            className="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50 transition-colors text-sm">
+            إلغاء
+          </button>
+        </div>
+      </motion.div>
+    </motion.div>
   )
 }

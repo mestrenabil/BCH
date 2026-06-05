@@ -56,6 +56,22 @@ export async function GET(request: NextRequest) {
             include: {
               product: { select: { id: true, nom: true, unite: true, quantiteStock: true } }
             }
+          },
+          documents: {
+            include: {
+              document: {
+                select: {
+                  id: true,
+                  titre: true,
+                  nomFichier: true,
+                  typeFichier: true,
+                  tailleFichier: true,
+                  cheminFichier: true,
+                  categorie: true,
+                  commune: true,
+                }
+              }
+            }
           }
         }
       }),

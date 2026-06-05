@@ -31,6 +31,23 @@ export async function GET(req: NextRequest) {
         orderBy: { createdAt: 'desc' },
         skip,
         take: limit,
+        include: {
+          interventions: {
+            include: {
+              intervention: {
+                select: {
+                  id: true,
+                  reference: true,
+                  type: true,
+                  date: true,
+                  statut: true,
+                  quartier: true,
+                  commune: true,
+                }
+              }
+            }
+          }
+        }
       }),
       db.document.count({ where }),
     ])

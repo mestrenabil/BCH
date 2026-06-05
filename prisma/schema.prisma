@@ -28,6 +28,7 @@ model Intervention {
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
   materials          InterventionMaterial[]
+  documents          InterventionDocument[]
 }
 
 model Quartier {
@@ -128,4 +129,18 @@ model Document {
   uploadedBy  String   @default("") // اسم المستخدم الذي رفع الملف
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+  interventions InterventionDocument[]
+}
+
+// جدول الربط بين التدخلات والمستندات
+model InterventionDocument {
+  id             String   @id @default(cuid())
+  interventionId String   // معرف التدخل
+  documentId     String   // معرف المستند
+  createdAt      DateTime @default(now())
+
+  intervention   Intervention @relation(fields: [interventionId], references: [id], onDelete: Cascade)
+  document       Document     @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@unique([interventionId, documentId]) // لا يمكن ربط نفس المستند بنفس التدخل مرتين
 }
