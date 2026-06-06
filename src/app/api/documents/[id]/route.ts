@@ -1,11 +1,30 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 
-// GET /api/documents/[id] — Get single document
+// GET /api/documents/[id] — Get single document with linked interventions
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params
-    const document = await db.document.findUnique({ where: { id } })
+    const document = await db.document.findUnique({
+      where: { id },
+      include: {
+        interventions: {
+          include: {
+            intervention: {
+              select: {
+                id: true,
+                reference: true,
+                type: true,
+                date: true,
+                statut: true,
+                quartier: true,
+                commune: true,
+              }
+            }
+          }
+        }
+      }
+    })
     if (!document) {
       return NextResponse.json({ error: 'المستند غير موجود' }, { status: 404 })
     }
