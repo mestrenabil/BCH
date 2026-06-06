@@ -1,0 +1,1253 @@
+'use client'
+
+import React, { useState, useCallback, useEffect, useRef } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
+import { toast } from 'sonner'
+import { useAppStore, type CommuneType } from '@/lib/store'
+import { getYearOptions } from '@/lib/store'
+import {
+  type Quartier,
+  COMMUNE_LABELS, COMMUNE_COLORS, COMMUNE_USER_INFO,
+} from '@/lib/constants'
+import { UserManagementSection } from './users-view-lite'
+
+// ===== QUARTIER MANAGEMENT SECTION =====
+function QuartierManagementSection() {
+  const [quartiers, setQuartiers] = useState<Quartier[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [showForm, setShowForm] = useState(false)
+  const [editingQuartier, setEditingQuartier] = useState<Quartier | null>(null)
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
+  const [filterCommune, setFilterCommune] = useState('ALL')
+  const [searchQuery, setSearchQuery] = useState('')
+
+  useEffect(() => {
+    let cancelled = false
+    const load = async () => {
+      try {
+        const params = new URLSearchParams()
+        if (filterCommune !== 'ALL') params.set('commune', filterCommune)
+        const res = await fetch(`/api/quartiers?${params}`)
+        const data = await res.json()
+        if (!cancelled) {
+          setQuartiers(data.quartiers || [])
+          setIsLoading(false)
+        }
+      } catch (err) { console.error('Failed to fetch quartiers:', err); if (!cancelled) setIsLoading(false) }
+    }
+    load()
+    return () => { cancelled = true }
+  }, [filterCommune])
+
+  const refreshQuartiers = useCallback(() => {
+    const load = async () => {
+      try {
+        const params = new URLSearchParams()
+        if (filterCommune !== 'ALL') params.set('commune', filterCommune)
+        const res = await fetch(`/api/quartiers?${params}`)
+        const data = await res.json()
+        setQuartiers(data.quartiers || [])
+      } catch (err) { console.error('Failed to fetch quartiers:', err) }
+    }
+    load()
+  }, [filterCommune])
+
+  const handleSave = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault()
+    const form = new FormData(e.currentTarget)
+    const data = {
+      nom: form.get('nom') as string,
+      commune: form.get('commune') as string,
+      latitude: form.get('latitude') as string,
+      longitude: form.get('longitude') as string,
+    }
+    if (!data.nom) { toast.error('يرجى إدخال اسم الحي'); return }
+    try {
+      const res = await fetch(editingQuartier ? `/api/quartiers/${editingQuartier.id}` : '/api/quartiers', {
+        method: editingQuartier ? 'PUT' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      })
+      if (res.ok) {
+        toast.success(editingQuartier ? 'تم تحديث الحي بنجاح' : 'تم إضافة الحي بنجاح')
+        setShowForm(false); setEditingQuartier(null); refreshQuartiers()
+      } else {
+        const err = await res.json().catch(() => ({}))
+        toast.error(err.error || 'حدث خطأ')
+      }
+    } catch { toast.error('حدث خطأ أثناء الحفظ') }
+  }
+
+  const handleDelete = async (id: string) => {
+    try {
+      const res = await fetch(`/api/quartiers/${id}`, { method: 'DELETE' })
+      if (res.ok) {
+        toast.success('تم حذف الحي بنجاح')
+        refreshQuartiers()
+      } else {
+        const err = await res.json().catch(() => ({}))
+        toast.error(err.error || 'حدث خطأ أثناء الحذف')
+      }
+    } catch { toast.error('حدث خطأ') }
+    setDeleteConfirm(null)
+  }
+
+  const filteredQuartiers = quartiers.filter(q =>
+    !searchQuery || q.nom.includes(searchQuery) || q.commune.includes(searchQuery)
+  )
+
+  // Group quartiers by commune
+  const groupedQuartiers: Record<string, Quartier[]> = {}
+  for (const q of filteredQuartiers) {
+    const key = q.commune || 'بدون جماعة'
+    if (!groupedQuartiers[key]) groupedQuartiers[key] = []
+    groupedQuartiers[key].push(q)
+  }
+
+  return (
+    <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.45 }}
+      className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+      <div className="bg-gradient-to-l from-teal-600 to-cyan-600 text-white px-6 py-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="font-bold text-base">🏘️ إدارة الأحياء</h3>
+            <p className="text-teal-200 text-xs mt-0.5">إضافة وتعديل وحذف الأحياء السكنية</p>
+          </div>
+          <motion.button onClick={() => { setEditingQuartier(null); setShowForm(true) }}
+            whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
+            className="px-4 py-2 bg-white/20 backdrop-blur-sm rounded-xl text-sm font-bold flex items-center gap-1.5 hover:bg-white/30 transition-colors">
+            <span>+</span> إضافة حي
+          </motion.button>
+        </div>
+      </div>
+      <div className="p-6 space-y-4">
+        {/* Filters */}
+        <div className="flex flex-col sm:flex-row gap-3">
+          <div className="flex-1 relative">
+            <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="🔍 بحث عن حي..." className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none text-sm" />
+          </div>
+          <select value={filterCommune} onChange={(e) => setFilterCommune(e.target.value)}
+            className="px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-teal-500/20">
+            <option value="ALL">كل الجماعات</option>
+            <option value="سلا">جماعة سلا</option>
+            <option value="سيدي أبي القنادل">جماعة سيدي أبي القنادل</option>
+            <option value="عامر">جماعة عامر</option>
+          </select>
+        </div>
+
+        {/* Stats Row */}
+        <div className="flex gap-3">
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-teal-50 border border-teal-100">
+            <span className="text-sm">🏘️</span>
+            <span className="text-xs font-bold text-teal-700">{quartiers.length} حي</span>
+          </div>
+          {Object.entries(COMMUNE_LABELS).map(([key, label]) => {
+            const count = quartiers.filter(q => q.commune === key).length
+            return (
+              <div key={key} className="flex items-center gap-2 px-3 py-1.5 rounded-lg border"
+                style={{ backgroundColor: COMMUNE_COLORS[key as keyof typeof COMMUNE_COLORS] + '08', borderColor: COMMUNE_COLORS[key as keyof typeof COMMUNE_COLORS] + '20' }}>
+                <div className="w-2 h-2 rounded-full" style={{ backgroundColor: COMMUNE_COLORS[key as keyof typeof COMMUNE_COLORS] }} />
+                <span className="text-xs font-bold" style={{ color: COMMUNE_COLORS[key as keyof typeof COMMUNE_COLORS] }}>{count}</span>
+              </div>
+            )
+          })}
+        </div>
+
+        {/* Quartier List */}
+        {isLoading ? (
+          <div className="flex items-center justify-center h-32"><div className="w-8 h-8 border-4 border-teal-500 border-t-transparent rounded-full animate-spin" /></div>
+        ) : filteredQuartiers.length === 0 ? (
+          <div className="text-center py-10 text-slate-400">
+            <p className="text-4xl mb-2">🏘️</p>
+            <p className="text-sm font-medium">لا توجد أحياء</p>
+            <button onClick={() => { setEditingQuartier(null); setShowForm(true) }}
+              className="mt-2 text-xs text-teal-600 font-bold hover:underline">إضافة حي جديد</button>
+          </div>
+        ) : (
+          <div className="space-y-4 max-h-96 overflow-y-auto">
+            {Object.entries(groupedQuartiers).map(([communeKey, items]) => (
+              <div key={communeKey}>
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: communeKey !== 'بدون جماعة' ? COMMUNE_COLORS[communeKey as keyof typeof COMMUNE_COLORS] || '#64748b' : '#94a3b8' }} />
+                  <span className="text-xs font-bold text-slate-600">{communeKey !== 'بدون جماعة' ? COMMUNE_LABELS[communeKey as keyof typeof COMMUNE_LABELS] || communeKey : 'بدون جماعة'}</span>
+                  <span className="text-[10px] text-slate-400">({items.length})</span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                  {items.map((q) => (
+                    <motion.div key={q.id} initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
+                      className="flex items-center justify-between gap-2 bg-slate-50 hover:bg-slate-100 rounded-xl px-3 py-2.5 border border-slate-100 transition-all group">
+                      <div className="flex items-center gap-2 min-w-0 flex-1">
+                        <span className="text-sm">📍</span>
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold text-slate-700 truncate">{q.nom}</p>
+                          <p className="text-[10px] text-slate-400 font-mono">{q.latitude.toFixed(4)}, {q.longitude.toFixed(4)}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button onClick={() => { setEditingQuartier(q); setShowForm(true) }}
+                          className="w-7 h-7 rounded-lg hover:bg-blue-50 text-blue-500 text-xs flex items-center justify-center transition-colors" title="تعديل">✏️</button>
+                        <button onClick={() => setDeleteConfirm(q.id)}
+                          className="w-7 h-7 rounded-lg hover:bg-red-50 text-red-500 text-xs flex items-center justify-center transition-colors" title="حذف">🗑️</button>
+                      </div>
+                    </motion.div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Add/Edit Form Dialog */}
+      <AnimatePresence>
+        {showForm && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            onClick={() => { setShowForm(false); setEditingQuartier(null) }}>
+            <motion.div initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.9, y: 20 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white rounded-2xl max-w-md w-full shadow-2xl">
+              <div className="bg-gradient-to-l from-teal-600 to-cyan-600 p-5 rounded-t-2xl text-white">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center text-xl backdrop-blur-sm">
+                      {editingQuartier ? '✏️' : '🏘️'}
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-lg">{editingQuartier ? 'تعديل الحي' : 'إضافة حي جديد'}</h3>
+                      <p className="text-teal-100 text-xs">{editingQuartier ? 'تحديث بيانات الحي' : 'إدخال حي سكني جديد'}</p>
+                    </div>
+                  </div>
+                  <button onClick={() => { setShowForm(false); setEditingQuartier(null) }}
+                    className="w-8 h-8 rounded-lg bg-white/20 flex items-center justify-center hover:bg-white/30 transition-colors">✕</button>
+                </div>
+              </div>
+              <form onSubmit={handleSave} className="p-5 space-y-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 mb-1.5">* اسم الحي</label>
+                  <input name="nom" defaultValue={editingQuartier?.nom || ''} required placeholder="مثال: حي الأمل"
+                    className="w-full px-3 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none text-sm" />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 mb-1.5">الجماعة</label>
+                  <select name="commune" defaultValue={editingQuartier?.commune || ''}
+                    className="w-full px-3 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none text-sm">
+                    <option value="">— اختر الجماعة —</option>
+                    <option value="سلا">جماعة سلا</option>
+                    <option value="سيدي أبي القنادل">جماعة سيدي أبي القنادل</option>
+                    <option value="عامر">جماعة عامر</option>
+                  </select>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 mb-1.5">خط العرض</label>
+                    <input name="latitude" type="number" step="any" defaultValue={editingQuartier?.latitude ?? 34.052} placeholder="34.052"
+                      className="w-full px-3 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none text-sm" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 mb-1.5">خط الطول</label>
+                    <input name="longitude" type="number" step="any" defaultValue={editingQuartier?.longitude ?? -6.735} placeholder="-6.735"
+                      className="w-full px-3 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none text-sm" />
+                  </div>
+                </div>
+                <div className="flex gap-3 pt-2">
+                  <button type="button" onClick={() => { setShowForm(false); setEditingQuartier(null) }}
+                    className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-medium text-sm hover:bg-slate-50 transition-colors">إلغاء</button>
+                  <button type="submit"
+                    className="flex-1 px-4 py-2.5 rounded-xl bg-gradient-to-l from-teal-600 to-cyan-600 text-white font-medium text-sm shadow-lg shadow-teal-200 hover:shadow-teal-300 transition-all">
+                    {editingQuartier ? '💾 تحديث الحي' : '🏘️ إضافة الحي'}
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Delete Confirmation */}
+      <AnimatePresence>
+        {deleteConfirm && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            onClick={() => setDeleteConfirm(null)}>
+            <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} exit={{ scale: 0.9 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl">
+              <div className="text-center">
+                <div className="w-14 h-14 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-3"><span className="text-2xl">🗑️</span></div>
+                <h3 className="font-bold text-slate-800 mb-1">حذف الحي</h3>
+                <p className="text-sm text-slate-500 mb-4">هل أنت متأكد من حذف هذا الحي؟ التدخلات المرتبطة به لن تُحذف.</p>
+                <div className="flex gap-3">
+                  <button onClick={() => setDeleteConfirm(null)}
+                    className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-medium text-sm hover:bg-slate-50 transition-colors">إلغاء</button>
+                  <button onClick={() => handleDelete(deleteConfirm)}
+                    className="flex-1 px-4 py-2.5 rounded-xl bg-red-600 text-white font-medium text-sm hover:bg-red-700 transition-colors shadow-lg shadow-red-200">حذف</button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.div>
+  )
+}
+
+// ===== AGENT MANAGEMENT SECTION =====
+function AgentManagementSection() {
+  const [agents, setAgents] = useState<{ id: string; nom: string; prenom: string; telephone: string; commune: string; fonction: string; actif: boolean }[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [showForm, setShowForm] = useState(false)
+  const [editingAgent, setEditingAgent] = useState<{ id: string; nom: string; prenom: string; telephone: string; commune: string; fonction: string; actif: boolean } | null>(null)
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
+  const [filterCommune, setFilterCommune] = useState('ALL')
+
+  const FONCTION_LABELS: Record<string, string> = {
+    'عون صحية': 'عون صحية',
+    'مراقب': 'مراقب صحي',
+    'مسؤول': 'مسؤول المصالح',
+    'تقني': 'تقني',
+  }
+
+  useEffect(() => {
+    let cancelled = false
+    const load = async () => {
+      try {
+        const params = new URLSearchParams()
+        if (filterCommune !== 'ALL') params.set('commune', filterCommune)
+        const res = await fetch(`/api/agents?${params}`)
+        const data = await res.json()
+        if (!cancelled) { setAgents(data.agents || []); setIsLoading(false) }
+      } catch { if (!cancelled) setIsLoading(false) }
+    }
+    load()
+    return () => { cancelled = true }
+  }, [filterCommune])
+
+  const refreshAgents = useCallback(() => {
+    const load = async () => {
+      try {
+        const params = new URLSearchParams()
+        if (filterCommune !== 'ALL') params.set('commune', filterCommune)
+        const res = await fetch(`/api/agents?${params}`)
+        const data = await res.json()
+        setAgents(data.agents || [])
+      } catch { /* */ }
+    }
+    load()
+  }, [filterCommune])
+
+  const handleSave = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault()
+    const form = new FormData(e.currentTarget)
+    const data = {
+      nom: form.get('nom') as string,
+      prenom: form.get('prenom') as string,
+      telephone: form.get('telephone') as string,
+      commune: form.get('commune') as string,
+      fonction: form.get('fonction') as string,
+      actif: form.get('actif') === 'on',
+    }
+    if (!data.nom) { toast.error('يرجى إدخال اسم العون'); return }
+    try {
+      const res = await fetch(editingAgent ? `/api/agents/${editingAgent.id}` : '/api/agents', {
+        method: editingAgent ? 'PUT' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      })
+      if (res.ok) {
+        toast.success(editingAgent ? 'تم تحديث العون بنجاح' : 'تم إضافة العون بنجاح')
+        setShowForm(false); setEditingAgent(null); refreshAgents()
+      } else {
+        const err = await res.json().catch(() => ({}))
+        toast.error(err.error || 'حدث خطأ')
+      }
+    } catch { toast.error('حدث خطأ أثناء الحفظ') }
+  }
+
+  const handleDelete = async (id: string) => {
+    try {
+      const res = await fetch(`/api/agents/${id}`, { method: 'DELETE' })
+      if (res.ok) { toast.success('تم حذف العون بنجاح'); refreshAgents() }
+      else { toast.error('حدث خطأ أثناء الحذف') }
+    } catch { toast.error('حدث خطأ') }
+    setDeleteConfirm(null)
+  }
+
+  const handleToggleActive = async (id: string, currentActif: boolean) => {
+    try {
+      const res = await fetch(`/api/agents/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ actif: !currentActif }),
+      })
+      if (res.ok) { refreshAgents(); toast.success(!currentActif ? 'تم تفعيل العون' : 'تم تعطيل العون') }
+    } catch { toast.error('حدث خطأ') }
+  }
+
+  return (
+    <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}
+      className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+      <div className="bg-gradient-to-l from-orange-600 to-amber-600 text-white px-6 py-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="font-bold text-base">👤 إدارة الأعوان</h3>
+            <p className="text-amber-200 text-xs mt-0.5">إضافة وتعديل وحذف الأعوان المكلفين بالتدخلات</p>
+          </div>
+          <motion.button onClick={() => { setEditingAgent(null); setShowForm(true) }}
+            whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
+            className="px-4 py-2 bg-white/20 backdrop-blur-sm rounded-xl text-sm font-bold flex items-center gap-1.5 hover:bg-white/30 transition-colors">
+            <span>+</span> إضافة عون
+          </motion.button>
+        </div>
+      </div>
+      <div className="p-6 space-y-4">
+        {/* Filter */}
+        <div className="flex items-center gap-3">
+          <select value={filterCommune} onChange={(e) => setFilterCommune(e.target.value)}
+            className="px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-amber-500/20">
+            <option value="ALL">كل الجماعات</option>
+            <option value="سلا">جماعة سلا</option>
+            <option value="سيدي أبي القنادل">جماعة سيدي أبي القنادل</option>
+            <option value="عامر">جماعة عامر</option>
+          </select>
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-amber-50 border border-amber-100">
+            <span className="text-sm">👤</span>
+            <span className="text-xs font-bold text-amber-700">{agents.length} عون</span>
+          </div>
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-50 border border-emerald-100">
+            <span className="text-sm">✅</span>
+            <span className="text-xs font-bold text-emerald-700">{agents.filter(a => a.actif).length} نشط</span>
+          </div>
+        </div>
+
+        {/* Agent List */}
+        {isLoading ? (
+          <div className="flex items-center justify-center h-32"><div className="w-8 h-8 border-4 border-amber-500 border-t-transparent rounded-full animate-spin" /></div>
+        ) : agents.length === 0 ? (
+          <div className="text-center py-10 text-slate-400">
+            <p className="text-4xl mb-2">👤</p>
+            <p className="text-sm font-medium">لا يوجد أعوان مسجلون</p>
+            <button onClick={() => { setEditingAgent(null); setShowForm(true) }}
+              className="mt-2 text-xs text-amber-600 font-bold hover:underline">إضافة عون جديد</button>
+          </div>
+        ) : (
+          <div className="space-y-2 max-h-80 overflow-y-auto">
+            {agents.map((agent) => (
+              <motion.div key={agent.id} initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
+                className={`flex items-center justify-between gap-3 rounded-xl px-4 py-3 border transition-all group ${
+                  agent.actif ? 'bg-white border-slate-100 hover:bg-slate-50' : 'bg-slate-50/50 border-slate-100 opacity-60'
+                }`}>
+                <div className="flex items-center gap-3 min-w-0 flex-1">
+                  <div className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold ${
+                    agent.actif ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-400'
+                  }`}>
+                    {agent.nom.charAt(0)}
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-semibold text-slate-700 truncate">{agent.nom} {agent.prenom}</p>
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${
+                        agent.actif ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-400'
+                      }`}>{agent.actif ? 'نشط' : 'معطل'}</span>
+                    </div>
+                    <div className="flex items-center gap-3 text-[11px] text-slate-400">
+                      <span>{agent.fonction}</span>
+                      {agent.commune && <span>🏛️ {agent.commune}</span>}
+                      {agent.telephone && <span>📞 {agent.telephone}</span>}
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button onClick={() => handleToggleActive(agent.id, agent.actif)}
+                    className="w-7 h-7 rounded-lg hover:bg-emerald-50 text-xs flex items-center justify-center transition-colors"
+                    title={agent.actif ? 'تعطيل' : 'تفعيل'}>{agent.actif ? '⏸️' : '▶️'}</button>
+                  <button onClick={() => { setEditingAgent(agent); setShowForm(true) }}
+                    className="w-7 h-7 rounded-lg hover:bg-blue-50 text-blue-500 text-xs flex items-center justify-center transition-colors" title="تعديل">✏️</button>
+                  <button onClick={() => setDeleteConfirm(agent.id)}
+                    className="w-7 h-7 rounded-lg hover:bg-red-50 text-red-500 text-xs flex items-center justify-center transition-colors" title="حذف">🗑️</button>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Add/Edit Form Dialog */}
+      <AnimatePresence>
+        {showForm && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            onClick={() => { setShowForm(false); setEditingAgent(null) }}>
+            <motion.div initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.9, y: 20 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white rounded-2xl max-w-md w-full shadow-2xl">
+              <div className="bg-gradient-to-l from-orange-600 to-amber-600 p-5 rounded-t-2xl text-white">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center text-xl backdrop-blur-sm">
+                      {editingAgent ? '✏️' : '👤'}
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-lg">{editingAgent ? 'تعديل العون' : 'إضافة عون جديد'}</h3>
+                      <p className="text-amber-100 text-xs">{editingAgent ? 'تحديث بيانات العون' : 'تسجيل عون مكلف بالتدخلات'}</p>
+                    </div>
+                  </div>
+                  <button onClick={() => { setShowForm(false); setEditingAgent(null) }}
+                    className="w-8 h-8 rounded-lg bg-white/20 flex items-center justify-center hover:bg-white/30 transition-colors">✕</button>
+                </div>
+              </div>
+              <form onSubmit={handleSave} className="p-5 space-y-4">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 mb-1.5">* الاسم</label>
+                    <input name="nom" defaultValue={editingAgent?.nom || ''} required placeholder="محمد"
+                      className="w-full px-3 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none text-sm" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 mb-1.5">اللقب</label>
+                    <input name="prenom" defaultValue={editingAgent?.prenom || ''} placeholder="بنعلي"
+                      className="w-full px-3 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none text-sm" />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 mb-1.5">📞 رقم الهاتف</label>
+                  <input name="telephone" defaultValue={editingAgent?.telephone || ''} placeholder="06XXXXXXXX" dir="ltr"
+                    className="w-full px-3 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none text-sm text-right" />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 mb-1.5">🏛️ الجماعة</label>
+                    <select name="commune" defaultValue={editingAgent?.commune || ''}
+                      className="w-full px-3 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none text-sm">
+                      <option value="">— اختر —</option>
+                      <option value="سلا">جماعة سلا</option>
+                      <option value="سيدي أبي القنادل">جماعة سيدي أبي القنادل</option>
+                      <option value="عامر">جماعة عامر</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 mb-1.5">🎯 الوظيفة</label>
+                    <select name="fonction" defaultValue={editingAgent?.fonction || 'عون صحية'}
+                      className="w-full px-3 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none text-sm">
+                      {Object.entries(FONCTION_LABELS).map(([k, v]) => (
+                        <option key={k} value={k}>{v}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <input type="checkbox" name="actif" id="agent-actif" defaultChecked={editingAgent?.actif !== false}
+                    className="w-4 h-4 rounded accent-amber-600" />
+                  <label htmlFor="agent-actif" className="text-sm font-medium text-slate-700">عون نشط</label>
+                </div>
+                <div className="flex gap-3 pt-2">
+                  <button type="button" onClick={() => { setShowForm(false); setEditingAgent(null) }}
+                    className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-medium text-sm hover:bg-slate-50 transition-colors">إلغاء</button>
+                  <button type="submit"
+                    className="flex-1 px-4 py-2.5 rounded-xl bg-gradient-to-l from-orange-600 to-amber-600 text-white font-medium text-sm shadow-lg shadow-amber-200 hover:shadow-amber-300 transition-all">
+                    {editingAgent ? '💾 تحديث العون' : '👤 إضافة العون'}
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Delete Confirmation */}
+      <AnimatePresence>
+        {deleteConfirm && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            onClick={() => setDeleteConfirm(null)}>
+            <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} exit={{ scale: 0.9 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl">
+              <div className="text-center">
+                <div className="w-14 h-14 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-3"><span className="text-2xl">🗑️</span></div>
+                <h3 className="font-bold text-slate-800 mb-1">حذف العون</h3>
+                <p className="text-sm text-slate-500 mb-4">هل أنت متأكد من حذف هذا العون؟</p>
+                <div className="flex gap-3">
+                  <button onClick={() => setDeleteConfirm(null)}
+                    className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-medium text-sm hover:bg-slate-50 transition-colors">إلغاء</button>
+                  <button onClick={() => handleDelete(deleteConfirm)}
+                    className="flex-1 px-4 py-2.5 rounded-xl bg-red-600 text-white font-medium text-sm hover:bg-red-700 transition-colors shadow-lg shadow-red-200">حذف</button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.div>
+  )
+}
+
+// ===== SETTINGS VIEW =====
+function SettingsView() {
+  const { settings, updateSettings, resetSettings, saveSettings, loadSettings, settingsCommune, settingsLoaded, setSelectedYear, setSelectedCommune, user } = useAppStore()
+  const [confirmReset, setConfirmReset] = useState(false)
+  const [confirmResetData, setConfirmResetData] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
+  const [isAdminViewingCommune, setIsAdminViewingCommune] = useState<string | null>(null)
+
+  // For admin users: allow switching which commune's settings to view/edit
+  const canSeeAllCommunes = user?.role === 'admin' || user?.commune === 'ALL'
+  const currentSettingsCommune = isAdminViewingCommune || settingsCommune || user?.commune || 'ALL'
+
+  // Load settings on mount
+  useEffect(() => {
+    if (!settingsLoaded) {
+      loadSettings(user?.commune !== 'ALL' ? user?.commune : undefined)
+    }
+  }, [settingsLoaded, loadSettings, user?.commune])
+
+  // Admin: load different commune's settings
+  const handleAdminSwitchCommune = async (commune: string) => {
+    setIsAdminViewingCommune(commune === 'ALL' ? null : commune)
+    await loadSettings(commune === 'ALL' ? undefined : commune)
+  }
+
+  // Auto-save settings with debounce
+  const saveTimerRef = useRef<NodeJS.Timeout | null>(null)
+  const handleUpdateAndSave = (partial: Partial<typeof settings>) => {
+    updateSettings(partial)
+    // Debounce save: 800ms after last change
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
+    saveTimerRef.current = setTimeout(async () => {
+      const ok = await saveSettings()
+      if (!ok) toast.error('حدث خطأ أثناء حفظ الإعدادات')
+    }, 800)
+  }
+
+  const handleApplyDefaults = () => {
+    setSelectedYear(settings.defaultYear)
+    setSelectedCommune(settings.defaultCommune)
+    toast.success('تم تطبيق الإعدادات الافتراضية')
+  }
+
+  const handleResetData = async () => {
+    try {
+      await fetch('/api/seed', { method: 'POST' })
+      setConfirmResetData(false)
+      toast.success('تم إعادة تهيئة البيانات بنجاح')
+    } catch {
+      toast.error('حدث خطأ أثناء إعادة التهيئة')
+    }
+  }
+
+  const handleDeleteAllData = async () => {
+    try {
+      const res = await fetch('/api/statistics')
+      const data = await res.json()
+      if (data.recent) {
+        for (const intervention of data.recent) {
+          await fetch(`/api/interventions/${intervention.id}`, { method: 'DELETE' })
+        }
+      }
+      setConfirmResetData(false)
+      toast.success('تم حذف جميع البيانات')
+    } catch {
+      toast.error('حدث خطأ أثناء الحذف')
+    }
+  }
+
+  return (
+    <div className="p-4 lg:p-6 space-y-6 pb-24 lg:pb-6 max-w-4xl">
+      {/* Title */}
+      <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}>
+        <h2 className="text-2xl font-bold text-slate-800">⚙️ الإعدادات</h2>
+        <p className="text-slate-500 text-sm mt-1">تهيئة مكونات التطبيق وتخصيص الإعدادات</p>
+      </motion.div>
+
+      {/* Commune Settings Selector — for admin users */}
+      {canSeeAllCommunes && (
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}
+          className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+          <div className="bg-gradient-to-l from-emerald-700 to-teal-700 text-white px-6 py-4">
+            <h3 className="font-bold text-base">🏛️ إعدادات الجماعة</h3>
+            <p className="text-emerald-200 text-xs mt-0.5">كل جماعة لها إعداداتها المنفصلة — اختر الجماعة لتعديل إعداداتها</p>
+          </div>
+          <div className="p-4">
+            <div className="flex flex-wrap gap-2">
+              {[
+                { key: 'ALL', label: 'عام (المشترك)', icon: '🌐', color: '#475569' },
+                { key: 'سلا', label: 'جماعة سلا', icon: '🏙️', color: '#059669' },
+                { key: 'سيدي أبي القنادل', label: 'جماعة سيدي أبي القنادل', icon: '🏘️', color: '#7c3aed' },
+                { key: 'عامر', label: 'جماعة عامر', icon: '🌄', color: '#d97706' },
+              ].map((c) => (
+                <button key={c.key}
+                  onClick={() => handleAdminSwitchCommune(c.key)}
+                  className={`px-4 py-2.5 rounded-xl text-sm font-medium transition-all flex items-center gap-2 ${
+                    currentSettingsCommune === c.key
+                      ? 'text-white shadow-lg'
+                      : 'bg-slate-50 text-slate-600 border border-slate-200 hover:bg-slate-100'
+                  }`}
+                  style={currentSettingsCommune === c.key ? { backgroundColor: c.color } : {}}>
+                  <span>{c.icon}</span>
+                  {c.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </motion.div>
+      )}
+
+      {/* Current commune indicator — for non-admin users */}
+      {!canSeeAllCommunes && user?.commune && (
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}
+          className="flex items-center gap-3 bg-white rounded-xl border border-slate-100 shadow-sm px-4 py-3">
+          <div className="w-8 h-8 rounded-lg flex items-center justify-center text-lg"
+            style={{ backgroundColor: (COMMUNE_COLORS[user.commune] || '#475569') + '20' }}>
+            {COMMUNE_USER_INFO[user.commune]?.icon || '🏠'}
+          </div>
+          <div>
+            <div className="text-sm font-bold text-slate-700">إعدادات {COMMUNE_LABELS[user.commune] || user.commune}</div>
+            <div className="text-[11px] text-slate-400">هذه الإعدادات خاصة بجماعتك فقط</div>
+          </div>
+          <div className="mr-auto">
+            <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+          </div>
+        </motion.div>
+      )}
+
+      {/* User Management — prominent section */}
+      <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.08 }}
+        className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+        <div className="bg-gradient-to-l from-emerald-700 to-teal-700 text-white px-6 py-4">
+          <h3 className="font-bold text-base">👥 إدارة المستخدمين</h3>
+          <p className="text-emerald-200 text-xs mt-0.5">الحسابات المرخصة للدخول لكل جماعة</p>
+        </div>
+        <div className="p-6">
+          <UserManagementSection />
+        </div>
+      </motion.div>
+
+      {/* General Settings */}
+      <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
+        className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+        <div className="bg-gradient-to-l from-slate-700 to-slate-800 text-white px-6 py-4">
+          <h3 className="font-bold text-base">🏠 الإعدادات العامة</h3>
+          <p className="text-slate-300 text-xs mt-0.5">الإعدادات الأساسية للتطبيق</p>
+        </div>
+        <div className="p-6 space-y-5">
+          {/* Default Year */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <label className="text-sm font-semibold text-slate-700">📅 السنة الافتراضية</label>
+              <p className="text-xs text-slate-400 mt-0.5">السنة المعروضة عند فتح التطبيق</p>
+            </div>
+            <select value={settings.defaultYear} onChange={(e) => handleUpdateAndSave({ defaultYear: e.target.value })}
+              className="px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-300 w-full sm:w-40">
+              <option value="">الكل</option>
+              {getYearOptions(10).map((y) => (
+                <option key={y.value} value={y.value}>{y.label}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="border-t border-slate-100" />
+
+          {/* Default Commune */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <label className="text-sm font-semibold text-slate-700">🏛️ الجماعة الافتراضية</label>
+              <p className="text-xs text-slate-400 mt-0.5">الجماعة المعروضة عند فتح التطبيق</p>
+            </div>
+            {!canSeeAllCommunes ? (
+              <div className="flex items-center gap-2 px-4 py-2.5 bg-slate-50 rounded-xl border border-slate-200">
+                <div className="w-3 h-3 rounded-full" style={{ backgroundColor: COMMUNE_COLORS[user?.commune || ''] || '#475569' }} />
+                <span className="text-sm font-medium text-slate-700">{COMMUNE_LABELS[user?.commune || ''] || user?.commune}</span>
+                <span className="text-[10px] text-slate-400">(ثابت)</span>
+              </div>
+            ) : (
+              <select value={settings.defaultCommune} onChange={(e) => handleUpdateAndSave({ defaultCommune: e.target.value as CommuneType | 'ALL' })}
+                className="px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-300 w-full sm:w-48">
+                <option value="ALL">كل الجماعات</option>
+                <option value="سلا">جماعة سلا</option>
+                <option value="سيدي أبي القنادل">جماعة سيدي أبي القنادل</option>
+                <option value="عامر">جماعة عامر</option>
+              </select>
+            )}
+          </div>
+
+          <div className="border-t border-slate-100" />
+
+          {/* Interventions Per Page */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <label className="text-sm font-semibold text-slate-700">📋 عدد التدخلات في كل صفحة</label>
+              <p className="text-xs text-slate-400 mt-0.5">الحد الأقصى للتدخلات المعروضة</p>
+            </div>
+            <select value={settings.interventionsPerPage} onChange={(e) => handleUpdateAndSave({ interventionsPerPage: parseInt(e.target.value) })}
+              className="px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-300 w-full sm:w-40">
+              <option value="20">20</option>
+              <option value="50">50</option>
+              <option value="100">100</option>
+              <option value="200">200</option>
+            </select>
+          </div>
+
+          <div className="border-t border-slate-100" />
+
+          {/* Apply Defaults Button */}
+          <div className="flex justify-end">
+            <motion.button onClick={handleApplyDefaults} whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+              className="px-5 py-2.5 bg-emerald-600 text-white rounded-xl text-sm font-medium shadow-lg shadow-emerald-200 hover:bg-emerald-700 transition-colors">
+              ✓ تطبيق الإعدادات الافتراضية الآن
+            </motion.button>
+          </div>
+        </div>
+      </motion.div>
+
+      {/* Map Settings */}
+      <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}
+        className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+        <div className="bg-gradient-to-l from-blue-600 to-cyan-600 text-white px-6 py-4">
+          <h3 className="font-bold text-base">🗺️ إعدادات الخريطة</h3>
+          <p className="text-blue-200 text-xs mt-0.5">تخصيص عرض الخريطة SIG</p>
+        </div>
+        <div className="p-6 space-y-5">
+          {/* Default Tile */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <label className="text-sm font-semibold text-slate-700">🗺️ نوع الخريطة الافتراضية</label>
+              <p className="text-xs text-slate-400 mt-0.5">نوع الخريطة المعروضة عند فتح صفحة الخريطة</p>
+            </div>
+            <div className="flex gap-2">
+              {[
+                { value: 'light' as const, label: 'خريطة عادية', icon: '🗺️' },
+                { value: 'satellite' as const, label: 'صورة ساتلية', icon: '🛰️' },
+              ].map((tile) => (
+                <button key={tile.value} onClick={() => handleUpdateAndSave({ mapDefaultTile: tile.value })}
+                  className={`px-4 py-2.5 rounded-xl text-sm font-medium transition-all flex items-center gap-2 ${
+                    settings.mapDefaultTile === tile.value
+                      ? 'bg-blue-600 text-white shadow-lg shadow-blue-200'
+                      : 'bg-slate-50 text-slate-600 border border-slate-200 hover:bg-slate-100'
+                  }`}>
+                  <span>{tile.icon}</span>
+                  {tile.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="border-t border-slate-100" />
+
+          {/* Map Click to Add */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <label className="text-sm font-semibold text-slate-700">📍 إضافة تدخل بالنقر على الخريطة</label>
+              <p className="text-xs text-slate-400 mt-0.5">تفعيل أو تعطيل إمكانية إضافة تدخل جديد بالضغط على موقع في الخريطة</p>
+            </div>
+            <button onClick={() => handleUpdateAndSave({ mapClickEnabled: !settings.mapClickEnabled })}
+              className={`relative w-14 h-8 rounded-full transition-colors duration-300 ${settings.mapClickEnabled ? 'bg-emerald-500' : 'bg-slate-300'}`}>
+              <motion.div className="absolute top-1 w-6 h-6 bg-white rounded-full shadow-md"
+                animate={{ left: settings.mapClickEnabled ? '2rem' : '0.25rem' }}
+                transition={{ type: 'spring', stiffness: 500, damping: 30 }} />
+            </button>
+          </div>
+
+          <div className="border-t border-slate-100" />
+
+          {/* Commune Boundary Popups */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <label className="text-sm font-semibold text-slate-700">🏛️ نوافذ الحدود الإدارية الترابية</label>
+              <p className="text-xs text-slate-400 mt-0.5">عرض أو إخفاء النوافذ المنبثقة عند النقر على حدود الجماعات</p>
+            </div>
+            <button onClick={() => handleUpdateAndSave({ showCommunePopups: !settings.showCommunePopups })}
+              className={`relative w-14 h-8 rounded-full transition-colors duration-300 ${settings.showCommunePopups ? 'bg-emerald-500' : 'bg-slate-300'}`}>
+              <motion.div className="absolute top-1 w-6 h-6 bg-white rounded-full shadow-md"
+                animate={{ left: settings.showCommunePopups ? '2rem' : '0.25rem' }}
+                transition={{ type: 'spring', stiffness: 500, damping: 30 }} />
+            </button>
+          </div>
+
+          <div className="border-t border-slate-100" />
+
+          {/* Cluster Radius */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <label className="text-sm font-semibold text-slate-700">🔵 نصف قطر التجميع</label>
+              <p className="text-xs text-slate-400 mt-0.5">المسافة القصوى لتجميع العلامات المتقاربة (بكسل)</p>
+            </div>
+            <div className="flex items-center gap-3 w-full sm:w-64">
+              <input type="range" min="20" max="120" step="10" value={settings.mapClusterRadius}
+                onChange={(e) => handleUpdateAndSave({ mapClusterRadius: parseInt(e.target.value) })}
+                className="flex-1 h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-600" />
+              <span className="text-sm font-bold text-slate-700 bg-slate-50 px-3 py-1 rounded-lg min-w-[3rem] text-center">{settings.mapClusterRadius}</span>
+            </div>
+          </div>
+        </div>
+      </motion.div>
+
+      {/* Display Settings */}
+      <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}
+        className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+        <div className="bg-gradient-to-l from-purple-600 to-pink-600 text-white px-6 py-4">
+          <h3 className="font-bold text-base">🎨 إعدادات العرض</h3>
+          <p className="text-purple-200 text-xs mt-0.5">تخصيص المظهر والرسوم المتحركة</p>
+        </div>
+        <div className="p-6 space-y-5">
+          {/* Animations */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <label className="text-sm font-semibold text-slate-700">✨ الرسوم المتحركة</label>
+              <p className="text-xs text-slate-400 mt-0.5">تفعيل أو تعطيل التأثيرات الحركية في التطبيق</p>
+            </div>
+            <button onClick={() => handleUpdateAndSave({ animationsEnabled: !settings.animationsEnabled })}
+              className={`relative w-14 h-8 rounded-full transition-colors duration-300 ${settings.animationsEnabled ? 'bg-emerald-500' : 'bg-slate-300'}`}>
+              <motion.div className="absolute top-1 w-6 h-6 bg-white rounded-full shadow-md"
+                animate={{ left: settings.animationsEnabled ? '2rem' : '0.25rem' }}
+                transition={{ type: 'spring', stiffness: 500, damping: 30 }} />
+            </button>
+          </div>
+
+          <div className="border-t border-slate-100" />
+
+          {/* Font Size */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <label className="text-sm font-semibold text-slate-700">📝 حجم الخط</label>
+              <p className="text-xs text-slate-400 mt-0.5">حجم النصوص في التطبيق</p>
+            </div>
+            <div className="flex gap-2">
+              {[
+                { value: 'small' as const, label: 'صغير', icon: '🔤' },
+                { value: 'medium' as const, label: 'متوسط', icon: '🔠' },
+                { value: 'large' as const, label: 'كبير', icon: '🔡' },
+              ].map((opt) => (
+                <button key={opt.value} onClick={() => handleUpdateAndSave({ fontSize: opt.value })}
+                  className={`px-3 py-2 rounded-xl text-sm font-medium transition-all flex items-center gap-1.5 ${
+                    settings.fontSize === opt.value
+                      ? 'bg-purple-600 text-white shadow-lg shadow-purple-200'
+                      : 'bg-slate-50 text-slate-600 border border-slate-200 hover:bg-slate-100'
+                  }`}>
+                  <span className="text-xs">{opt.icon}</span>
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="border-t border-slate-100" />
+
+          {/* Compact Mode */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <label className="text-sm font-semibold text-slate-700">📐 الوضع المضغوط</label>
+              <p className="text-xs text-slate-400 mt-0.5">تقليل المسافات لعرض بيانات أكثر</p>
+            </div>
+            <button onClick={() => handleUpdateAndSave({ compactMode: !settings.compactMode })}
+              className={`relative w-14 h-8 rounded-full transition-colors duration-300 ${settings.compactMode ? 'bg-emerald-500' : 'bg-slate-300'}`}>
+              <motion.div className="absolute top-1 w-6 h-6 bg-white rounded-full shadow-md"
+                animate={{ left: settings.compactMode ? '2rem' : '0.25rem' }}
+                transition={{ type: 'spring', stiffness: 500, damping: 30 }} />
+            </button>
+          </div>
+        </div>
+      </motion.div>
+
+      {/* Alert Settings */}
+      <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }}
+        className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+        <div className="bg-gradient-to-l from-rose-600 to-red-600 text-white px-6 py-4">
+          <h3 className="font-bold text-base">🔔 إعدادات التنبيهات</h3>
+          <p className="text-rose-200 text-xs mt-0.5">تنبيهات المخزون والمواعيد</p>
+        </div>
+        <div className="p-6 space-y-5">
+          {/* Stock Alert */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <label className="text-sm font-semibold text-slate-700">📦 تنبيه المخزون المنخفض</label>
+              <p className="text-xs text-slate-400 mt-0.5">تنبيه عند انخفاض كمية مادة في المخزون عن العتبة</p>
+            </div>
+            <button onClick={() => handleUpdateAndSave({ stockAlertEnabled: !settings.stockAlertEnabled })}
+              className={`relative w-14 h-8 rounded-full transition-colors duration-300 ${settings.stockAlertEnabled ? 'bg-emerald-500' : 'bg-slate-300'}`}>
+              <motion.div className="absolute top-1 w-6 h-6 bg-white rounded-full shadow-md"
+                animate={{ left: settings.stockAlertEnabled ? '2rem' : '0.25rem' }}
+                transition={{ type: 'spring', stiffness: 500, damping: 30 }} />
+            </button>
+          </div>
+
+          <div className="border-t border-slate-100" />
+
+          {/* Stock Alert Threshold */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <label className="text-sm font-semibold text-slate-700">📊 عتبة تنبيه المخزون</label>
+              <p className="text-xs text-slate-400 mt-0.5">الحد الأدنى قبل إطلاق التنبيه</p>
+            </div>
+            <div className="flex items-center gap-3 w-full sm:w-64">
+              <input type="range" min="1" max="50" step="1" value={settings.stockAlertThreshold}
+                onChange={(e) => handleUpdateAndSave({ stockAlertThreshold: parseInt(e.target.value) })}
+                className="flex-1 h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-rose-600" />
+              <span className="text-sm font-bold text-slate-700 bg-slate-50 px-3 py-1 rounded-lg min-w-[3rem] text-center">{settings.stockAlertThreshold}</span>
+            </div>
+          </div>
+
+          <div className="border-t border-slate-100" />
+
+          {/* Deadline Reminder */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <label className="text-sm font-semibold text-slate-700">⏰ تذكير المواعيد</label>
+              <p className="text-xs text-slate-400 mt-0.5">تذكير بالتدخلات المبرمجة قبل موعدها</p>
+            </div>
+            <button onClick={() => handleUpdateAndSave({ deadlineReminderEnabled: !settings.deadlineReminderEnabled })}
+              className={`relative w-14 h-8 rounded-full transition-colors duration-300 ${settings.deadlineReminderEnabled ? 'bg-emerald-500' : 'bg-slate-300'}`}>
+              <motion.div className="absolute top-1 w-6 h-6 bg-white rounded-full shadow-md"
+                animate={{ left: settings.deadlineReminderEnabled ? '2rem' : '0.25rem' }}
+                transition={{ type: 'spring', stiffness: 500, damping: 30 }} />
+            </button>
+          </div>
+
+          <div className="border-t border-slate-100" />
+
+          {/* Deadline Reminder Days */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <label className="text-sm font-semibold text-slate-700">📅 أيام قبل التذكير</label>
+              <p className="text-xs text-slate-400 mt-0.5">عدد الأيام قبل موعد التدخل للتنبيه</p>
+            </div>
+            <div className="flex items-center gap-3 w-full sm:w-64">
+              <input type="range" min="1" max="14" step="1" value={settings.deadlineReminderDays}
+                onChange={(e) => handleUpdateAndSave({ deadlineReminderDays: parseInt(e.target.value) })}
+                className="flex-1 h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-rose-600" />
+              <span className="text-sm font-bold text-slate-700 bg-slate-50 px-3 py-1 rounded-lg min-w-[3rem] text-center">{settings.deadlineReminderDays} يوم</span>
+            </div>
+          </div>
+        </div>
+      </motion.div>
+
+      {/* Agent Management */}
+      <AgentManagementSection />
+
+      {/* Data Export */}
+      <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.45 }}
+        className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+        <div className="bg-gradient-to-l from-indigo-600 to-violet-600 text-white px-6 py-4">
+          <h3 className="font-bold text-base">📤 تصدير البيانات</h3>
+          <p className="text-indigo-200 text-xs mt-0.5">تصدير التدخلات والتقارير بتنسيقات مختلفة</p>
+        </div>
+        <div className="p-6 space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* Export CSV */}
+            <motion.button onClick={() => {
+              const params = new URLSearchParams({ format: 'csv' })
+              if (settings.defaultYear) params.set('year', settings.defaultYear)
+              if (settings.defaultCommune !== 'ALL') params.set('commune', settings.defaultCommune)
+              window.open(`/api/export?${params.toString()}`, '_blank')
+              toast.success('جاري تحميل ملف CSV...')
+            }} whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+              className="flex items-center gap-3 p-4 rounded-xl border-2 border-dashed border-emerald-200 hover:border-emerald-400 hover:bg-emerald-50/50 transition-all group">
+              <div className="w-12 h-12 rounded-xl bg-emerald-100 flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">📊</div>
+              <div className="text-right">
+                <div className="text-sm font-bold text-slate-700">تصدير CSV</div>
+                <div className="text-[11px] text-slate-400">ملف جدول بيانات متوافق مع Excel</div>
+              </div>
+            </motion.button>
+
+            {/* Export JSON */}
+            <motion.button onClick={() => {
+              const params = new URLSearchParams({ format: 'json' })
+              if (settings.defaultYear) params.set('year', settings.defaultYear)
+              if (settings.defaultCommune !== 'ALL') params.set('commune', settings.defaultCommune)
+              window.open(`/api/export?${params.toString()}`, '_blank')
+              toast.success('جاري تحميل ملف JSON...')
+            }} whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+              className="flex items-center gap-3 p-4 rounded-xl border-2 border-dashed border-blue-200 hover:border-blue-400 hover:bg-blue-50/50 transition-all group">
+              <div className="w-12 h-12 rounded-xl bg-blue-100 flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">📋</div>
+              <div className="text-right">
+                <div className="text-sm font-bold text-slate-700">تصدير JSON</div>
+                <div className="text-[11px] text-slate-400">بيانات مهيكلة للمطورين</div>
+              </div>
+            </motion.button>
+          </div>
+
+          {/* Export options info */}
+          <div className="bg-slate-50 rounded-xl p-3.5 flex items-start gap-3">
+            <span className="text-lg mt-0.5">💡</span>
+            <div className="text-xs text-slate-500 leading-relaxed">
+              <strong className="text-slate-600">ملاحظة:</strong> يتم تصدير البيانات حسب السنة والجماعة المختارة حالياً. يمكنك تغيير الفلترات قبل التصدير.
+            </div>
+          </div>
+        </div>
+      </motion.div>
+
+      {/* Backup & Restore */}
+      <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }}
+        className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+        <div className="bg-gradient-to-l from-cyan-600 to-sky-600 text-white px-6 py-4">
+          <h3 className="font-bold text-base">💾 النسخ الاحتياطي</h3>
+          <p className="text-cyan-200 text-xs mt-0.5">حفظ واستعادة بيانات التطبيق</p>
+        </div>
+        <div className="p-6 space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* Backup */}
+            <motion.button onClick={async () => {
+              try {
+                const [interventions, products, quartiers, agents] = await Promise.all([
+                  fetch('/api/export?format=json').then(r => r.json()),
+                  fetch('/api/products').then(r => r.json()),
+                  fetch('/api/quartiers').then(r => r.json()),
+                  fetch('/api/agents').then(r => r.json()),
+                ])
+                const backup = {
+                  version: '2.0',
+                  date: new Date().toISOString(),
+                  interventions,
+                  products: products.products || [],
+                  quartiers: quartiers.quartiers || [],
+                  agents: agents.agents || [],
+                  settings,
+                }
+                const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' })
+                const url = URL.createObjectURL(blob)
+                const a = document.createElement('a')
+                a.href = url; a.download = `backup-3d-${new Date().toISOString().split('T')[0]}.json`
+                a.click(); URL.revokeObjectURL(url)
+                toast.success('تم تحميل النسخة الاحتياطية بنجاح')
+              } catch { toast.error('حدث خطأ أثناء النسخ الاحتياطي') }
+            }} whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+              className="flex items-center gap-3 p-4 rounded-xl bg-cyan-50 border border-cyan-100 hover:bg-cyan-100/70 transition-all group">
+              <div className="w-12 h-12 rounded-xl bg-cyan-200/70 flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">💾</div>
+              <div className="text-right">
+                <div className="text-sm font-bold text-cyan-800">إنشاء نسخة احتياطية</div>
+                <div className="text-[11px] text-cyan-600">تحميل جميع البيانات كملف JSON</div>
+              </div>
+            </motion.button>
+
+            {/* Restore */}
+            <motion.button onClick={() => {
+              const input = document.createElement('input')
+              input.type = 'file'; input.accept = '.json'
+              input.onchange = async (e) => {
+                const file = (e.target as HTMLInputElement).files?.[0]
+                if (!file) return
+                try {
+                  const text = await file.text()
+                  const backup = JSON.parse(text)
+                  if (!backup.version) { toast.error('ملف النسخة الاحتياطية غير صالح'); return }
+                  toast.success(`تم العثور على ${backup.interventions?.total || 0} تدخل، ${backup.quartiers?.length || 0} حي، ${backup.agents?.length || 0} عون`)
+                } catch { toast.error('حدث خطأ أثناء قراءة الملف') }
+              }
+              input.click()
+            }} whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+              className="flex items-center gap-3 p-4 rounded-xl bg-slate-50 border border-slate-200 hover:bg-slate-100/70 transition-all group">
+              <div className="w-12 h-12 rounded-xl bg-slate-200/70 flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">📂</div>
+              <div className="text-right">
+                <div className="text-sm font-bold text-slate-700">استعادة من نسخة</div>
+                <div className="text-[11px] text-slate-500">استيراد بيانات من ملف احتياطي</div>
+              </div>
+            </motion.button>
+          </div>
+        </div>
+      </motion.div>
+
+      {/* Data Management */}
+      <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}
+        className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+        <div className="bg-gradient-to-l from-amber-600 to-orange-600 text-white px-6 py-4">
+          <h3 className="font-bold text-base">🗄️ إدارة البيانات</h3>
+          <p className="text-amber-200 text-xs mt-0.5">إعادة تهيئة وإدارة بيانات التطبيق</p>
+        </div>
+        <div className="p-6 space-y-5">
+          {/* Re-seed Data */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <label className="text-sm font-semibold text-slate-700">🔄 إعادة تهيئة البيانات</label>
+              <p className="text-xs text-slate-400 mt-0.5">إعادة إنشاء البيانات التجريبية (الأحياء، الوكلاء، التدخلات)</p>
+            </div>
+            {confirmResetData ? (
+              <div className="flex gap-2">
+                <motion.button onClick={handleResetData} whileTap={{ scale: 0.95 }}
+                  className="px-4 py-2 bg-amber-600 text-white rounded-xl text-sm font-medium shadow-lg">
+                  ⚠️ تأكيد
+                </motion.button>
+                <button onClick={() => setConfirmResetData(false)}
+                  className="px-4 py-2 bg-slate-100 text-slate-600 rounded-xl text-sm font-medium">
+                  إلغاء
+                </button>
+              </div>
+            ) : (
+              <motion.button onClick={() => setConfirmResetData(true)} whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+                className="px-5 py-2.5 bg-amber-50 text-amber-700 border border-amber-200 rounded-xl text-sm font-medium hover:bg-amber-100 transition-colors">
+                🔄 إعادة تهيئة
+              </motion.button>
+            )}
+          </div>
+        </div>
+      </motion.div>
+
+      {/* Quartier Management */}
+      <QuartierManagementSection />
+
+      {/* Reset Settings */}
+      <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }}
+        className="bg-white rounded-2xl border border-red-100 shadow-sm overflow-hidden">
+        <div className="bg-gradient-to-l from-red-600 to-rose-600 text-white px-6 py-4">
+          <h3 className="font-bold text-base">⚠️ منطقة الخطر</h3>
+          <p className="text-red-200 text-xs mt-0.5">إجراءات لا يمكن التراجع عنها</p>
+        </div>
+        <div className="p-6 space-y-5">
+          {/* Reset All Settings */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <label className="text-sm font-semibold text-slate-700">🔁 إعادة ضبط الإعدادات</label>
+              <p className="text-xs text-slate-400 mt-0.5">استعادة جميع الإعدادات إلى قيمها الافتراضية</p>
+            </div>
+            {confirmReset ? (
+              <div className="flex gap-2">
+                <motion.button onClick={async () => { const ok = await resetSettings(); setConfirmReset(false); toast.success(ok ? 'تم إعادة ضبط الإعدادات' : 'حدث خطأ أثناء إعادة الضبط') }} whileTap={{ scale: 0.95 }}
+                  className="px-4 py-2 bg-red-600 text-white rounded-xl text-sm font-medium shadow-lg">
+                  ⚠️ تأكيد
+                </motion.button>
+                <button onClick={() => setConfirmReset(false)}
+                  className="px-4 py-2 bg-slate-100 text-slate-600 rounded-xl text-sm font-medium">
+                  إلغاء
+                </button>
+              </div>
+            ) : (
+              <button onClick={() => setConfirmReset(true)}
+                className="px-5 py-2.5 bg-red-50 text-red-700 border border-red-200 rounded-xl text-sm font-medium hover:bg-red-100 transition-colors">
+                🔁 إعادة ضبط
+              </button>
+            )}
+          </div>
+        </div>
+      </motion.div>
+
+      {/* About — moved to end */}
+      <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.6 }}
+        className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+        <div className="bg-gradient-to-l from-emerald-700 to-teal-700 text-white px-6 py-4">
+          <h3 className="font-bold text-base">ℹ️ حول التطبيق</h3>
+          <p className="text-emerald-200 text-xs mt-0.5">معلومات النظام</p>
+        </div>
+        <div className="p-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {[
+              { label: 'اسم التطبيق', value: 'عمالة سلا — قسم حفظ الصحة والبيئة' },
+              { label: 'الإصدار', value: '2.0.0' },
+              { label: 'المصالح', value: 'مكتب مكافحة الجرذان • مكافحة الحشرات • التطهير' },
+              { label: 'الحدود الترابية', value: 'قرار رقم 1954.24 — الجريدة الرسمية عدد 7340' },
+              { label: 'السكان', value: 'RGPH 2024 — HCP المندوبية السامية للتخطيط' },
+              { label: 'التطوير', value: 'Nabil EL BOUOSSI — 2026' },
+            ].map((item, i) => (
+              <motion.div key={item.label} initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.7 + i * 0.05 }}
+                className="bg-slate-50 rounded-xl p-3.5">
+                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{item.label}</div>
+                <div className="text-sm font-semibold text-slate-700 mt-1">{item.value}</div>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+      </motion.div>
+    </div>
+  )
+}
+
+export default SettingsView
