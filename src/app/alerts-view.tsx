@@ -280,8 +280,14 @@ export default function AlertsView() {
   const planifieeCount = stats?.byStatut?.PLANIFIEE || 0
   const enCoursCount = stats?.byStatut?.EN_COURS || 0
   const termineeCount = stats?.byStatut?.TERMINEE || 0
+  const annuleeCount = stats?.byStatut?.ANNULEE || 0
+  const totalAll = planifieeCount + enCoursCount + termineeCount + annuleeCount
   const totalForProgress = planifieeCount + enCoursCount + termineeCount
   const completionPercent = totalForProgress > 0 ? Math.round((termineeCount / totalForProgress) * 100) : 0
+  // Transition percentages
+  const planifieeToEnCours = planifieeCount > 0 ? Math.round(((enCoursCount + termineeCount) / planifieeCount) * 100) : 0
+  const enCoursToTerminee = (enCoursCount + termineeCount) > 0 ? Math.round((termineeCount / (enCoursCount + termineeCount)) * 100) : 0
+  const annulationRate = totalAll > 0 ? Math.round((annuleeCount / totalAll) * 100) : 0
 
   // ===== RENDER =====
   if (isLoading) {
@@ -742,7 +748,7 @@ export default function AlertsView() {
       {/* ===== BOTTOM TWO-COLUMN: PROGRESS TRACKER & RECENT ACTIVITY ===== */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
-        {/* ===== INTERVENTION PROGRESS TRACKER ===== */}
+        {/* ===== INTERVENTION STATUS FLOW VISUALIZATION ===== */}
         <motion.div
           initial={{ opacity: 0, y: 15 }}
           animate={{ opacity: 1, y: 0 }}
@@ -752,11 +758,11 @@ export default function AlertsView() {
           <div className="p-5 border-b border-slate-100 bg-gradient-to-l from-emerald-50 to-white">
             <h3 className="text-base font-bold text-slate-800 flex items-center gap-2">
               <span className="text-lg">📊</span>
-              تتبع سير التدخلات
+              مسار حالات التدخلات
             </h3>
           </div>
           <div className="p-5">
-            {/* Progress Bar */}
+            {/* Completion bar */}
             <div className="mb-6">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-sm font-bold text-slate-700">نسبة الإنجاز</span>
@@ -788,83 +794,143 @@ export default function AlertsView() {
               </div>
             </div>
 
-            {/* Status Steps */}
-            <div className="space-y-4">
-              {/* PLANIFIEE */}
-              <div className="flex items-center gap-4">
-                <div className="w-10 h-10 rounded-xl bg-blue-50 border-2 border-blue-200 flex items-center justify-center text-lg shrink-0">
+            {/* Flow Diagram — horizontal nodes with SVG arrows */}
+            <div className="flex items-center justify-center gap-0 mb-6 overflow-x-auto py-2">
+              {/* PLANIFIEE node */}
+              <motion.div
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ delay: 0.2 }}
+                className="flex flex-col items-center min-w-[90px]"
+              >
+                <motion.div
+                  animate={{ boxShadow: ['0 0 0 0 rgba(59,130,246,0.3)', '0 0 0 8px rgba(59,130,246,0)', '0 0 0 0 rgba(59,130,246,0.3)'] }}
+                  transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+                  className="w-16 h-16 rounded-2xl bg-blue-50 border-2 border-blue-300 flex items-center justify-center text-2xl mb-2"
+                >
                   📋
-                </div>
-                <div className="flex-1">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-sm font-bold text-slate-700">مبرمجة</span>
-                    <span className="text-sm font-extrabold text-blue-600">{planifieeCount}</span>
-                  </div>
-                  <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
-                    <motion.div
-                      initial={{ width: 0 }}
-                      animate={{ width: `${totalForProgress > 0 ? (planifieeCount / totalForProgress) * 100 : 0}%` }}
-                      transition={{ duration: 0.6 }}
-                      className="h-full bg-blue-400 rounded-full"
-                    />
-                  </div>
-                </div>
-              </div>
+                </motion.div>
+                <span className="text-xs font-bold text-blue-700">مبرمجة</span>
+                <span className="text-lg font-extrabold text-blue-600">{planifieeCount}</span>
+              </motion.div>
 
-              {/* Arrow */}
-              <div className="flex justify-center">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-slate-300 rotate-90" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M5.293 7.707a1 1 0 010-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 01-1.414 1.414L11 5.414V17a1 1 0 11-2 0V5.414L6.707 7.707a1 1 0 01-1.414 0z" clipRule="evenodd" />
+              {/* Arrow 1: PLANIFIEE → EN_COURS */}
+              <div className="flex flex-col items-center mx-1 min-w-[50px]">
+                <svg width="50" height="24" viewBox="0 0 50 24" className="overflow-visible">
+                  <defs>
+                    <linearGradient id="flowGrad1" x1="0" y1="0" x2="1" y2="0">
+                      <stop offset="0%" stopColor="#3b82f6" />
+                      <stop offset="100%" stopColor="#059669" />
+                    </linearGradient>
+                  </defs>
+                  <line x1="2" y1="12" x2="38" y2="12" stroke="url(#flowGrad1)" strokeWidth="3" strokeLinecap="round" />
+                  <polygon points="38,6 50,12 38,18" fill="#059669" />
+                  {/* Flowing dot animation */}
+                  <circle r="3" fill="#059669">
+                    <animate attributeName="cx" from="2" to="38" dur="1.5s" repeatCount="indefinite" />
+                    <animate attributeName="cy" values="12" dur="1.5s" repeatCount="indefinite" />
+                    <animate attributeName="opacity" values="1;0.3;1" dur="1.5s" repeatCount="indefinite" />
+                  </circle>
                 </svg>
               </div>
 
-              {/* EN_COURS */}
-              <div className="flex items-center gap-4">
-                <div className="w-10 h-10 rounded-xl bg-amber-50 border-2 border-amber-200 flex items-center justify-center text-lg shrink-0">
+              {/* EN_COURS node */}
+              <motion.div
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ delay: 0.4 }}
+                className="flex flex-col items-center min-w-[90px]"
+              >
+                <motion.div
+                  animate={{ boxShadow: ['0 0 0 0 rgba(245,158,11,0.3)', '0 0 0 8px rgba(245,158,11,0)', '0 0 0 0 rgba(245,158,11,0.3)'] }}
+                  transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut', delay: 0.5 }}
+                  className="w-16 h-16 rounded-2xl bg-amber-50 border-2 border-amber-300 flex items-center justify-center text-2xl mb-2"
+                >
                   ⚡
-                </div>
-                <div className="flex-1">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-sm font-bold text-slate-700">جارية</span>
-                    <span className="text-sm font-extrabold text-amber-600">{enCoursCount}</span>
-                  </div>
-                  <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
-                    <motion.div
-                      initial={{ width: 0 }}
-                      animate={{ width: `${totalForProgress > 0 ? (enCoursCount / totalForProgress) * 100 : 0}%` }}
-                      transition={{ duration: 0.6, delay: 0.15 }}
-                      className="h-full bg-amber-400 rounded-full"
-                    />
-                  </div>
-                </div>
-              </div>
+                </motion.div>
+                <span className="text-xs font-bold text-amber-700">جارية</span>
+                <span className="text-lg font-extrabold text-amber-600">{enCoursCount}</span>
+              </motion.div>
 
-              {/* Arrow */}
-              <div className="flex justify-center">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-slate-300 rotate-90" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M5.293 7.707a1 1 0 010-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 01-1.414 1.414L11 5.414V17a1 1 0 11-2 0V5.414L6.707 7.707a1 1 0 01-1.414 0z" clipRule="evenodd" />
+              {/* Arrow 2: EN_COURS → TERMINEE */}
+              <div className="flex flex-col items-center mx-1 min-w-[50px]">
+                <svg width="50" height="24" viewBox="0 0 50 24" className="overflow-visible">
+                  <defs>
+                    <linearGradient id="flowGrad2" x1="0" y1="0" x2="1" y2="0">
+                      <stop offset="0%" stopColor="#f59e0b" />
+                      <stop offset="100%" stopColor="#059669" />
+                    </linearGradient>
+                  </defs>
+                  <line x1="2" y1="12" x2="38" y2="12" stroke="url(#flowGrad2)" strokeWidth="3" strokeLinecap="round" />
+                  <polygon points="38,6 50,12 38,18" fill="#059669" />
+                  <circle r="3" fill="#059669">
+                    <animate attributeName="cx" from="2" to="38" dur="1.5s" repeatCount="indefinite" begin="0.3s" />
+                    <animate attributeName="cy" values="12" dur="1.5s" repeatCount="indefinite" begin="0.3s" />
+                    <animate attributeName="opacity" values="1;0.3;1" dur="1.5s" repeatCount="indefinite" begin="0.3s" />
+                  </circle>
                 </svg>
               </div>
 
-              {/* TERMINEE */}
-              <div className="flex items-center gap-4">
-                <div className="w-10 h-10 rounded-xl bg-emerald-50 border-2 border-emerald-200 flex items-center justify-center text-lg shrink-0">
+              {/* TERMINEE node */}
+              <motion.div
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ delay: 0.6 }}
+                className="flex flex-col items-center min-w-[90px]"
+              >
+                <motion.div
+                  animate={{ boxShadow: ['0 0 0 0 rgba(5,150,105,0.3)', '0 0 0 8px rgba(5,150,105,0)', '0 0 0 0 rgba(5,150,105,0.3)'] }}
+                  transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut', delay: 1 }}
+                  className="w-16 h-16 rounded-2xl bg-emerald-50 border-2 border-emerald-300 flex items-center justify-center text-2xl mb-2"
+                >
                   ✅
+                </motion.div>
+                <span className="text-xs font-bold text-emerald-700">منجزة</span>
+                <span className="text-lg font-extrabold text-emerald-600">{termineeCount}</span>
+              </motion.div>
+
+              {/* Branch arrow to ANNULEE */}
+              <div className="flex flex-col items-center mx-1 min-w-[30px] self-start mt-2">
+                <svg width="30" height="50" viewBox="0 0 30 50" className="overflow-visible">
+                  <line x1="15" y1="2" x2="15" y2="34" stroke="#dc2626" strokeWidth="2" strokeDasharray="4 3" />
+                  <polygon points="9,34 15,46 21,34" fill="#dc2626" />
+                </svg>
+              </div>
+
+              {/* ANNULEE node */}
+              <motion.div
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ delay: 0.8 }}
+                className="flex flex-col items-center min-w-[80px] self-start mt-6"
+              >
+                <div className="w-14 h-14 rounded-2xl bg-red-50 border-2 border-red-200 flex items-center justify-center text-xl mb-2">
+                  ❌
                 </div>
-                <div className="flex-1">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-sm font-bold text-slate-700">منجزة</span>
-                    <span className="text-sm font-extrabold text-emerald-600">{termineeCount}</span>
-                  </div>
-                  <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
-                    <motion.div
-                      initial={{ width: 0 }}
-                      animate={{ width: `${totalForProgress > 0 ? (termineeCount / totalForProgress) * 100 : 0}%` }}
-                      transition={{ duration: 0.6, delay: 0.3 }}
-                      className="h-full bg-emerald-500 rounded-full"
-                    />
-                  </div>
-                </div>
+                <span className="text-xs font-bold text-red-500">ملغاة</span>
+                <span className="text-base font-extrabold text-red-500">{annuleeCount}</span>
+              </motion.div>
+            </div>
+
+            {/* Transition percentages */}
+            <div className="space-y-3">
+              <div className="flex items-center gap-3 bg-blue-50 rounded-xl px-4 py-2.5">
+                <div className="w-2 h-2 rounded-full bg-blue-400" />
+                <span className="text-xs font-medium text-slate-600">
+                  <span className="font-bold text-blue-700">{planifieeToEnCours}%</span> من المبرمجة انتقلت إلى جارية
+                </span>
+              </div>
+              <div className="flex items-center gap-3 bg-emerald-50 rounded-xl px-4 py-2.5">
+                <div className="w-2 h-2 rounded-full bg-emerald-400" />
+                <span className="text-xs font-medium text-slate-600">
+                  <span className="font-bold text-emerald-700">{enCoursToTerminee}%</span> من الجارية انتقلت إلى منجزة
+                </span>
+              </div>
+              <div className="flex items-center gap-3 bg-red-50 rounded-xl px-4 py-2.5">
+                <div className="w-2 h-2 rounded-full bg-red-400" />
+                <span className="text-xs font-medium text-slate-600">
+                  <span className="font-bold text-red-600">{annulationRate}%</span> تم إلغاؤها
+                </span>
               </div>
             </div>
           </div>

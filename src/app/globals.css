@@ -127,6 +127,15 @@
   font-family: inherit;
 }
 
+/* LTR layout support when dir="ltr" is set */
+[dir="ltr"] aside {
+  order: -1;
+}
+
+[dir="ltr"] .bg-gradient-to-l {
+  background-image: linear-gradient(to right, var(--tw-gradient-stops));
+}
+
 /* Custom scrollbar */
 ::-webkit-scrollbar {
   width: 5px;

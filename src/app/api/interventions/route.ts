@@ -102,6 +102,7 @@ export async function POST(request: NextRequest) {
       type, date, quartier, adresse, commune, latitude, longitude,
       statut, description, agentNom, produitUtilise, quantite,
       superficie, nombrePrestations, observations,
+      coutMainOeuvre, coutMateriaux, coutTotal,
       materials, // Array of { productId, quantity }
     } = body
 
@@ -183,6 +184,9 @@ export async function POST(request: NextRequest) {
         superficie: superficie || '',
         nombrePrestations: parseInt(nombrePrestations) || 1,
         observations: observations || '',
+        coutMainOeuvre: coutMainOeuvre ? parseFloat(coutMainOeuvre) : null,
+        coutMateriaux: coutMateriaux ? parseFloat(coutMateriaux) : null,
+        coutTotal: coutTotal ? parseFloat(coutTotal) : null,
         reference,
         materials: {
           create: materialsCreate,

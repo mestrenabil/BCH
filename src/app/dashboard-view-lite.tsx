@@ -8,12 +8,24 @@ import {
   PolarAngleAxis, PolarRadiusAxis,
 } from 'recharts'
 import { type ViewType, type CommuneType } from '@/lib/store'
+import { useAppStore } from '@/lib/store'
 import {
   type Statistics,
   TYPE_LABELS, STATUT_LABELS, TYPE_COLORS, STATUT_COLORS,
   COMMUNE_LABELS, COMMUNE_COLORS, TYPE_ICONS, MONTH_NAMES_AR,
   cardVariants,
 } from '@/lib/constants'
+
+// Weather data interface
+interface WeatherData {
+  temperature: number
+  humidity: number
+  windSpeed: number
+  description: string
+  descriptionAr: string
+  city: string
+  icon: string
+}
 
 // Helper: compute trend badge between current and previous values
 function getTrendBadge(current: number, previous: number | undefined): { text: string; color: string; bg: string } | null {
@@ -33,6 +45,29 @@ function getTrendBadge(current: number, previous: number | undefined): { text: s
 function DashboardView({ stats, onNavigate, selectedCommune, canSeeAllCommunes, onRetry, selectedYear }: { stats: Statistics | null; onNavigate: (v: ViewType) => void; selectedCommune: CommuneType | 'ALL'; canSeeAllCommunes: boolean; onRetry?: () => void; selectedYear?: string }) {
   // Previous year stats for trend comparison
   const [prevStats, setPrevStats] = useState<Pick<Statistics, 'total' | 'byType'> | null>(null)
+  // Weather state
+  const [weather, setWeather] = useState<WeatherData | null>(null)
+  const [weatherLoading, setWeatherLoading] = useState(true)
+  const { language } = useAppStore()
+
+  // Fetch weather data
+  useEffect(() => {
+    const fetchWeather = async () => {
+      setWeatherLoading(true)
+      try {
+        const res = await fetch('/api/weather')
+        if (res.ok) {
+          const data = await res.json()
+          setWeather(data)
+        }
+      } catch { /* ignore */ }
+      setWeatherLoading(false)
+    }
+    fetchWeather()
+    // Auto-refresh every 30 minutes
+    const interval = setInterval(fetchWeather, 30 * 60 * 1000)
+    return () => clearInterval(interval)
+  }, [])
 
   useEffect(() => {
     if (!selectedYear) return
@@ -219,6 +254,71 @@ function DashboardView({ stats, onNavigate, selectedCommune, canSeeAllCommunes, 
           )
         })}
       </div>
+
+      {/* Weather Widget */}
+      <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
+        className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+        <div className="bg-gradient-to-l from-sky-500 to-blue-600 text-white px-5 py-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="text-lg">🌤️</span>
+              <span className="font-bold text-sm">{language === 'ar' ? 'الطقس — سلا' : 'Météo — Salé'}</span>
+            </div>
+            <button
+              onClick={async () => {
+                setWeatherLoading(true)
+                try {
+                  const res = await fetch('/api/weather')
+                  if (res.ok) { const data = await res.json(); setWeather(data) }
+                } catch { /* ignore */ }
+                setWeatherLoading(false)
+              }}
+              className="p-1.5 hover:bg-white/20 rounded-lg transition-all"
+              title={language === 'ar' ? 'تحديث' : 'Actualiser'}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className={`h-4 w-4 ${weatherLoading ? 'animate-spin' : ''}`} viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clipRule="evenodd" />
+              </svg>
+            </button>
+          </div>
+        </div>
+        <div className="p-4">
+          {weatherLoading && !weather ? (
+            <div className="flex items-center justify-center py-4">
+              <div className="w-6 h-6 border-2 border-sky-500 border-t-transparent rounded-full animate-spin" />
+            </div>
+          ) : weather ? (
+            <div className="flex items-center gap-4">
+              <div className="text-4xl">{weather.icon}</div>
+              <div className="flex-1 grid grid-cols-2 gap-x-6 gap-y-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm">🌡️</span>
+                  <span className="text-sm text-slate-500">{language === 'ar' ? 'درجة الحرارة' : 'Température'}</span>
+                  <span className="text-sm font-bold text-slate-800">{weather.temperature}°C</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm">💧</span>
+                  <span className="text-sm text-slate-500">{language === 'ar' ? 'الرطوبة' : 'Humidité'}</span>
+                  <span className="text-sm font-bold text-slate-800">{weather.humidity}%</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm">💨</span>
+                  <span className="text-sm text-slate-500">{language === 'ar' ? 'الرياح' : 'Vent'}</span>
+                  <span className="text-sm font-bold text-slate-800">{weather.windSpeed} km/h</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm">📍</span>
+                  <span className="text-sm font-bold text-sky-600">{language === 'ar' ? weather.descriptionAr : weather.description}</span>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="text-center py-3 text-sm text-slate-400">
+              {language === 'ar' ? 'غير متاح' : 'Indisponible'}
+            </div>
+          )}
+        </div>
+      </motion.div>
 
       {/* Commune Breakdown - Only show for admin users viewing ALL communes */}
       {canSeeAllCommunes && selectedCommune === 'ALL' && stats.byCommune && (

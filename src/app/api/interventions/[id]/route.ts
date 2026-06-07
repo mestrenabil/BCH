@@ -132,6 +132,9 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       latitude: restBody.latitude ? parseFloat(restBody.latitude as string) : undefined,
       longitude: restBody.longitude ? parseFloat(restBody.longitude as string) : undefined,
       nombrePrestations: restBody.nombrePrestations ? parseInt(restBody.nombrePrestations as string) : undefined,
+      coutMainOeuvre: restBody.coutMainOeuvre !== undefined ? (restBody.coutMainOeuvre ? parseFloat(restBody.coutMainOeuvre as string) : null) : undefined,
+      coutMateriaux: restBody.coutMateriaux !== undefined ? (restBody.coutMateriaux ? parseFloat(restBody.coutMateriaux as string) : null) : undefined,
+      coutTotal: restBody.coutTotal !== undefined ? (restBody.coutTotal ? parseFloat(restBody.coutTotal as string) : null) : undefined,
     }
 
     // Build new materials

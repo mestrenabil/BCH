@@ -528,3 +528,297 @@ Work Log:
 
 - Lint passes cleanly
 - Dev server running successfully
+---
+
+---
+Task ID: 3
+Agent: main
+Task: Add 3 features — French/Arabic Language Toggle, Keyboard Shortcuts, Weather Widget
+
+Work Log:
+
+### Feature 1: French/Arabic Language Toggle
+1. **Created `/home/z/my-project/src/lib/i18n.ts`** — Translation dictionary with ar and fr support:
+   - 50+ translation keys covering: navigation labels, section titles, common buttons, status labels, type labels, form labels, filter labels, footer text, header text, keyboard shortcuts labels, weather labels
+   - Exported Language type (ar | fr), TranslationKey type, and t() helper function
+2. **Added language state to `/home/z/my-project/src/lib/store.ts`**:
+   - Added language: Language with default ar
+   - Added setLanguage: (lang: Language) => void
+   - Persisted in localStorage under app-language key
+   - Hydrated from localStorage on client mount (outside create call for clean SSR)
+3. **Updated `/home/z/my-project/src/app/page.tsx`** with language toggle and translations:
+   - Added language toggle button in header: globe icon Fr / Arabic letter
+   - When French is selected: root dir changes from rtl to ltr
+   - Header text, filter labels, commune/type dropdown options all translated
+   - Desktop sidebar: section headers, nav items, user card, quick summary, add button translated
+   - Mobile sidebar and bottom nav labels translated
+   - Footer text translated
+   - RTL/LTR direction-aware CSS classes applied throughout
+   - Sidebar border direction and position changes with language
+   - Mobile sidebar slides from appropriate direction based on language
+   - navItems refactored from hardcoded strings to TranslationKey references
+4. **Updated `/home/z/my-project/src/app/globals.css`** for LTR support:
+   - Added [dir=ltr] aside order: -1 to move sidebar to left in LTR mode
+   - Added [dir=ltr] .bg-gradient-to-l override for proper gradient direction
+
+### Feature 2: Keyboard Shortcuts
+1. **Added keyboard shortcut handler in page.tsx**:
+   - Alt+1 through Alt+9: Navigate to views
+   - Alt+N: Open new intervention form
+   - Alt+S: Focus search input
+   - Escape: Close dialogs/forms
+   - Shortcuts only work when not typing in input/textarea/select fields
+2. **Added help button and shortcuts dialog**:
+   - ? button in header next to language toggle
+   - AnimatePresence dialog listing all shortcuts
+   - Displayed in current language (Arabic or French)
+   - Closable with X button or Escape key
+
+### Feature 3: Weather Widget
+1. **Created /api/weather/route.ts** API route:
+   - Fetches from wttr.in/Sale,Morocco (free, no API key)
+   - Extracts temperature, humidity, wind speed, description
+   - Translates conditions to Arabic
+   - 30-minute server-side cache
+   - Falls back to stale cache on error
+2. **Added weather widget to dashboard-view-lite.tsx**:
+   - Compact card with sky-blue gradient header
+   - Displays temperature, humidity, wind speed, condition
+   - Condition in Arabic or French based on language
+   - Refresh button with spinning animation
+   - Auto-refresh every 30 minutes
+   - Loading spinner and unavailable fallback
+
+- Lint passes cleanly
+- Dev server running successfully
+- Weather API confirmed working
+
+---
+Task ID: 2
+Agent: main
+Task: Add 3 features — Dark Mode/Theme Toggle, Budget/Cost Tracking, Intervention Templates
+
+Work Log:
+
+### Feature 1: Dark Mode / Theme Toggle
+1. **Added theme state to store.ts**:
+   - Added `theme: 'light' | 'dark'` state with default 'light'
+   - Added `setTheme` action that persists to localStorage under 'app-theme' key
+   - setTheme adds/removes `dark` class on `<html>` element
+   - Initial theme read from localStorage at store creation time
+2. **Added theme toggle button in page.tsx header**:
+   - Moon/Sun icon (🌙/☀️) button next to language toggle
+   - Smooth rotation animation (180deg) on icon when toggling
+   - WhileHover/WhileTap spring animations
+   - Tooltip showing "الوضع النهاري" (light mode) or "الوضع الليلي" (dark mode)
+3. **Added useEffect to sync dark class on mount**:
+   - Checks current theme and adds/removes `dark` class on `<html>` element
+   - Runs whenever theme changes
+4. **Added dark mode classes to main layout shell**:
+   - Main container: `dark:from-slate-900 dark:via-slate-900 dark:to-slate-800`
+   - Desktop sidebar: `dark:bg-slate-800/90 dark:border-slate-700/80`
+   - Mobile sidebar: `dark:bg-slate-800`
+   - Mobile filters bar: `dark:bg-slate-800/90 dark:border-slate-700`
+   - Mobile bottom nav: `dark:bg-slate-800/95 dark:border-slate-700`
+5. **globals.css already configured**: `@custom-variant dark (&:is(.dark *))` and `.dark` CSS variables already present in shadcn/ui theme
+
+### Feature 2: Budget/Cost Tracking
+1. **Added Prisma schema fields** — 3 new optional Float fields to Intervention model:
+   - `coutMainOeuvre Float?` (تكلفة اليد العاملة - Labor cost)
+   - `coutMateriaux Float?` (تكلفة المواد - Material cost)
+   - `coutTotal Float?` (التكلفة الإجمالية - Total cost)
+   - Ran `bun run db:push` successfully
+2. **Updated constants.ts Intervention interface** — Added:
+   - `coutMainOeuvre?: number | null`
+   - `coutMateriaux?: number | null`
+   - `coutTotal?: number | null`
+3. **Updated intervention API routes**:
+   - `POST /api/interventions/route.ts`: Added `coutMainOeuvre`, `coutMateriaux`, `coutTotal` to destructured body and create data with `parseFloat()` conversion
+   - `PUT /api/interventions/[id]/route.ts`: Added handling for cost fields with null support, using `parseFloat()` conversion
+4. **Added cost fields to intervention form in page.tsx**:
+   - Added `coutMainOeuvre: ''`, `coutMateriaux: ''`, `coutTotal: ''` to formData
+   - Added cost field loading from existing intervention data
+   - Added grid-cols-3 section after superficie/produitUtilise with:
+     - "💰 تكلفة اليد العاملة" (Labor cost) — number input
+     - "🧪 تكلفة المواد" (Material cost) — number input
+     - "📊 التكلفة الإجمالية" (Total cost) — read-only auto-calculated field (labor + materials)
+   - Auto-calculation: changing labor or material cost automatically updates total
+   - Total displays as formatted MAD with "درهم" suffix
+5. **Added cost section to intervention detail panel** — In `interventions-view-lite.tsx`:
+   - Shows when any cost field exists on the intervention
+   - Emerald-50 background with emerald-100 border
+   - 3-column grid showing: اليد العاملة, المواد, الإجمالية
+   - Values formatted with `toLocaleString('ar-MA')` and "د.م" suffix
+   - Total displayed with `font-extrabold text-emerald-700`
+6. **Added budget section to KPI view** — In `kpi-view.tsx`:
+   - Added `budgetData` state with totalCost, byType, byCommune
+   - Modified stats useEffect to also fetch all interventions for budget calculation
+   - Computed total cost, cost by type (DERATISATION/DESINSECTISATION/DESINFECTION), cost by commune
+   - Added "💰 الميزانية" section between Top Quartiers and Footer Stats
+   - 4-card grid: Total cost (amber gradient), cost per type (3 cards with TYPE_COLORS)
+   - When all communes selected: additional 3-column grid showing cost per commune
+7. **Inventory view already shows total value** — The existing stats card "قيمة المخزون" already displays `totalStockValue.toLocaleString('ar-MA')` with "د.م" suffix
+8. **Added monthly cost trend to reports view** — In `reports-view-lite.tsx`:
+   - Added `monthlyCosts` state (Record<string, number>)
+   - Added useEffect to fetch interventions and compute monthly cost totals
+   - Added "💰 التكلفة" column header to monthly table
+   - Each month row shows formatted cost in amber badge or "—" if no cost data
+   - Updated ReportsView props to accept `selectedYear` from page.tsx
+
+### Feature 3: Intervention Templates
+1. **Added INTERVENTION_TEMPLATES constant** — In `constants.ts`:
+   - 5 pre-defined templates:
+     - `deratisation-standard`: مكافحة القوارض معيارية (Standard rodent control)
+     - `desinsectisation-mouches`: مكافحة الذباب (Fly control)
+     - `desinfection-covid`: تطهير معمم (General disinfection)
+     - `deratisation-urgence`: مكافحة قوارض طارئة (Emergency rodent control)
+     - `desinsectisation-moustiques`: مكافحة البعوض (Mosquito control)
+   - Each template has: id, name, type, description, produitUtilise, superficie, nombrePrestations, optional statut
+2. **Added template selector to intervention form** — In `page.tsx`:
+   - Added `selectedTemplate` state
+   - Added "📋 استعمال قالب" (Use Template) select dropdown at top of form
+   - Only shown for new interventions (not edit mode)
+   - Selecting a template pre-fills: type, produitUtilise, superficie, nombrePrestations, description, statut (if set)
+   - User can modify any field after applying template
+   - Dropdown shows TYPE_ICONS next to template names for visual clarity
+
+- Lint passes cleanly (exit code 0)
+- Dev server running successfully
+
+---
+Task ID: 4-retry
+Agent: main
+Task: Add 4 features — Notification Sounds, CSV Import, Per-Commune Status Breakdown, Status Flow Visualization
+
+Work Log:
+
+### Feature 1: Notification Sounds — ALREADY IMPLEMENTED
+- Verified that `notifSound: true` boolean state with `setNotifSound` action exists in `store.ts` (lines 91-92, 249-253)
+- Verified `playNotifSound` function using Web Audio API in `notifications-view.tsx` (lines 9-32)
+- Verified `prevUrgentCountRef` tracking with useRef (line 174)
+- Verified sound plays when new urgent count > previous (lines 370-376)
+- Verified 🔊/🔇 toggle in notification settings panel (lines 623-638)
+- No changes needed — feature was fully implemented in a prior task
+
+### Feature 2: Data Import (CSV) — Created missing API route
+1. **Created `/home/z/my-project/src/app/api/import/route.ts`** — The settings view already had the `CSVImportButton` component with client-side CSV parsing, preview, and import UI, but the backend API route was missing
+   - POST handler accepting JSON: `{ type: 'interventions' | 'agents' | 'products', data: Record<string, string>[] }`
+   - Requires authentication via `requireAuth()`
+   - Enforces commune filter for non-admin users
+   - For interventions:
+     - Validates required fields (type, date, reference)
+     - Checks for duplicate reference before creating
+     - Maps all CSV fields to Prisma create data with type conversions
+   - For agents:
+     - Validates required field (nom)
+     - Handles actif boolean from string values
+   - For products:
+     - Validates required fields (nom, reference)
+     - Checks for duplicate reference before creating
+     - Handles dateExpiration conversion
+   - Returns `{ success: number, failed: number, total: number, errors: string[] }`
+   - Errors include row number for easy debugging, capped at 50 messages
+
+### Feature 3: Fix Per-Commune Status Breakdown — ALREADY IMPLEMENTED
+- Verified the statistics API already includes `byCommuneStatus` nested object (lines 132-143 in `route.ts`)
+- The `byCommuneStatus` structure: `{ [commune]: { byStatut: { [statut]: count }, total: number } }`
+- Verified `kpi-view.tsx` already uses `stats.byCommuneStatus?.[communeKey]` for radar chart (line 279)
+- Per-commune completion rate uses `csd?.byStatut?.TERMINEE ?? 0` (line 288)
+- The `Statistics` type in `constants.ts` already includes `byCommuneStatus` (line 56)
+- No changes needed — feature was fully implemented in a prior task
+
+### Feature 4: Intervention Status Flow Visualization — ALREADY IMPLEMENTED
+- Verified the "مسار حالات التدخلات" section exists in `alerts-view.tsx` (lines 751-937)
+- Flow diagram with 4 nodes: مبرمجة → جارية → منجزة, with ملغاة branch
+- SVG arrows with gradient colors and flowing dot animations
+- Pulse animation on each node using Framer Motion boxShadow
+- Each node shows count of interventions in that status
+- Completion bar with animated segments
+- Transition percentages displayed:
+  - "X% من المبرمجة انتقلت إلى جارية" (line 920)
+  - "X% من الجارية انتقلت إلى منجزة" (line 926)
+  - "X% تم إلغاؤها" (line 932)
+- Color coding: emerald for main flow, red for cancellation
+- No changes needed — feature was fully implemented in a prior task
+
+- Lint passes cleanly
+- Dev server running successfully
+
+---
+Task ID: 1-retry
+Agent: main
+Task: Add Intervention Photo Attachments and Citizen Complaint Tracking
+
+Work Log:
+
+### Feature 1: Intervention Photo Attachments
+
+1. **Prisma schema** — InterventionPhoto model and photos relation already existed from previous task. Ran `bun run db:push` to confirm sync.
+
+2. **API route** (`src/app/api/intervention-photos/route.ts`) — Already existed from previous task with GET/POST/DELETE handlers.
+
+3. **Photo upload dialog in interventions-view-lite.tsx**:
+   - Added `photoFile` state (File | null) for the new dialog-based upload approach
+   - Refactored `handleUploadPhoto` from programmatic file input (document.createElement) to dialog-based:
+     - Uses photoFile state from the dialog form
+     - Converts file to base64 via FileReader
+     - POSTs to `/api/intervention-photos` with interventionId, url (base64 data URL), caption, type
+     - Resets form state on success
+   - Created Photo Upload Dialog with:
+     - Teal/emerald gradient header with 📸 icon
+     - File input with preview (drag area styled with border-dashed)
+     - Caption text input ("الوصف")
+     - Type select: "قبل المعالجة" (BEFORE) / "بعد المعالجة" (AFTER)
+     - Submit button with loading spinner during upload
+     - Cancel button that resets all form state
+   - Used AnimatePresence for enter/exit animations
+
+4. **Fullscreen photo viewer in interventions-view-lite.tsx**:
+   - Added `viewerPhoto` state (string | null) to track the URL of the photo being viewed
+   - Created fullscreen overlay (fixed position, z-[70]):
+     - Dark background (bg-black/90)
+     - Full-size image with object-contain
+     - Close button in top-left corner
+     - Click anywhere to close
+   - Used AnimatePresence for smooth enter/exit animations
+   - Photos section thumbnails already had `onClick={() => setViewerPhoto(photo.url)}` from previous task
+
+5. **Existing photo section** — The "📸 الصور" section with 2-column grid, type badges ("قبل"/"بعد"), caption display, and delete buttons was already implemented from a previous task.
+
+### Feature 2: Citizen Complaint Tracking
+
+1. **ViewType update** — Added 'complaints' to the ViewType union in `src/lib/store.ts`
+
+2. **Prisma schema** — Complaint model and complaints relation already existed from previous task. Ran `bun run db:push` to confirm sync.
+
+3. **API routes** — Both already existed from previous task:
+   - `src/app/api/complaints/route.ts`: GET (list with filters) and POST (create with auto reference PL-YYYY-NNN)
+   - `src/app/api/complaints/[id]/route.ts`: GET, PUT, DELETE
+
+4. **Created `/home/z/my-project/src/app/complaints-view.tsx`** — Full complaints management view:
+   - **Header**: "📢 تدبير الشكايات" with search bar and "إضافة شكاية" button
+   - **Statistics cards**: 5 cards showing total, في الانتظار (EN_ATTENTE/amber), قيد المعالجة (EN_COURS/blue), تمت معالجتها (TRAITEE/green), مرفوضة (REJETEE/red)
+   - **Filter tabs**: Status filter tabs with counts, like interventions view
+   - **Additional filters**: Commune dropdown, type dropdown
+   - **Complaint cards**: Reference, citizen name, type badge, priority badge, status badge, date, address, description snippet, phone, linked intervention
+   - **Detail panel**: Full info with actions (change status, link intervention, add observations)
+   - **Add complaint dialog**: Full form with all fields (nomCitoyen, telephone, adresse, quartier, commune, type, description, priorite, observations)
+   - **Priority colors**: URGENTE=red, HAUTE=amber, NORMALE=blue, BASSE=gray
+   - **Statut colors**: EN_ATTENTE=amber, EN_COURS=blue, TRAITEE=green, REJETEE=red
+   - **Search debounce**: 300ms debounce pattern matching existing views
+   - **Intervention linking**: Fetches available interventions and allows linking via dropdown
+   - **Delete confirmation**: Two-step delete with confirmation
+
+5. **Updated page.tsx**:
+   - Added `const ComplaintsView = dynamic(() => import('./complaints-view'), { ssr: false })`
+   - Added complaints nav item: `{ id: 'complaints', labelKey: 'complaints', icon: '📢', descKey: 'descComplaints', sectionKey: 'sectionMain' }`
+   - Added `{currentView === 'complaints' && <ComplaintsView />}` in content section
+   - Added 'complaints' to keyboard shortcuts views array
+
+6. **Updated i18n.ts**:
+   - Added `descComplaints: 'تدبير شكايات المواطنين'` (Arabic)
+   - Added `descComplaints: 'Gestion des réclamations'` (French)
+   - `complaints: 'الشكايات'` already existed
+
+- Lint passes cleanly
+- Dev server running successfully

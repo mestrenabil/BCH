@@ -26,11 +26,16 @@ model Intervention {
   observations       String   @default("")
   heureDebut         String?  // "08:00"
   heureFin           String?  // "10:00"
+  coutMainOeuvre     Float?   // تكلفة اليد العاملة
+  coutMateriaux      Float?   // تكلفة المواد
+  coutTotal          Float?   // التكلفة الإجمالية
   reference          String   @unique
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
   materials          InterventionMaterial[]
   documents          InterventionDocument[]
+  photos             InterventionPhoto[]
+  complaints         Complaint[]
 }
 
 model Quartier {
@@ -159,4 +164,35 @@ model InterventionDocument {
   document       Document     @relation(fields: [documentId], references: [id], onDelete: Cascade)
 
   @@unique([interventionId, documentId]) // لا يمكن ربط نفس المستند بنفس التدخل مرتين
+}
+
+model InterventionPhoto {
+  id             String   @id @default(cuid())
+  interventionId String
+  intervention   Intervention @relation(fields: [interventionId], references: [id], onDelete: Cascade)
+  url            String   // stored as base64 data URL or file path
+  caption        String?  // وصف الصورة
+  type           String   @default("AFTER") // "BEFORE" or "AFTER"
+  createdAt      DateTime @default(now())
+}
+
+model Complaint {
+  id             String   @id @default(cuid())
+  reference      String   @unique  // "PL-2026-001"
+  nomCitoyen     String   // اسم المواطن
+  telephone      String?  // رقم الهاتف
+  adresse        String   // العنوان
+  quartier       String?  // الحي
+  commune        String   // الجماعة
+  type           String   // "DERATISATION", "DESINSECTISATION", "DESINFECTION", "AUTRE"
+  description    String   // وصف الشكاية
+  priorite       String   @default("NORMALE") // "URGENTE", "HAUTE", "NORMALE", "BASSE"
+  statut         String   @default("EN_ATTENTE") // "EN_ATTENTE", "EN_COURS", "TRAITEE", "REJETEE"
+  interventionId String?  // linked intervention
+  intervention   Intervention? @relation(fields: [interventionId], references: [id])
+  dateReception  DateTime @default(now())
+  dateTraitement DateTime?
+  observations   String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 }

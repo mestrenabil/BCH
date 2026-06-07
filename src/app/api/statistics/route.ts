@@ -128,12 +128,27 @@ export async function GET(request: NextRequest) {
     if (communeFilter) quartierWhere.commune = communeFilter
     const quartiers = await db.quartier.findMany({ where: quartierWhere })
 
+    // Get per-commune status breakdown for radar chart completion rate
+    const communeStatusData = await db.intervention.groupBy({
+      by: ['commune', 'statut'],
+      where,
+      _count: { statut: true },
+    })
+    const byCommuneStatus: Record<string, { byStatut: Record<string, number>, total: number }> = {}
+    for (const item of communeStatusData) {
+      const commune = item.commune || 'غير محدد'
+      if (!byCommuneStatus[commune]) byCommuneStatus[commune] = { byStatut: {}, total: 0 }
+      byCommuneStatus[commune].byStatut[item.statut] = item._count.statut
+      byCommuneStatus[commune].total += item._count.statut
+    }
+
     return NextResponse.json({
       total,
       byType: typeStats,
       byStatut: statutStats,
       byQuartier: byQuartier.map(q => ({ quartier: q.quartier, count: q._count })),
       byCommune: communeStats,
+      byCommuneStatus,
       monthly: monthlyData,
       recent,
       quartiers,

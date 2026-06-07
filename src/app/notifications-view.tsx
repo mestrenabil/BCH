@@ -5,6 +5,32 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { useAppStore, type CommuneType } from '@/lib/store'
 import { toast } from 'sonner'
 
+// ===== NOTIFICATION SOUND =====
+const playNotifSound = () => {
+  try {
+    const ctx = new AudioContext()
+    const osc = ctx.createOscillator()
+    const gain = ctx.createGain()
+    osc.connect(gain)
+    gain.connect(ctx.destination)
+    osc.frequency.value = 800
+    gain.gain.value = 0.1
+    osc.start()
+    osc.stop(ctx.currentTime + 0.15)
+    // Second beep
+    setTimeout(() => {
+      const osc2 = ctx.createOscillator()
+      const gain2 = ctx.createGain()
+      osc2.connect(gain2)
+      gain2.connect(ctx.destination)
+      osc2.frequency.value = 1000
+      gain2.gain.value = 0.1
+      osc2.start()
+      osc2.stop(ctx.currentTime + 0.15)
+    }, 200)
+  } catch { /* ignore */ }
+}
+
 // ===== TYPE DEFINITIONS =====
 type NotificationCategory = 'urgent' | 'warning' | 'info' | 'success'
 
@@ -139,12 +165,13 @@ function daysBetween(date1: Date, date2: Date): number {
 
 // ===== MAIN COMPONENT =====
 export default function NotificationsView() {
-  const { user, selectedCommune } = useAppStore()
+  const { user, selectedCommune, notifSound, setNotifSound } = useAppStore()
   const canSeeAllCommunes = user?.role === 'admin' || user?.commune === 'ALL'
   const effectiveCommune = canSeeAllCommunes ? selectedCommune : (user?.commune as CommuneType || 'ALL')
 
   // State
   const [notifications, setNotifications] = useState<Notification[]>([])
+  const prevUrgentCountRef = useRef(0)
   const [isLoading, setIsLoading] = useState(true)
   const [activeFilter, setActiveFilter] = useState<'all' | NotificationCategory>('all')
   const [readIds, setReadIds] = useState<Set<string>>(() => getReadState())
@@ -338,6 +365,15 @@ export default function NotificationsView() {
     load()
     return () => { cancelled = true }
   }, [refreshKey, fetchNotifications])
+
+  // Play sound when new urgent notifications appear
+  useEffect(() => {
+    const urgentCount = notifications.filter(n => n.category === 'urgent').length
+    if (urgentCount > prevUrgentCountRef.current && prevUrgentCountRef.current > 0 && notifSound) {
+      playNotifSound()
+    }
+    prevUrgentCountRef.current = urgentCount
+  }, [notifications, notifSound])
 
   // Auto-refresh every 30 seconds — only increments the counter
   useEffect(() => {
@@ -581,6 +617,24 @@ export default function NotificationsView() {
                     />
                     <span className="text-sm font-bold text-emerald-700 min-w-[2rem] text-center">{notifSettings.reminderDays}</span>
                   </div>
+                </div>
+
+                {/* Sound toggle */}
+                <div className="flex items-center justify-between bg-slate-50 rounded-xl p-3 group hover:bg-slate-100 transition-colors">
+                  <div className="flex items-center gap-3">
+                    <span className="text-xl">{notifSound ? '🔊' : '🔇'}</span>
+                    <div>
+                      <p className="text-sm font-medium text-slate-700">صوت الإشعارات</p>
+                      <p className="text-[11px] text-slate-400">تشغيل صوت عند ظهور إشعارات عاجلة</p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setNotifSound(!notifSound)}
+                    className={`w-11 h-6 rounded-full relative transition-colors cursor-pointer ${notifSound ? 'bg-emerald-500' : 'bg-slate-300'}`}
+                  >
+                    <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-all ${notifSound ? 'right-0.5' : 'right-6'}`} />
+                  </button>
                 </div>
               </div>
             </div>

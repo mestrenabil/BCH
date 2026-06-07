@@ -37,6 +37,7 @@ export interface Intervention {
   nombrePrestations: number; observations: string; reference: string
   commune: string; createdAt: string; updatedAt: string
   heureDebut?: string | null; heureFin?: string | null
+  coutMainOeuvre?: number | null; coutMateriaux?: number | null; coutTotal?: number | null
   materials?: InterventionMaterial[]
   documents?: InterventionDocument[]
 }
@@ -52,6 +53,7 @@ export interface Statistics {
   total: number; byType: Record<string, number>; byStatut: Record<string, number>
   byQuartier: { quartier: string; count: number }[]
   byCommune: Record<string, CommuneBreakdown>
+  byCommuneStatus: Record<string, { byStatut: Record<string, number>; total: number }>
   monthly: Record<string, Record<string, number>>
   recent: Intervention[]
   quartiers: { id: string; nom: string; latitude: number; longitude: number }[]
@@ -91,6 +93,53 @@ export const MONTH_NAMES_AR = [
 ]
 
 export const CHART_COLORS = ['#10b981', '#f59e0b', '#ef4444', '#3b82f6', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16']
+
+// ===== INTERVENTION TEMPLATES =====
+export const INTERVENTION_TEMPLATES = [
+  {
+    id: 'deratisation-standard',
+    name: 'مكافحة القوارض معيارية',
+    type: 'DERATISATION' as const,
+    description: 'معالجة معيارية لمكافحة القوارض',
+    produitUtilise: 'سيفوفوس 2%',
+    superficie: '500',
+    nombrePrestations: '3',
+  },
+  {
+    id: 'desinsectisation-mouches',
+    name: 'مكافحة الذباب',
+    type: 'DESINSECTISATION' as const,
+    description: 'رش مضاد للذباب في الأماكن العامة',
+    produitUtilise: 'بيرميثرين 0.5%',
+    superficie: '1000',
+    nombrePrestations: '2',
+  },
+  {
+    id: 'desinfection-covid',
+    name: 'تطهير معمم',
+    type: 'DESINFECTION' as const,
+    description: 'تطهير شامل للأماكن المشتركة',
+    produitUtilise: 'هيبوكلوريت الصوديوم 2%',
+    superficie: '800',
+    nombrePrestations: '1',
+  },
+  {
+    id: 'deratisation-urgence',
+    name: 'مكافحة قوارض طارئة',
+    type: 'DERATISATION' as const,
+    description: 'تدخل عاجل لمكافحة تفشي القوارض',
+    produitUtilise: 'روديفين بلوك',
+    statut: 'EN_COURS' as const,
+  },
+  {
+    id: 'desinsectisation-moustiques',
+    name: 'مكافحة البعوض',
+    type: 'DESINSECTISATION' as const,
+    description: 'مكافحة يرقات البعوض في المياه الراكدة',
+    produitUtilise: 'أبقات 0.1%',
+    superficie: '2000',
+  },
+]
 
 // ===== ANIMATION VARIANTS =====
 export const pageVariants = {

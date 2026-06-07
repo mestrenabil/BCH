@@ -11,7 +11,7 @@ import { useAppStore, type CommuneType } from '@/lib/store'
 import {
   type Statistics,
   TYPE_LABELS, TYPE_COLORS, STATUT_LABELS, STATUT_COLORS,
-  COMMUNE_LABELS, COMMUNE_COLORS, MONTH_NAMES_AR,
+  COMMUNE_LABELS, COMMUNE_COLORS, MONTH_NAMES_AR, type Intervention,
 } from '@/lib/constants'
 
 // ===== ANIMATED NUMBER COUNTER =====
@@ -124,6 +124,7 @@ export default function KpiView() {
   const [stats, setStats] = useState<Statistics | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [hasError, setHasError] = useState(false)
+  const [budgetData, setBudgetData] = useState<{ totalCost: number; byType: Record<string, number>; byCommune: Record<string, number> } | null>(null)
 
   const canSeeAllCommunes = user?.role === 'admin' || user?.commune === 'ALL'
 
@@ -143,6 +144,27 @@ export default function KpiView() {
         }
         const data = await res.json()
         if (!cancelled) { setStats(data); setIsLoading(false) }
+        // Fetch budget data
+        try {
+          const iParams = new URLSearchParams({ limit: '9999' })
+          if (selectedYear) { iParams.set('from', `${selectedYear}-01-01`); iParams.set('to', `${selectedYear}-12-31`) }
+          if (selectedCommune !== 'ALL') iParams.set('commune', selectedCommune)
+          const iRes = await fetch(`/api/interventions?${iParams.toString()}`)
+          if (iRes.ok) {
+            const iData = await iRes.json()
+            const allInterventions: Intervention[] = iData.interventions || []
+            let totalCost = 0
+            const byType: Record<string, number> = {}
+            const byCommune: Record<string, number> = {}
+            for (const iv of allInterventions) {
+              const c = iv.coutTotal || 0
+              totalCost += c
+              byType[iv.type] = (byType[iv.type] || 0) + c
+              if (iv.commune) byCommune[iv.commune] = (byCommune[iv.commune] || 0) + c
+            }
+            if (!cancelled) setBudgetData({ totalCost, byType, byCommune })
+          }
+        } catch { /* ignore budget fetch error */ }
       } catch (err) {
         console.error('Failed to fetch stats:', err)
         if (!cancelled) { setHasError(true); setIsLoading(false) }
@@ -254,6 +276,7 @@ export default function KpiView() {
 
   const buildRadarDataForCommune = (communeKey: string) => {
     const cd = stats.byCommune?.[communeKey]
+    const csd = stats.byCommuneStatus?.[communeKey]
     if (!cd) return null
     const cTotal = cd.total || 1
     const cQuartiers = (stats.quartiers || []).filter(q => q.commune === communeKey)
@@ -261,11 +284,14 @@ export default function KpiView() {
       cQuartiers.some(cq => cq.nom === q.quartier) && q.count > 0
     ).length
     const cTotalQuartiers = cQuartiers.length || 1
+    // Use per-commune status breakdown for accurate completion rate
+    const cTerminee = csd?.byStatut?.TERMINEE ?? 0
+    const cTotalForRate = csd?.total ?? cTotal
     return {
       'مكافحة القوارض': Math.round((cd.DERATISATION / maxType) * 100),
       'مكافحة الحشرات': Math.round((cd.DESINSECTISATION / maxType) * 100),
       'التطهير': Math.round((cd.DESINFECTION / maxType) * 100),
-      'نسبة الإنجاز': Math.round(((cd.total > 0 ? (stats.byStatut.TERMINEE || 0) : 0) / Math.max(cTotal, 1)) * 100),
+      'نسبة الإنجاز': cTotalForRate > 0 ? Math.round((cTerminee / cTotalForRate) * 100) : 0,
       'تغطية الأحياء': Math.round((cQuartiersWithInterventions / cTotalQuartiers) * 100),
     }
   }
@@ -825,6 +851,49 @@ export default function KpiView() {
           <div className="text-center py-8 text-slate-400 text-sm">لا توجد بيانات كافية</div>
         )}
       </motion.div>
+
+      {/* ===== BUDGET/COST SECTION ===== */}
+      {budgetData && budgetData.totalCost > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.9 }}
+          className="bg-white rounded-2xl border border-slate-100 p-6 shadow-sm"
+        >
+          <h3 className="font-bold text-slate-800 mb-1">💰 الميزانية</h3>
+          <p className="text-xs text-slate-400 mb-4">تكاليف التدخلات</p>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+            <div className="bg-gradient-to-br from-amber-500 to-amber-600 text-white rounded-xl p-4 text-center">
+              <div className="text-2xl font-extrabold">{budgetData.totalCost.toLocaleString('ar-MA')}</div>
+              <div className="text-xs opacity-80 mt-1">التكلفة الإجمالية (د.م)</div>
+            </div>
+            <div className="rounded-xl p-4 text-center border" style={{ backgroundColor: TYPE_COLORS.DERATISATION + '10', borderColor: TYPE_COLORS.DERATISATION + '30' }}>
+              <div className="text-2xl font-extrabold" style={{ color: TYPE_COLORS.DERATISATION }}>{(budgetData.byType.DERATISATION || 0).toLocaleString('ar-MA')}</div>
+              <div className="text-[10px] font-semibold text-slate-500 mt-1">مكافحة القوارض (د.م)</div>
+            </div>
+            <div className="rounded-xl p-4 text-center border" style={{ backgroundColor: TYPE_COLORS.DESINSECTISATION + '10', borderColor: TYPE_COLORS.DESINSECTISATION + '30' }}>
+              <div className="text-2xl font-extrabold" style={{ color: TYPE_COLORS.DESINSECTISATION }}>{(budgetData.byType.DESINSECTISATION || 0).toLocaleString('ar-MA')}</div>
+              <div className="text-[10px] font-semibold text-slate-500 mt-1">مكافحة الحشرات (د.م)</div>
+            </div>
+            <div className="rounded-xl p-4 text-center border" style={{ backgroundColor: TYPE_COLORS.DESINFECTION + '10', borderColor: TYPE_COLORS.DESINFECTION + '30' }}>
+              <div className="text-2xl font-extrabold" style={{ color: TYPE_COLORS.DESINFECTION }}>{(budgetData.byType.DESINFECTION || 0).toLocaleString('ar-MA')}</div>
+              <div className="text-[10px] font-semibold text-slate-500 mt-1">التطهير (د.م)</div>
+            </div>
+          </div>
+          {/* Cost by Commune */}
+          {selectedCommune === 'ALL' && Object.keys(budgetData.byCommune).length > 0 && (
+            <div className="grid grid-cols-3 gap-3">
+              {Object.entries(budgetData.byCommune).map(([key, cost]) => (
+                <div key={key} className="rounded-xl p-3 text-center border"
+                  style={{ backgroundColor: (COMMUNE_COLORS[key] || '#64748b') + '10', borderColor: (COMMUNE_COLORS[key] || '#64748b') + '30' }}>
+                  <div className="text-lg font-extrabold" style={{ color: COMMUNE_COLORS[key] || '#64748b' }}>{cost.toLocaleString('ar-MA')}</div>
+                  <div className="text-[10px] font-semibold text-slate-500 mt-0.5">{COMMUNE_LABELS[key] || key} (د.م)</div>
+                </div>
+              ))}
+            </div>
+          )}
+        </motion.div>
+      )}
 
       {/* ===== FOOTER STATS STRIP ===== */}
       <motion.div

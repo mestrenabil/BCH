@@ -1,6 +1,6 @@
 'use client'
 
-import React from 'react'
+import React, { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
@@ -8,11 +8,38 @@ import {
 } from 'recharts'
 import { type CommuneType } from '@/lib/store'
 import {
-  type Statistics,
+  type Statistics, type Intervention,
   TYPE_LABELS, TYPE_COLORS, CHART_COLORS, COMMUNE_COLORS, COMMUNE_LABELS, MONTH_NAMES_AR,
 } from '@/lib/constants'
 
-function ReportsView({ stats, selectedCommune, canSeeAllCommunes }: { stats: Statistics | null; selectedCommune: CommuneType | 'ALL'; canSeeAllCommunes: boolean }) {
+function ReportsView({ stats, selectedCommune, canSeeAllCommunes, selectedYear }: { stats: Statistics | null; selectedCommune: CommuneType | 'ALL'; canSeeAllCommunes: boolean; selectedYear: string }) {
+  const [monthlyCosts, setMonthlyCosts] = useState<Record<string, number>>({})
+
+  // Fetch monthly costs
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const params = new URLSearchParams({ limit: '9999' })
+        if (selectedYear) { params.set('from', `${selectedYear}-01-01`); params.set('to', `${selectedYear}-12-31`) }
+        if (selectedCommune !== 'ALL') params.set('commune', selectedCommune)
+        const res = await fetch(`/api/interventions?${params.toString()}`)
+        if (res.ok) {
+          const data = await res.json()
+          const interventions: Intervention[] = data.interventions || []
+          const costs: Record<string, number> = {}
+          for (const iv of interventions) {
+            if (iv.coutTotal && iv.date) {
+              const monthKey = new Date(iv.date).toISOString().slice(0, 7)
+              costs[monthKey] = (costs[monthKey] || 0) + iv.coutTotal
+            }
+          }
+          setMonthlyCosts(costs)
+        }
+      } catch { /* ignore */ }
+    }
+    load()
+  }, [selectedYear, selectedCommune])
+
   if (!stats) return null
 
   // Empty state check
@@ -190,6 +217,7 @@ function ReportsView({ stats, selectedCommune, canSeeAllCommunes }: { stats: Sta
                 <th className="py-3 px-4 text-center font-semibold text-amber-600">🦟 الحشرات</th>
                 <th className="py-3 px-4 text-center font-semibold text-emerald-600">🧴 التطهير</th>
                 <th className="py-3 px-4 text-center font-semibold text-slate-800">المجموع</th>
+                <th className="py-3 px-4 text-center font-semibold text-amber-700">💰 التكلفة</th>
               </tr>
             </thead>
             <tbody>
@@ -203,6 +231,13 @@ function ReportsView({ stats, selectedCommune, canSeeAllCommunes }: { stats: Sta
                     <td className="py-2.5 px-4 text-center"><span className="inline-block px-2 py-0.5 rounded-md text-xs font-bold bg-amber-50 text-amber-600">{di}</span></td>
                     <td className="py-2.5 px-4 text-center"><span className="inline-block px-2 py-0.5 rounded-md text-xs font-bold bg-emerald-50 text-emerald-600">{df}</span></td>
                     <td className="py-2.5 px-4 text-center font-bold text-slate-800">{total}</td>
+                    <td className="py-2.5 px-4 text-center">
+                      {monthlyCosts[month] ? (
+                        <span className="inline-block px-2 py-0.5 rounded-md text-xs font-bold bg-amber-50 text-amber-700">{monthlyCosts[month].toLocaleString('ar-MA')} د.م</span>
+                      ) : (
+                        <span className="text-slate-300">—</span>
+                      )}
+                    </td>
                   </tr>
                 )
               })}

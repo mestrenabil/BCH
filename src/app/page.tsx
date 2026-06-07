@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import dynamic from 'next/dynamic'
 import { useAppStore, type ViewType, type InterventionType, type CommuneType, type MapClickCoords, type AuthUser, getYearOptions } from '@/lib/store'
+import { t, type Language, type TranslationKey } from '@/lib/i18n'
 import { toast } from 'sonner'
 import {
   type InterventionMaterial, type InterventionDocument, type Intervention,
@@ -11,6 +12,7 @@ import {
   TYPE_LABELS, STATUT_LABELS, TYPE_COLORS, STATUT_COLORS,
   COMMUNE_LABELS, COMMUNE_COLORS, TYPE_ICONS, MONTH_NAMES_AR,
   CHART_COLORS, COMMUNE_USER_INFO, pageVariants, cardVariants,
+  INTERVENTION_TEMPLATES,
 } from '@/lib/constants'
 
 // Dynamic imports for extracted views (code-split to reduce initial bundle)
@@ -28,6 +30,7 @@ const AlertsView = dynamic(() => import('./alerts-view'), { ssr: false })
 const CalendarView = dynamic(() => import('./calendar-view'), { ssr: false })
 const KpiView = dynamic(() => import('./kpi-view'), { ssr: false })
 const AgentsView = dynamic(() => import('./agents-view'), { ssr: false })
+const ComplaintsView = dynamic(() => import('./complaints-view'), { ssr: false })
 
 // ===== LOGIN PAGE =====
 function LoginPage({ onLogin }: { onLogin: (user: AuthUser) => void }) {
@@ -309,6 +312,8 @@ export default function HomePage() {
     mapClickCoords, setMapClickCoords,
     user, setUser, isAuthenticated, isAuthLoading, setAuthLoading,
     loadSettings, settingsCommune,
+    language, setLanguage,
+    theme, setTheme,
   } = useAppStore()
 
   const [stats, setStats] = useState<Statistics | null>(null)
@@ -321,6 +326,11 @@ export default function HomePage() {
   const [isSeeding, setIsSeeding] = useState(false)
   const [presetDate, setPresetDate] = useState<string | null>(null)
   const [unreadNotifCount, setUnreadNotifCount] = useState(0)
+  const [showShortcuts, setShowShortcuts] = useState(false)
+
+  // Direction based on language
+  const isRtl = language === 'ar'
+  const dir = isRtl ? 'rtl' : 'ltr'
 
   // Auth: check session on mount
   useEffect(() => {
@@ -347,6 +357,15 @@ export default function HomePage() {
     }
     checkAuth()
   }, [])
+
+  // Initialize dark mode class on mount
+  useEffect(() => {
+    if (theme === 'dark') {
+      document.documentElement.classList.add('dark')
+    } else {
+      document.documentElement.classList.remove('dark')
+    }
+  }, [theme])
 
   // Auth: handle login
   const handleLogin = useCallback(async (loggedInUser: AuthUser) => {
@@ -460,34 +479,61 @@ export default function HomePage() {
     return () => clearInterval(interval)
   }, [isAuthenticated])
 
-  const navItems: { id: ViewType; label: string; icon: string; desc: string; section?: string }[] = [
-    // 📋 الأقسام الأساسية
-    { id: 'dashboard', label: 'لوحة القيادة', icon: '📊', desc: 'نظرة شاملة', section: '📋 الأقسام الأساسية' },
-    { id: 'map', label: 'الخريطة', icon: '🗺️', desc: 'SIG تفاعلي', section: '📋 الأقسام الأساسية' },
-    { id: 'interventions', label: 'التدخلات', icon: '📋', desc: 'إدارة العمليات', section: '📋 الأقسام الأساسية' },
-    { id: 'agents', label: 'الأعوان', icon: '👷', desc: 'إدارة الأعوان', section: '📋 الأقسام الأساسية' },
-    { id: 'inventory', label: 'المخزون', icon: '📦', desc: 'تدبير المواد', section: '📋 الأقسام الأساسية' },
-    { id: 'documents', label: 'المستندات', icon: '📁', desc: 'تنظيم وعرض الملفات', section: '📋 الأقسام الأساسية' },
-    { id: 'calendar', label: 'التقويم', icon: '📅', desc: 'عرض شهري للتدخلات', section: '📋 الأقسام الأساسية' },
-    // 📊 التتبع والتحليل
-    { id: 'reports', label: 'التقارير', icon: '📈', desc: 'إحصائيات مفصلة', section: '📊 التتبع والتحليل' },
-    { id: 'kpi', label: 'مؤشرات الأداء', icon: '🎯', desc: 'KPI لوحة المتابعة', section: '📊 التتبع والتحليل' },
-    { id: 'alerts', label: 'التنبيهات والتتبع', icon: '⚡', desc: 'تنبيهات المخزون والتدخلات', section: '📊 التتبع والتحليل' },
-    // 📱 التقارير والاتصال
-    { id: 'export', label: 'التصدير', icon: '📤', desc: 'تصدير التقارير والبيانات', section: '📱 التقارير والاتصال' },
-    { id: 'notifications', label: 'الإشعارات', icon: '🔔', desc: 'مركز التنبيهات', section: '📱 التقارير والاتصال' },
-    // 👥 الإدارة
-    { id: 'users', label: 'المستخدمون', icon: '👥', desc: 'إدارة الحسابات', section: '👥 الإدارة' },
-    { id: 'settings', label: 'الإعدادات', icon: '⚙️', desc: 'تهيئة التطبيق', section: '👥 الإدارة' },
+  const navItems: { id: ViewType; labelKey: TranslationKey; icon: string; descKey: TranslationKey; sectionKey: TranslationKey }[] = [
+    { id: 'dashboard', labelKey: 'dashboard', icon: '📊', descKey: 'descDashboard', sectionKey: 'sectionMain' },
+    { id: 'map', labelKey: 'map', icon: '🗺️', descKey: 'descMap', sectionKey: 'sectionMain' },
+    { id: 'interventions', labelKey: 'interventions', icon: '📋', descKey: 'descInterventions', sectionKey: 'sectionMain' },
+    { id: 'agents', labelKey: 'agents', icon: '👷', descKey: 'descAgents', sectionKey: 'sectionMain' },
+    { id: 'inventory', labelKey: 'inventory', icon: '📦', descKey: 'descInventory', sectionKey: 'sectionMain' },
+    { id: 'documents', labelKey: 'documents', icon: '📁', descKey: 'descDocuments', sectionKey: 'sectionMain' },
+    { id: 'calendar', labelKey: 'calendar', icon: '📅', descKey: 'descCalendar', sectionKey: 'sectionMain' },
+    { id: 'complaints', labelKey: 'complaints', icon: '📢', descKey: 'descComplaints', sectionKey: 'sectionMain' },
+    { id: 'reports', labelKey: 'reports', icon: '📈', descKey: 'descReports', sectionKey: 'sectionTracking' },
+    { id: 'kpi', labelKey: 'kpi', icon: '🎯', descKey: 'descKpi', sectionKey: 'sectionTracking' },
+    { id: 'alerts', labelKey: 'alerts', icon: '⚡', descKey: 'descAlerts', sectionKey: 'sectionTracking' },
+    { id: 'export', labelKey: 'export', icon: '📤', descKey: 'descExport', sectionKey: 'sectionReports' },
+    { id: 'notifications', labelKey: 'notifications', icon: '🔔', descKey: 'descNotifications', sectionKey: 'sectionReports' },
+    { id: 'users', labelKey: 'users', icon: '👥', descKey: 'descUsers', sectionKey: 'sectionAdmin' },
+    { id: 'settings', labelKey: 'settings', icon: '⚙️', descKey: 'descSettings', sectionKey: 'sectionAdmin' },
   ]
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement)?.tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
+
+      if (e.altKey && e.key >= '1' && e.key <= '9') {
+        e.preventDefault()
+        const views: ViewType[] = ['dashboard', 'map', 'interventions', 'agents', 'inventory', 'documents', 'calendar', 'complaints', 'reports', 'kpi']
+        const idx = parseInt(e.key) - 1
+        if (idx < views.length) setCurrentView(views[idx])
+      }
+      if (e.altKey && (e.key === 'n' || e.key === 'N')) {
+        e.preventDefault()
+        setIsFormOpen(true)
+      }
+      if (e.altKey && (e.key === 's' || e.key === 'S')) {
+        e.preventDefault()
+        const searchInput = document.querySelector<HTMLInputElement>('input[placeholder*="بحث"], input[placeholder*="recherch"], input[data-search]')
+        searchInput?.focus()
+      }
+      if (e.key === 'Escape') {
+        if (isFormOpen) { setIsFormOpen(false); setEditingInterventionId(null); setMapClickCoords(null); setPresetDate(null) }
+        if (showShortcuts) setShowShortcuts(false)
+      }
+    }
+    document.addEventListener('keydown', handler)
+    return () => document.removeEventListener('keydown', handler)
+  }, [isFormOpen, showShortcuts, setCurrentView, setIsFormOpen, setEditingInterventionId, setMapClickCoords])
 
   // Show loading while checking auth
   if (isAuthLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-emerald-900 via-teal-800 to-emerald-950" dir="rtl">
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-emerald-900 via-teal-800 to-emerald-950" dir={dir}>
         <div className="text-center space-y-4">
           <div className="w-14 h-14 border-4 border-emerald-400 border-t-transparent rounded-full animate-spin mx-auto" />
-          <p className="text-emerald-200/70 font-medium">جاري التحقق...</p>
+          <p className="text-emerald-200/70 font-medium">{t('loading', language)}</p>
         </div>
       </div>
     )
@@ -499,7 +545,7 @@ export default function HomePage() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-gradient-to-br from-slate-50 via-white to-emerald-50/30" dir="rtl">
+    <div className="min-h-screen flex flex-col bg-gradient-to-br from-slate-50 via-white to-emerald-50/30 dark:from-slate-900 dark:via-slate-900 dark:to-slate-800" dir={dir}>
       {/* Header */}
       <header className="bg-gradient-to-l from-emerald-800 via-teal-700 to-emerald-900 text-white shadow-xl sticky top-0 z-50 backdrop-blur-sm">
         <div className="max-w-[1800px] mx-auto px-4 lg:px-6 py-3">
@@ -517,44 +563,72 @@ export default function HomePage() {
                   🏛️
                 </motion.div>
                 <div>
-                  <h1 className="text-lg font-extrabold leading-tight tracking-tight">عمالة سلا</h1>
-                  <p className="text-[12px] text-emerald-100/90 font-semibold">قسم حفظ الصحة والبيئة ⚡ مكتب مكافحة الجرذان • مكافحة الحشرات • التطهير</p>
+                  <h1 className="text-lg font-extrabold leading-tight tracking-tight">{t('headerTitle', language)}</h1>
+                  <p className="text-[12px] text-emerald-100/90 font-semibold">{t('headerSubtitle', language)}</p>
                 </div>
               </div>
             </div>
             <div className="flex items-center gap-2">
+              {/* Theme Toggle */}
+              <motion.button
+                onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+                whileHover={{ scale: 1.1 }}
+                whileTap={{ scale: 0.9 }}
+                className="hidden sm:flex items-center justify-center w-9 h-9 rounded-xl bg-white/10 backdrop-blur-sm border border-white/10 hover:bg-white/20 transition-all"
+                title={theme === 'dark' ? 'الوضع النهاري' : 'الوضع الليلي'}
+              >
+                <span className="text-lg transition-transform duration-300" style={{ transform: theme === 'dark' ? 'rotate(180deg)' : 'rotate(0deg)' }}>
+                  {theme === 'dark' ? '☀️' : '🌙'}
+                </span>
+              </motion.button>
+              {/* Language toggle */}
+              <button
+                onClick={() => setLanguage(language === 'ar' ? 'fr' : 'ar')}
+                className="hidden sm:flex items-center gap-1.5 bg-white/10 backdrop-blur-sm rounded-xl px-3 py-2 border border-white/10 hover:bg-white/20 transition-all text-xs font-bold"
+                title={language === 'ar' ? 'Passer en français' : 'التبديل إلى العربية'}
+              >
+                🌐 {language === 'ar' ? 'Fr' : 'ع'}
+              </button>
+              {/* Help button */}
+              <button
+                onClick={() => setShowShortcuts(true)}
+                className="hidden sm:flex items-center gap-1.5 bg-white/10 backdrop-blur-sm rounded-xl px-3 py-2 border border-white/10 hover:bg-white/20 transition-all text-xs font-bold"
+                title="?"
+              >
+                ?
+              </button>
               <div className="hidden sm:flex items-center gap-2 bg-white/10 backdrop-blur-sm rounded-xl px-3 py-2 border border-white/10">
-                <span className="text-xs text-emerald-100/70">📅 السنة:</span>
+                <span className="text-xs text-emerald-100/70">📅 {t('year', language)}:</span>
                 <select value={selectedYear} onChange={(e) => setSelectedYear(e.target.value)}
                   className="bg-transparent text-sm font-bold outline-none cursor-pointer">
-                  <option value="" className="text-black">الكل</option>
+                  <option value="" className="text-black">{t('all', language)}</option>
                   {getYearOptions(10).map((y) => (
                     <option key={y.value} value={y.value} className="text-black">{y.label}</option>
                   ))}
                 </select>
               </div>
               <div className="hidden sm:flex items-center gap-2 bg-white/10 backdrop-blur-sm rounded-xl px-3 py-2 border border-white/10">
-                <span className="text-xs text-emerald-100/70">🏛️ الجماعة:</span>
+                <span className="text-xs text-emerald-100/70">🏛️ {t('commune', language)}:</span>
                 {canSeeAllCommunes ? (
                   <select value={selectedCommune} onChange={(e) => setSelectedCommune(e.target.value as CommuneType | 'ALL')}
                     className="bg-transparent text-sm font-bold outline-none cursor-pointer">
-                    <option value="ALL" className="text-black">كل الجماعات</option>
-                    <option value="سلا" className="text-black">جماعة سلا</option>
-                    <option value="سيدي أبي القنادل" className="text-black">جماعة سيدي أبي القنادل</option>
-                    <option value="عامر" className="text-black">جماعة عامر</option>
+                    <option value="ALL" className="text-black">{t('allCommunes', language)}</option>
+                    <option value="سلا" className="text-black">{t('communeSale', language)}</option>
+                    <option value="سيدي أبي القنادل" className="text-black">{t('communeSidi', language)}</option>
+                    <option value="عامر" className="text-black">{t('communeAmer', language)}</option>
                   </select>
                 ) : (
                   <span className="text-sm font-bold">{COMMUNE_LABELS[selectedCommune] || selectedCommune}</span>
                 )}
               </div>
               <div className="hidden sm:flex items-center gap-2 bg-white/10 backdrop-blur-sm rounded-xl px-3 py-2 border border-white/10">
-                <span className="text-xs text-emerald-100/70">🏷️ النوع:</span>
+                <span className="text-xs text-emerald-100/70">🏷️ {t('type', language)}:</span>
                 <select value={selectedType} onChange={(e) => setSelectedType(e.target.value as InterventionType | 'ALL')}
                   className="bg-transparent text-sm font-bold outline-none cursor-pointer">
-                  <option value="ALL" className="text-black">الكل</option>
-                  <option value="DERATISATION" className="text-black">مكافحة القوارض</option>
-                  <option value="DESINSECTISATION" className="text-black">مكافحة الحشرات</option>
-                  <option value="DESINFECTION" className="text-black">التطهير والتعقيم</option>
+                  <option value="ALL" className="text-black">{t('all', language)}</option>
+                  <option value="DERATISATION" className="text-black">{t('DERATISATION', language)}</option>
+                  <option value="DESINSECTISATION" className="text-black">{t('DESINSECTISATION', language)}</option>
+                  <option value="DESINFECTION" className="text-black">{t('DESINFECTION', language)}</option>
                 </select>
               </div>
               {/* User Info & Logout */}
@@ -563,14 +637,14 @@ export default function HomePage() {
                   style={{ backgroundColor: (user?.commune && user.commune !== 'ALL' ? COMMUNE_COLORS[user.commune] : '#64748b') + '30' }}>
                   {user?.role === 'admin' ? '🔐' : '👤'}
                 </div>
-                <div className="text-right leading-tight">
+                <div className={`${isRtl ? 'text-right' : 'text-left'} leading-tight`}>
                   <div className="text-[11px] font-bold text-white">{user?.nom}</div>
                   <div className="text-[9px] text-emerald-200/60">
-                    {user?.commune === 'ALL' ? 'مسؤول عام' : COMMUNE_LABELS[user?.commune || ''] || user?.commune}
+                    {user?.commune === 'ALL' ? t('adminGeneral', language) : COMMUNE_LABELS[user?.commune || ''] || user?.commune}
                   </div>
                 </div>
                 <button onClick={handleLogout}
-                  className="p-1.5 hover:bg-white/20 rounded-lg transition-all" title="تسجيل الخروج">
+                  className="p-1.5 hover:bg-white/20 rounded-lg transition-all" title={t('logout', language)}>
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-emerald-200/70 hover:text-white" viewBox="0 0 20 20" fill="currentColor">
                     <path fillRule="evenodd" d="M3 3a1 1 0 00-1 1v12a1 1 0 102 0V4a1 1 0 00-1-1zm10.293 9.293a1 1 0 001.414 1.414l3-3a1 1 0 000-1.414l-3-3a1 1 0 10-1.414 1.414L14.586 9H7a1 1 0 100 2h7.586l-1.293 1.293z" clipRule="evenodd" />
                   </svg>
@@ -582,13 +656,13 @@ export default function HomePage() {
       </header>
 
       {/* Mobile Filters Bar */}
-      <div className="sm:hidden bg-white/90 backdrop-blur-sm border-b border-slate-100 px-3 py-2">
+      <div className="sm:hidden bg-white/90 dark:bg-slate-800/90 backdrop-blur-sm border-b border-slate-100 dark:border-slate-700 px-3 py-2">
         <div className="flex items-center gap-2 overflow-x-auto">
           <span className="text-[10px] text-slate-400 font-bold whitespace-nowrap">🏛️</span>
           {canSeeAllCommunes && (
             <button onClick={() => setSelectedCommune('ALL')}
               className={`px-2.5 py-1 rounded-lg text-[11px] font-bold whitespace-nowrap transition-all ${selectedCommune === 'ALL' ? 'bg-slate-800 text-white shadow-md' : 'bg-slate-100 text-slate-600'}`}>
-              الكل
+              {t('all', language)}
             </button>
           )}
           {Object.entries(COMMUNE_LABELS).map(([key, label]) => (
@@ -601,9 +675,9 @@ export default function HomePage() {
             </button>
           ))}
           {/* Mobile user & logout */}
-          <div className="flex items-center gap-1 mr-2 pr-2 border-r border-slate-200">
+          <div className={`flex items-center gap-1 ${isRtl ? 'mr-2 pr-2 border-r border-slate-200' : 'ml-2 pl-2 border-l border-slate-200'}`}>
             <span className="text-[10px] text-slate-500 font-bold">{user?.nom}</span>
-            <button onClick={handleLogout} className="p-1 hover:bg-slate-100 rounded" title="خروج">
+            <button onClick={handleLogout} className="p-1 hover:bg-slate-100 rounded" title={t('logout', language)}>
               <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 text-slate-400" viewBox="0 0 20 20" fill="currentColor">
                 <path fillRule="evenodd" d="M3 3a1 1 0 00-1 1v12a1 1 0 102 0V4a1 1 0 00-1-1zm10.293 9.293a1 1 0 001.414 1.414l3-3a1 1 0 000-1.414l-3-3a1 1 0 10-1.414 1.414L14.586 9H7a1 1 0 100 2h7.586l-1.293 1.293z" clipRule="evenodd" />
               </svg>
@@ -614,11 +688,11 @@ export default function HomePage() {
 
       <div className="flex-1 flex">
         {/* Sidebar Desktop */}
-        <aside className="hidden lg:flex w-72 bg-white/80 backdrop-blur-sm border-l border-slate-200/80 flex-col shadow-sm">
+        <aside className={`hidden lg:flex w-72 bg-white/80 dark:bg-slate-800/90 backdrop-blur-sm ${isRtl ? 'border-l' : 'border-r'} border-slate-200/80 dark:border-slate-700/80 flex-col shadow-sm ${isRtl ? '' : 'order-first'}`}>
           <div className="p-5">
             <div className="flex items-center gap-2 mb-4">
               <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              <span className="text-xs font-semibold text-emerald-600 uppercase tracking-wider">نشط</span>
+              <span className="text-xs font-semibold text-emerald-600 uppercase tracking-wider">{t('active', language)}</span>
             </div>
             {/* User card */}
             <div className="bg-gradient-to-l from-slate-50 to-slate-100 rounded-xl p-3 border border-slate-200/80">
@@ -630,10 +704,10 @@ export default function HomePage() {
                 <div className="flex-1 min-w-0">
                   <div className="text-xs font-bold text-slate-700 truncate">{user?.nom}</div>
                   <div className="text-[10px] text-slate-400 truncate">
-                    {user?.commune === 'ALL' ? 'مسؤول عام — صلاحية كاملة' : COMMUNE_LABELS[user?.commune || ''] || user?.commune}
+                    {user?.commune === 'ALL' ? `${t('adminGeneral', language)} — ${t('fullAccess', language)}` : COMMUNE_LABELS[user?.commune || ''] || user?.commune}
                   </div>
                 </div>
-                <button onClick={handleLogout} className="p-1.5 hover:bg-white rounded-lg transition-all" title="تسجيل الخروج">
+                <button onClick={handleLogout} className="p-1.5 hover:bg-white rounded-lg transition-all" title={t('logout', language)}>
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-slate-400 hover:text-red-500" viewBox="0 0 20 20" fill="currentColor">
                     <path fillRule="evenodd" d="M3 3a1 1 0 00-1 1v12a1 1 0 102 0V4a1 1 0 00-1-1zm10.293 9.293a1 1 0 001.414 1.414l3-3a1 1 0 000-1.414l-3-3a1 1 0 10-1.414 1.414L14.586 9H7a1 1 0 100 2h7.586l-1.293 1.293z" clipRule="evenodd" />
                   </svg>
@@ -643,17 +717,17 @@ export default function HomePage() {
           </div>
           <nav className="flex-1 px-3 overflow-y-auto" style={{ scrollbarWidth: 'none' }}>
             {navItems.map((item, idx) => {
-              const showSection = item.section && (idx === 0 || navItems[idx - 1].section !== item.section)
+              const showSection = item.sectionKey && (idx === 0 || navItems[idx - 1].sectionKey !== item.sectionKey)
               return (
                 <React.Fragment key={item.id}>
                   {showSection && (
                     <div className="px-4 pt-4 pb-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                      {item.section}
+                      {t(item.sectionKey, language)}
                     </div>
                   )}
                   <motion.button
                     onClick={() => setCurrentView(item.id)}
-                    whileHover={{ x: -4 }}
+                    whileHover={{ x: isRtl ? -4 : 4 }}
                     whileTap={{ scale: 0.98 }}
                     className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 ${
                       currentView === item.id
@@ -662,14 +736,14 @@ export default function HomePage() {
                     }`}
                   >
                     <span className="text-lg">{item.icon}</span>
-                    <div className="text-right flex-1">
+                    <div className={`${isRtl ? 'text-right' : 'text-left'} flex-1`}>
                       <div className="text-[13px] flex items-center gap-2">
-                        {item.label}
+                        {t(item.labelKey, language)}
                         {item.id === 'notifications' && unreadNotifCount > 0 && (
                           <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] rounded-full bg-red-500 text-white text-[10px] font-bold px-1">{unreadNotifCount > 99 ? '99+' : unreadNotifCount}</span>
                         )}
                       </div>
-                      <div className={`text-[10px] ${currentView === item.id ? 'text-emerald-100' : 'text-slate-400'}`}>{item.desc}</div>
+                      <div className={`text-[10px] ${currentView === item.id ? 'text-emerald-100' : 'text-slate-400'}`}>{t(item.descKey, language)}</div>
                     </div>
                   </motion.button>
                 </React.Fragment>
@@ -683,28 +757,28 @@ export default function HomePage() {
               className="w-full bg-gradient-to-l from-emerald-600 to-teal-600 text-white px-4 py-3 rounded-xl font-medium shadow-lg shadow-emerald-200 flex items-center justify-center gap-2"
             >
               <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" /></svg>
-              <span>إضافة تدخل جديد</span>
+              <span>{t('addInterventionNew', language)}</span>
             </motion.button>
           </div>
           {stats && (
             <div className="p-4 border-t border-slate-100 space-y-3">
-              <h3 className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">ملخص سريع</h3>
+              <h3 className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">{t('quickSummary', language)}</h3>
               <div className="grid grid-cols-2 gap-2">
                 <div className="bg-slate-50 rounded-lg p-2.5 text-center">
                   <div className="text-lg font-bold text-emerald-600">{stats.total}</div>
-                  <div className="text-[10px] text-slate-500">الإجمالي</div>
+                  <div className="text-[10px] text-slate-500">{t('total', language)}</div>
                 </div>
                 <div className="bg-emerald-50 rounded-lg p-2.5 text-center">
                   <div className="text-lg font-bold text-emerald-600">{stats.byStatut.TERMINEE || 0}</div>
-                  <div className="text-[10px] text-emerald-600">منجزة</div>
+                  <div className="text-[10px] text-emerald-600">{t('TERMINEE', language)}</div>
                 </div>
                 <div className="bg-amber-50 rounded-lg p-2.5 text-center">
                   <div className="text-lg font-bold text-amber-600">{stats.byStatut.EN_COURS || 0}</div>
-                  <div className="text-[10px] text-amber-600">جارية</div>
+                  <div className="text-[10px] text-amber-600">{t('EN_COURS', language)}</div>
                 </div>
                 <div className="bg-blue-50 rounded-lg p-2.5 text-center">
                   <div className="text-lg font-bold text-blue-600">{stats.byStatut.PLANIFIEE || 0}</div>
-                  <div className="text-[10px] text-blue-600">مبرمجة</div>
+                  <div className="text-[10px] text-blue-600">{t('PLANIFIEE', language)}</div>
                 </div>
               </div>
             </div>
@@ -717,21 +791,21 @@ export default function HomePage() {
             <>
               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
                 className="lg:hidden fixed inset-0 bg-black/50 z-40 backdrop-blur-sm" onClick={() => setSidebarOpen(false)} />
-              <motion.aside initial={{ x: 300 }} animate={{ x: 0 }} exit={{ x: 300 }}
+              <motion.aside initial={{ x: isRtl ? 300 : -300 }} animate={{ x: 0 }} exit={{ x: isRtl ? 300 : -300 }}
                 transition={{ type: 'spring', damping: 25 }}
-                className="fixed right-0 top-0 bottom-0 w-72 bg-white shadow-2xl z-50 flex flex-col">
+                className={`fixed ${isRtl ? 'right-0' : 'left-0'} top-0 bottom-0 w-72 bg-white dark:bg-slate-800 shadow-2xl z-50 flex flex-col`}>
                 <div className="p-4 border-b border-slate-100 flex items-center justify-between">
-                  <h2 className="font-bold text-emerald-700">القائمة</h2>
+                  <h2 className="font-bold text-emerald-700">{t('menu', language)}</h2>
                   <button onClick={() => setSidebarOpen(false)} className="p-2 hover:bg-slate-100 rounded-lg">✕</button>
                 </div>
                 <nav className="flex-1 p-3 overflow-y-auto" style={{ scrollbarWidth: 'none' }}>
                   {navItems.map((item, idx) => {
-                    const showSection = item.section && (idx === 0 || navItems[idx - 1].section !== item.section)
+                    const showSection = item.sectionKey && (idx === 0 || navItems[idx - 1].sectionKey !== item.sectionKey)
                     return (
                       <React.Fragment key={item.id}>
                         {showSection && (
                           <div className="px-4 pt-3 pb-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                            {item.section}
+                            {t(item.sectionKey, language)}
                           </div>
                         )}
                         <button
@@ -741,7 +815,7 @@ export default function HomePage() {
                           }`}>
                           <span className="text-lg">{item.icon}</span>
                           <span className="text-[13px] flex items-center gap-2">
-                            {item.label}
+                            {t(item.labelKey, language)}
                             {item.id === 'notifications' && unreadNotifCount > 0 && (
                               <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] rounded-full bg-red-500 text-white text-[10px] font-bold px-1">{unreadNotifCount > 99 ? '99+' : unreadNotifCount}</span>
                             )}
@@ -764,7 +838,7 @@ export default function HomePage() {
                 className="flex items-center justify-center h-64">
                 <div className="text-center space-y-4">
                   <div className="w-14 h-14 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mx-auto" />
-                  <p className="text-slate-500 font-medium">جاري تحميل البيانات...</p>
+                  <p className="text-slate-500 font-medium">{t('loadingData', language)}</p>
                 </div>
               </motion.div>
             ) : (
@@ -783,7 +857,7 @@ export default function HomePage() {
                     onEdit={setEditingInterventionId} onRefresh={fetchInterventions} selectedCommune={selectedCommune}
                     onAdd={() => setIsFormOpen(true)} />
                 )}
-                {currentView === 'reports' && <ReportsView stats={stats} selectedCommune={selectedCommune} canSeeAllCommunes={canSeeAllCommunes} />}
+                {currentView === 'reports' && <ReportsView stats={stats} selectedCommune={selectedCommune} canSeeAllCommunes={canSeeAllCommunes} selectedYear={selectedYear} />}
                 {currentView === 'inventory' && <InventoryView />}
                 {currentView === 'documents' && <DocumentsView />}
                 {currentView === 'calendar' && <CalendarView onAdd={(date) => { setPresetDate(date); setEditingInterventionId(null); setMapClickCoords(null); setIsFormOpen(true) }} />}
@@ -792,6 +866,7 @@ export default function HomePage() {
                 {currentView === 'kpi' && <KpiView />}
                 {currentView === 'export' && <ExportView />}
                 {currentView === 'agents' && <AgentsView />}
+                {currentView === 'complaints' && <ComplaintsView />}
                 {currentView === 'users' && <UsersView />}
                 {currentView === 'settings' && <SettingsView />}
               </motion.div>
@@ -813,7 +888,7 @@ export default function HomePage() {
       {/* Footer */}
       <footer className="bg-white/80 backdrop-blur-sm border-t border-slate-200 py-3 px-4 mt-auto">
         <div className="max-w-[1800px] mx-auto flex flex-col sm:flex-row items-center justify-between gap-1">
-          <p className="text-xs text-slate-500">© 2025 عمالة سلا — قسم حفظ الصحة والبيئة</p>
+          <p className="text-xs text-slate-500">{t('footerText', language)}</p>
           <div className="flex items-center gap-2">
             {user && user.commune !== 'ALL' && (
               <span className="text-[10px] font-bold px-2 py-0.5 rounded-full"
@@ -821,13 +896,13 @@ export default function HomePage() {
                 {COMMUNE_LABELS[user.commune]}
               </span>
             )}
-            <p className="text-xs text-emerald-600 font-medium">نظام تدبير عمليات 3D ⚡ مكتب مكافحة الجرذان • مكافحة الحشرات • التطهير</p>
+            <p className="text-xs text-emerald-600 font-medium">{t('footerSystem', language)}</p>
           </div>
         </div>
       </footer>
 
       {/* Mobile Nav */}
-      <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-slate-200 z-40 shadow-lg">
+      <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-white/95 dark:bg-slate-800/95 backdrop-blur-md border-t border-slate-200 dark:border-slate-700 z-40 shadow-lg">
         <div className="flex items-center justify-around py-1.5 px-1">
           {['dashboard', 'map', 'interventions', 'agents', 'notifications'].map((viewId) => {
             const item = navItems.find(n => n.id === viewId)
@@ -845,17 +920,53 @@ export default function HomePage() {
                     </span>
                   )}
                 </span>
-                <span className="text-[9px] font-semibold">{item.label}</span>
+                <span className="text-[9px] font-semibold">{t(item.labelKey, language)}</span>
               </button>
             )
           })}
           <motion.button onClick={() => setIsFormOpen(true)} whileTap={{ scale: 0.9 }}
             className="flex flex-col items-center gap-0.5 px-1.5 py-1.5">
             <span className="w-9 h-9 bg-gradient-to-br from-emerald-500 to-teal-600 text-white rounded-full flex items-center justify-center text-lg shadow-lg shadow-emerald-200">+</span>
-            <span className="text-[9px] font-semibold text-emerald-600">إضافة</span>
+            <span className="text-[9px] font-semibold text-emerald-600">{t('add', language)}</span>
           </motion.button>
         </div>
       </nav>
+
+      {/* Keyboard Shortcuts Help Dialog */}
+      <AnimatePresence>
+        {showShortcuts && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+            <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setShowShortcuts(false)} />
+            <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }}
+              transition={{ type: 'spring', damping: 25 }}
+              className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm border border-slate-100 overflow-hidden">
+              <div className="bg-gradient-to-l from-emerald-700 to-teal-700 text-white p-5 flex items-center justify-between">
+                <h2 className="text-lg font-bold">⌨️ {t('shortcutsTitle', language)}</h2>
+                <button onClick={() => setShowShortcuts(false)} className="p-2 hover:bg-white/20 rounded-xl transition-colors">✕</button>
+              </div>
+              <div className="p-5 space-y-3" dir={dir}>
+                <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl">
+                  <kbd className="px-2 py-1 bg-white rounded-lg border border-slate-200 text-xs font-mono font-bold shadow-sm">Alt + 1-9</kbd>
+                  <span className="text-sm text-slate-700">{t('shortcutNav', language)}</span>
+                </div>
+                <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl">
+                  <kbd className="px-2 py-1 bg-white rounded-lg border border-slate-200 text-xs font-mono font-bold shadow-sm">Alt + N</kbd>
+                  <span className="text-sm text-slate-700">{t('shortcutAdd', language)}</span>
+                </div>
+                <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl">
+                  <kbd className="px-2 py-1 bg-white rounded-lg border border-slate-200 text-xs font-mono font-bold shadow-sm">Alt + S</kbd>
+                  <span className="text-sm text-slate-700">{t('shortcutSearch', language)}</span>
+                </div>
+                <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl">
+                  <kbd className="px-2 py-1 bg-white rounded-lg border border-slate-200 text-xs font-mono font-bold shadow-sm">Esc</kbd>
+                  <span className="text-sm text-slate-700">{t('shortcutClose', language)}</span>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }
@@ -881,11 +992,13 @@ function InterventionFormDialog({ interventionId, quartiers, mapClickCoords, pre
     longitude: mapClickCoords ? mapClickCoords.longitude.toString() : '-6.735',
     statut: 'PLANIFIEE', description: '', agentNom: '', produitUtilise: '',
     quantite: '', superficie: '', nombrePrestations: '1', observations: '',
+    coutMainOeuvre: '', coutMateriaux: '', coutTotal: '',
   })
   const [materials, setMaterials] = useState<{ productId: string; quantity: number }[]>([])
   const [dropdownProducts, setDropdownProducts] = useState<DropdownProduct[]>([])
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isLoadingData, setIsLoadingData] = useState(false)
+  const [selectedTemplate, setSelectedTemplate] = useState<string>('')
 
   // Load products for dropdown
   useEffect(() => {
@@ -927,6 +1040,7 @@ function InterventionFormDialog({ interventionId, quartiers, mapClickCoords, pre
           produitUtilise: data.produitUtilise || '', quantite: data.quantite || '',
           superficie: data.superficie || '', nombrePrestations: data.nombrePrestations?.toString() || '1',
           observations: data.observations || '',
+          coutMainOeuvre: data.coutMainOeuvre?.toString() || '', coutMateriaux: data.coutMateriaux?.toString() || '', coutTotal: data.coutTotal?.toString() || '',
         })
         // Load existing materials
         if (data.materials && Array.isArray(data.materials)) {
@@ -1015,6 +1129,36 @@ function InterventionFormDialog({ interventionId, quartiers, mapClickCoords, pre
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="p-6 space-y-5">
+            {/* Template Selector */}
+            {!interventionId && (
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-1.5">📋 استعمال قالب</label>
+                <select value={selectedTemplate} onChange={(e) => {
+                  const tplId = e.target.value
+                  setSelectedTemplate(tplId)
+                  if (tplId) {
+                    const tpl = INTERVENTION_TEMPLATES.find(t => t.id === tplId)
+                    if (tpl) {
+                      setFormData(prev => ({
+                        ...prev,
+                        type: tpl.type,
+                        produitUtilise: tpl.produitUtilise || prev.produitUtilise,
+                        superficie: tpl.superficie || prev.superficie,
+                        nombrePrestations: tpl.nombrePrestations || prev.nombrePrestations,
+                        description: tpl.description || prev.description,
+                        ...(tpl.statut ? { statut: tpl.statut } : {}),
+                      }))
+                    }
+                  }
+                }}
+                  className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-300">
+                  <option value="">— اختر قالباً —</option>
+                  {INTERVENTION_TEMPLATES.map(tpl => (
+                    <option key={tpl.id} value={tpl.id}>{TYPE_ICONS[tpl.type]} {tpl.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
             {/* Map click indicator banner */}
             {mapClickCoords && !interventionId && (
               <motion.div 
@@ -1201,6 +1345,37 @@ function InterventionFormDialog({ interventionId, quartiers, mapClickCoords, pre
                 <input type="text" value={formData.produitUtilise} onChange={(e) => updateField('produitUtilise', e.target.value)}
                   placeholder="اسم المادة إن لم تكن في المخزون"
                   className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-300" />
+              </div>
+            </div>
+            {/* Cost Fields */}
+            <div className="grid grid-cols-3 gap-4">
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-1.5">💰 تكلفة اليد العاملة</label>
+                <input type="number" min="0" step="0.01" value={formData.coutMainOeuvre} onChange={(e) => {
+                  updateField('coutMainOeuvre', e.target.value)
+                  const mo = parseFloat(e.target.value) || 0
+                  const mat = parseFloat(formData.coutMateriaux) || 0
+                  updateField('coutTotal', (mo + mat).toString())
+                }}
+                  placeholder="0.00"
+                  className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-300" />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-1.5">🧪 تكلفة المواد</label>
+                <input type="number" min="0" step="0.01" value={formData.coutMateriaux} onChange={(e) => {
+                  updateField('coutMateriaux', e.target.value)
+                  const mo = parseFloat(formData.coutMainOeuvre) || 0
+                  const mat = parseFloat(e.target.value) || 0
+                  updateField('coutTotal', (mo + mat).toString())
+                }}
+                  placeholder="0.00"
+                  className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-300" />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-1.5">📊 التكلفة الإجمالية</label>
+                <input type="text" value={formData.coutTotal ? parseFloat(formData.coutTotal).toLocaleString('ar-MA') + ' درهم' : ''} readOnly
+                  placeholder="تلقائي"
+                  className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm outline-none cursor-not-allowed text-slate-500" />
               </div>
             </div>
             <div>

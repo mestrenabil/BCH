@@ -168,6 +168,11 @@ function InterventionsView({ interventions, total, page, setPage, onEdit, onRefr
   const [detailIntervention, setDetailIntervention] = useState<Intervention | null>(null)
   const [showDocPicker, setShowDocPicker] = useState(false)
   const [linkedDocs, setLinkedDocs] = useState<InterventionDocument[]>([])
+  const [photos, setPhotos] = useState<{ id: string; url: string; caption: string | null; type: string; createdAt: string }[]>([])
+  const [showPhotoUpload, setShowPhotoUpload] = useState(false)
+  const [photoForm, setPhotoForm] = useState({ caption: '', type: 'AFTER' })
+  const [photoUploading, setPhotoUploading] = useState(false)
+  const [viewerPhoto, setViewerPhoto] = useState<string | null>(null)
 
   const fetchLinkedDocs = useCallback(async (interventionId: string) => {
     try {
@@ -179,11 +184,22 @@ function InterventionsView({ interventions, total, page, setPage, onEdit, onRefr
     } catch { /* ignore */ }
   }, [])
 
+  const fetchPhotos = useCallback(async (interventionId: string) => {
+    try {
+      const res = await fetch(`/api/intervention-photos?interventionId=${interventionId}`)
+      if (res.ok) {
+        const data = await res.json()
+        setPhotos(data.photos || [])
+      }
+    } catch { /* ignore */ }
+  }, [])
+
   const handleShowDetail = useCallback((intervention: Intervention) => {
     setDetailIntervention(intervention)
     setLinkedDocs(intervention.documents || [])
     fetchLinkedDocs(intervention.id)
-  }, [fetchLinkedDocs])
+    fetchPhotos(intervention.id)
+  }, [fetchLinkedDocs, fetchPhotos])
 
   const handleUnlinkDoc = useCallback(async (documentId: string) => {
     if (!detailIntervention) return
@@ -222,6 +238,56 @@ function InterventionsView({ interventions, total, page, setPage, onEdit, onRefr
       toast.error('حدث خطأ أثناء ربط المستندات')
     }
   }, [detailIntervention, fetchLinkedDocs, onRefresh])
+
+  const [photoFile, setPhotoFile] = useState<File | null>(null)
+
+  const handleUploadPhoto = useCallback(async () => {
+    if (!detailIntervention || !photoFile) return
+    setPhotoUploading(true)
+    try {
+      const reader = new FileReader()
+      reader.onload = async () => {
+        const base64 = reader.result as string
+        const res = await fetch('/api/intervention-photos', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ interventionId: detailIntervention.id, url: base64, caption: photoForm.caption, type: photoForm.type }),
+        })
+        if (res.ok) {
+          toast.success('تم رفع الصورة بنجاح')
+          fetchPhotos(detailIntervention.id)
+          setShowPhotoUpload(false)
+          setPhotoForm({ caption: '', type: 'AFTER' })
+          setPhotoFile(null)
+        } else {
+          toast.error('فشل في رفع الصورة')
+        }
+        setPhotoUploading(false)
+      }
+      reader.readAsDataURL(photoFile)
+    } catch {
+      toast.error('حدث خطأ أثناء رفع الصورة')
+      setPhotoUploading(false)
+    }
+  }, [detailIntervention, photoForm, photoFile, fetchPhotos])
+
+  const handleDeletePhoto = useCallback(async (photoId: string) => {
+    try {
+      const res = await fetch('/api/intervention-photos', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: photoId }),
+      })
+      if (res.ok) {
+        toast.success('تم حذف الصورة بنجاح')
+        if (detailIntervention) fetchPhotos(detailIntervention.id)
+      } else {
+        toast.error('فشل في حذف الصورة')
+      }
+    } catch {
+      toast.error('حدث خطأ')
+    }
+  }, [detailIntervention, fetchPhotos])
 
   const handleDelete = async (id: string) => {
     try {
@@ -610,6 +676,33 @@ function InterventionsView({ interventions, total, page, setPage, onEdit, onRefr
                   </div>
                 )}
 
+                {/* Cost Section */}
+                {(detailIntervention.coutMainOeuvre || detailIntervention.coutMateriaux || detailIntervention.coutTotal) && (
+                  <div className="bg-emerald-50 rounded-xl p-3 border border-emerald-100">
+                    <p className="text-[10px] text-emerald-600 font-bold mb-2">💰 التكلفة</p>
+                    <div className="grid grid-cols-3 gap-2">
+                      {detailIntervention.coutMainOeuvre != null && (
+                        <div className="text-center">
+                          <p className="text-[9px] text-slate-500">اليد العاملة</p>
+                          <p className="text-xs font-bold text-slate-700">{Number(detailIntervention.coutMainOeuvre).toLocaleString('ar-MA')} د.م</p>
+                        </div>
+                      )}
+                      {detailIntervention.coutMateriaux != null && (
+                        <div className="text-center">
+                          <p className="text-[9px] text-slate-500">المواد</p>
+                          <p className="text-xs font-bold text-slate-700">{Number(detailIntervention.coutMateriaux).toLocaleString('ar-MA')} د.م</p>
+                        </div>
+                      )}
+                      {detailIntervention.coutTotal != null && (
+                        <div className="text-center">
+                          <p className="text-[9px] text-slate-500">الإجمالية</p>
+                          <p className="text-xs font-extrabold text-emerald-700">{Number(detailIntervention.coutTotal).toLocaleString('ar-MA')} د.م</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
                 {detailIntervention.materials && detailIntervention.materials.length > 0 && (
                   <div className="bg-slate-50 rounded-xl p-3">
                     <p className="text-[10px] text-slate-400 font-medium mb-2">المواد المستعملة</p>
@@ -623,6 +716,56 @@ function InterventionsView({ interventions, total, page, setPage, onEdit, onRefr
                     </div>
                   </div>
                 )}
+
+                {/* ===== PHOTOS SECTION ===== */}
+                <div className="border-t border-slate-100 pt-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <h4 className="text-sm font-bold text-slate-700 flex items-center gap-2">
+                      <span>📸</span> الصور
+                      <span className="text-[10px] font-medium text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">{photos.length}</span>
+                    </h4>
+                    <div className="flex gap-2">
+                      <motion.button
+                        whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+                        onClick={() => setShowPhotoUpload(true)}
+                        className="text-[11px] font-medium px-3 py-1.5 rounded-lg bg-teal-50 text-teal-700 hover:bg-teal-100 transition-colors flex items-center gap-1"
+                      >
+                        <span>+</span> إضافة صورة
+                      </motion.button>
+                    </div>
+                  </div>
+
+                  {photos.length === 0 ? (
+                    <div className="bg-slate-50 rounded-xl p-6 text-center">
+                      <p className="text-3xl mb-2">📷</p>
+                      <p className="text-xs text-slate-400">لا توجد صور لهذا التدخل</p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-2 max-h-60 overflow-y-auto">
+                      {photos.map((photo) => (
+                        <div key={photo.id} className="relative group/photo rounded-xl overflow-hidden border border-slate-100 cursor-pointer" onClick={() => setViewerPhoto(photo.url)}>
+                          <img src={photo.url} alt={photo.caption || 'صورة'} className="w-full h-28 object-cover" />
+                          <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover/photo:opacity-100 transition-opacity" />
+                          <div className="absolute bottom-0 right-0 left-0 p-2 opacity-0 group-hover/photo:opacity-100 transition-opacity">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[9px] px-1.5 py-0.5 rounded-full font-bold text-white" style={{ backgroundColor: photo.type === 'BEFORE' ? '#f59e0b' : '#10b981' }}>
+                                {photo.type === 'BEFORE' ? 'قبل' : 'بعد'}
+                              </span>
+                              <button
+                                onClick={(e) => { e.stopPropagation(); handleDeletePhoto(photo.id) }}
+                                className="p-1 hover:bg-red-500/80 rounded bg-black/40 text-white transition-colors"
+                                title="حذف الصورة"
+                              >
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" /></svg>
+                              </button>
+                            </div>
+                            {photo.caption && <p className="text-[9px] text-white truncate mt-0.5">{photo.caption}</p>}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
 
                 {/* ===== LINKED DOCUMENTS SECTION ===== */}
                 <div className="border-t border-slate-100 pt-4">
@@ -705,6 +848,120 @@ function InterventionsView({ interventions, total, page, setPage, onEdit, onRefr
           onClose={() => setShowDocPicker(false)}
         />
       )}
+
+      {/* ===== PHOTO UPLOAD DIALOG ===== */}
+      <AnimatePresence>
+        {showPhotoUpload && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[60] flex items-center justify-center p-4"
+            onClick={() => { setShowPhotoUpload(false); setPhotoForm({ caption: '', type: 'AFTER' }); setPhotoFile(null) }}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden"
+              onClick={(e) => e.stopPropagation()}
+              dir="rtl"
+            >
+              <div className="bg-gradient-to-l from-teal-700 to-emerald-700 p-4 text-white">
+                <h3 className="text-base font-bold flex items-center gap-2">
+                  <span>📸</span> إضافة صورة
+                </h3>
+              </div>
+              <div className="p-5 space-y-4">
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1.5">الصورة</label>
+                  <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-slate-200 rounded-xl cursor-pointer hover:border-teal-400 hover:bg-teal-50/30 transition-colors">
+                    {photoFile ? (
+                      <div className="flex flex-col items-center gap-2">
+                        <img src={URL.createObjectURL(photoFile)} alt="preview" className="w-20 h-20 object-cover rounded-lg" />
+                        <span className="text-xs text-slate-500">{photoFile.name}</span>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center gap-2 text-slate-400">
+                        <span className="text-2xl">📷</span>
+                        <span className="text-xs">اختر صورة</span>
+                      </div>
+                    )}
+                    <input type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) setPhotoFile(f) }} />
+                  </label>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1.5">الوصف</label>
+                  <input type="text" value={photoForm.caption} onChange={(e) => setPhotoForm({ ...photoForm, caption: e.target.value })}
+                    placeholder="وصف الصورة..." className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-300 transition-all" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1.5">النوع</label>
+                  <select value={photoForm.type} onChange={(e) => setPhotoForm({ ...photoForm, type: e.target.value })}
+                    className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-teal-500/20">
+                    <option value="BEFORE">قبل المعالجة</option>
+                    <option value="AFTER">بعد المعالجة</option>
+                  </select>
+                </div>
+                <div className="flex gap-2 pt-2">
+                  <motion.button
+                    whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+                    onClick={handleUploadPhoto}
+                    disabled={!photoFile || photoUploading}
+                    className="flex-1 bg-gradient-to-l from-teal-600 to-emerald-600 text-white px-4 py-2.5 rounded-xl font-medium shadow-lg shadow-teal-200 disabled:opacity-50 disabled:cursor-not-allowed text-sm flex items-center justify-center gap-2"
+                  >
+                    {photoUploading ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        <span>جاري الرفع...</span>
+                      </>
+                    ) : (
+                      <>
+                        <span>📸</span> رفع الصورة
+                      </>
+                    )}
+                  </motion.button>
+                  <button onClick={() => { setShowPhotoUpload(false); setPhotoForm({ caption: '', type: 'AFTER' }); setPhotoFile(null) }}
+                    className="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50 transition-colors text-sm">
+                    إلغاء
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ===== FULLSCREEN PHOTO VIEWER ===== */}
+      <AnimatePresence>
+        {viewerPhoto && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/90 z-[70] flex items-center justify-center p-4 cursor-pointer"
+            onClick={() => setViewerPhoto(null)}
+          >
+            <motion.img
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              src={viewerPhoto}
+              alt="صورة مكبرة"
+              className="max-w-full max-h-full object-contain rounded-lg"
+              onClick={(e) => e.stopPropagation()}
+            />
+            <button
+              onClick={() => setViewerPhoto(null)}
+              className="absolute top-4 left-4 p-3 bg-white/20 hover:bg-white/30 rounded-xl text-white transition-colors"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+              </svg>
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }

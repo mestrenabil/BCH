@@ -11,6 +11,242 @@ import {
 } from '@/lib/constants'
 import { UserManagementSection } from './users-view-lite'
 
+// ===== CSV IMPORT BUTTON =====
+function CSVImportButton({ type, label, icon, color }: { type: 'interventions' | 'agents' | 'products'; label: string; icon: string; color: string }) {
+  const [dialogOpen, setDialogOpen] = useState(false)
+  const [csvData, setCsvData] = useState<Record<string, string>[]>([])
+  const [isImporting, setIsImporting] = useState(false)
+  const [importResult, setImportResult] = useState<{ success: number; failed: number; total: number } | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const colorClasses: Record<string, string> = {
+    emerald: 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100',
+    amber: 'bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100',
+    blue: 'bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100',
+  }
+
+  const sampleFormats: Record<string, string> = {
+    interventions: 'type, date, quartier, adresse, commune, statut, agentNom, reference, description',
+    agents: 'nom, prenom, telephone, commune, fonction, actif',
+    products: 'nom, categorie, commune, unite, quantiteStock, seuilAlerte, prixUnitaire, fournisseur, reference',
+  }
+
+  // Simple CSV parser — handles basic quoted fields
+  const parseCSV = (text: string): Record<string, string>[] => {
+    const lines = text.split(/\r?\n/).filter(l => l.trim())
+    if (lines.length < 2) return []
+    const parseLine = (line: string): string[] => {
+      const result: string[] = []
+      let current = ''
+      let inQuotes = false
+      for (let i = 0; i < line.length; i++) {
+        const ch = line[i]
+        if (ch === '"') {
+          if (inQuotes && line[i + 1] === '"') { current += '"'; i++ }
+          else { inQuotes = !inQuotes }
+        } else if (ch === ',' && !inQuotes) {
+          result.push(current.trim())
+          current = ''
+        } else {
+          current += ch
+        }
+      }
+      result.push(current.trim())
+      return result
+    }
+    const headers = parseLine(lines[0])
+    const rows: Record<string, string>[] = []
+    for (let i = 1; i < lines.length; i++) {
+      const values = parseLine(lines[i])
+      const obj: Record<string, string> = {}
+      headers.forEach((h, idx) => { obj[h] = values[idx] || '' })
+      rows.push(obj)
+    }
+    return rows
+  }
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = (ev) => {
+      const text = ev.target?.result as string
+      const parsed = parseCSV(text)
+      setCsvData(parsed)
+      setImportResult(null)
+    }
+    reader.readAsText(file)
+  }
+
+  const handleImport = async () => {
+    if (csvData.length === 0) return
+    setIsImporting(true)
+    try {
+      const res = await fetch('/api/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type, data: csvData }),
+      })
+      const result = await res.json()
+      if (res.ok) {
+        setImportResult({ success: result.success, failed: result.failed, total: result.total })
+        toast.success(`تم استيراد ${result.success} من ${result.total} سجل${result.failed > 0 ? ` (${result.failed} فشل)` : ''}`)
+        if (result.errors?.length > 0) {
+          console.warn('Import errors:', result.errors)
+        }
+      } else {
+        toast.error(result.error || 'حدث خطأ أثناء الاستيراد')
+      }
+    } catch {
+      toast.error('حدث خطأ في الاتصال')
+    }
+    setIsImporting(false)
+  }
+
+  const handleClose = () => {
+    setDialogOpen(false)
+    setCsvData([])
+    setImportResult(null)
+    if (fileInputRef.current) fileInputRef.current.value = ''
+  }
+
+  return (
+    <>
+      <motion.button
+        whileHover={{ scale: 1.02 }}
+        whileTap={{ scale: 0.98 }}
+        onClick={() => setDialogOpen(true)}
+        className={`flex flex-col items-center gap-2 p-4 rounded-xl border transition-all ${colorClasses[color] || colorClasses.emerald}`}
+      >
+        <span className="text-2xl">{icon}</span>
+        <span className="text-xs font-bold">{label}</span>
+      </motion.button>
+
+      <AnimatePresence>
+        {dialogOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            onClick={handleClose}
+          >
+            <motion.div
+              initial={{ scale: 0.9, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.9, y: 20 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white rounded-2xl max-w-lg w-full shadow-2xl"
+              dir="rtl"
+            >
+              <div className="bg-gradient-to-l from-amber-600 to-yellow-600 p-5 rounded-t-2xl text-white">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center text-xl backdrop-blur-sm">
+                      {icon}
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-lg">{label}</h3>
+                      <p className="text-amber-100 text-xs">استيراد بيانات من ملف CSV</p>
+                    </div>
+                  </div>
+                  <button onClick={handleClose} className="w-8 h-8 rounded-lg bg-white/20 flex items-center justify-center hover:bg-white/30 transition-colors">✕</button>
+                </div>
+              </div>
+              <div className="p-5 space-y-4">
+                {/* File input */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 mb-1.5">📁 اختر ملف CSV</label>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".csv"
+                    onChange={handleFileChange}
+                    className="w-full text-sm file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-amber-50 file:text-amber-700 hover:file:bg-amber-100"
+                  />
+                </div>
+
+                {/* Format note */}
+                <div className="bg-slate-50 rounded-xl p-3">
+                  <p className="text-xs font-bold text-slate-600 mb-1">📝 التنسيق المتوقع: CSV مع عناوين الأعمدة</p>
+                  <p className="text-[11px] text-slate-400 font-mono" dir="ltr">
+                    {sampleFormats[type]}
+                  </p>
+                </div>
+
+                {/* Preview */}
+                {csvData.length > 0 && (
+                  <div>
+                    <p className="text-xs font-bold text-slate-600 mb-2">
+                      👁️ معاينة ({Math.min(5, csvData.length)} من {csvData.length} صف)
+                    </p>
+                    <div className="overflow-x-auto rounded-xl border border-slate-200 max-h-48">
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="bg-slate-50">
+                            {Object.keys(csvData[0]).map((key) => (
+                              <th key={key} className="px-2 py-1.5 text-right font-bold text-slate-600 whitespace-nowrap">{key}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {csvData.slice(0, 5).map((row, idx) => (
+                            <tr key={idx} className="border-t border-slate-100">
+                              {Object.values(row).map((val, i) => (
+                                <td key={i} className="px-2 py-1 text-slate-500 whitespace-nowrap max-w-[120px] truncate">{val || '—'}</td>
+                              ))}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {/* Import result */}
+                {importResult && (
+                  <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3">
+                    <p className="text-sm font-bold text-emerald-700">
+                      ✅ تم استيراد {importResult.success} من {importResult.total} سجل
+                      {importResult.failed > 0 && <span className="text-red-600"> ({importResult.failed} فشل)</span>}
+                    </p>
+                  </div>
+                )}
+
+                {/* Actions */}
+                <div className="flex gap-3">
+                  <button
+                    onClick={handleClose}
+                    className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-medium text-sm hover:bg-slate-50 transition-colors"
+                  >
+                    {importResult ? 'إغلاق' : 'إلغاء'}
+                  </button>
+                  {!importResult && (
+                    <button
+                      onClick={handleImport}
+                      disabled={csvData.length === 0 || isImporting}
+                      className="flex-1 px-4 py-2.5 rounded-xl bg-gradient-to-l from-amber-600 to-yellow-600 text-white font-medium text-sm shadow-lg shadow-amber-200 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                    >
+                      {isImporting ? (
+                        <>
+                          <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                          جاري الاستيراد...
+                        </>
+                      ) : (
+                        <>📥 استيراد {csvData.length} سجل</>
+                      )}
+                    </button>
+                  )}
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </>
+  )
+}
+
 // ===== QUARTIER MANAGEMENT SECTION =====
 function QuartierManagementSection() {
   const [quartiers, setQuartiers] = useState<Quartier[]>([])
@@ -1343,6 +1579,21 @@ function SettingsView() {
                 🔄 إعادة تهيئة
               </motion.button>
             )}
+          </div>
+
+          {/* Import Data Section */}
+          <div className="border-t border-slate-100 pt-5">
+            <h4 className="text-sm font-bold text-slate-700 mb-3">📥 استيراد البيانات</h4>
+            <p className="text-xs text-slate-400 mb-4">استيراد البيانات من ملفات CSV لملء قاعدة البيانات بسرعة</p>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {[
+                { type: 'interventions' as const, label: 'استيراد التدخلات', icon: '📋', color: 'emerald' },
+                { type: 'agents' as const, label: 'استيراد الأعوان', icon: '👤', color: 'amber' },
+                { type: 'products' as const, label: 'استيراد المنتجات', icon: '📦', color: 'blue' },
+              ].map((item) => (
+                <CSVImportButton key={item.type} type={item.type} label={item.label} icon={item.icon} color={item.color} />
+              ))}
+            </div>
           </div>
         </div>
       </motion.div>

@@ -1,6 +1,7 @@
 import { create } from 'zustand'
+import { type Language } from './i18n'
 
-export type ViewType = 'dashboard' | 'map' | 'interventions' | 'inventory' | 'reports' | 'documents' | 'users' | 'settings' | 'agents' | 'calendar' | 'kpi' | 'alerts' | 'export' | 'notifications'
+export type ViewType = 'dashboard' | 'map' | 'interventions' | 'inventory' | 'reports' | 'documents' | 'users' | 'settings' | 'agents' | 'calendar' | 'kpi' | 'alerts' | 'export' | 'notifications' | 'complaints'
 export type InterventionType = 'DERATISATION' | 'DESINSECTISATION' | 'DESINFECTION'
 export type StatutType = 'PLANIFIEE' | 'EN_COURS' | 'TERMINEE' | 'ANNULEE'
 export type CommuneType = 'سلا' | 'سيدي أبي القنادل' | 'عامر'
@@ -74,6 +75,9 @@ interface AppState {
   setEditingInterventionId: (id: string | null) => void
   sidebarOpen: boolean
   setSidebarOpen: (open: boolean) => void
+  // Theme
+  theme: 'light' | 'dark'
+  setTheme: (theme: 'light' | 'dark') => void
   // Settings — per-commune, loaded from DB
   settings: AppSettings
   settingsLoaded: boolean
@@ -83,9 +87,15 @@ interface AppState {
   saveSettings: () => Promise<boolean>
   resetSettings: () => Promise<boolean>
   setSettings: (settings: AppSettings, commune: string) => void
+  // Notification sound
+  notifSound: boolean
+  setNotifSound: (v: boolean) => void
   // Map
   mapClickCoords: MapClickCoords | null
   setMapClickCoords: (coords: MapClickCoords | null) => void
+  // Language
+  language: Language
+  setLanguage: (lang: Language) => void
 }
 
 export const CURRENT_YEAR = new Date().getFullYear().toString()
@@ -132,7 +142,15 @@ export const DEFAULT_SETTINGS: AppSettings = {
   documentFooter: '',
 }
 
-export const useAppStore = create<AppState>((set, get) => ({
+export const useAppStore = create<AppState>((set, get) => {
+  // Initialize theme from localStorage
+  let initialTheme: 'light' | 'dark' = 'light'
+  if (typeof window !== 'undefined') {
+    const saved = localStorage.getItem('app-theme')
+    if (saved === 'dark' || saved === 'light') initialTheme = saved
+  }
+
+  return {
   // Auth
   user: null,
   setUser: (user) => set({ user, isAuthenticated: !!user }),
@@ -156,6 +174,19 @@ export const useAppStore = create<AppState>((set, get) => ({
   setEditingInterventionId: (id) => set({ editingInterventionId: id, isFormOpen: !!id }),
   sidebarOpen: false,
   setSidebarOpen: (open) => set({ sidebarOpen: open }),
+  // Theme
+  theme: initialTheme,
+  setTheme: (theme) => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('app-theme', theme)
+      if (theme === 'dark') {
+        document.documentElement.classList.add('dark')
+      } else {
+        document.documentElement.classList.remove('dark')
+      }
+    }
+    set({ theme })
+  },
   // Settings
   settings: { ...DEFAULT_SETTINGS },
   settingsLoaded: false,
@@ -214,7 +245,31 @@ export const useAppStore = create<AppState>((set, get) => ({
       return false
     }
   },
+  // Notification sound — persisted in localStorage
+  notifSound: true,
+  setNotifSound: (v) => {
+    set({ notifSound: v })
+    try { localStorage.setItem('notif-sound', String(v)) } catch { /* ignore */ }
+  },
   // Map
   mapClickCoords: null,
   setMapClickCoords: (coords) => set({ mapClickCoords: coords }),
-}))
+  // Language — persisted in localStorage
+  language: 'ar' as Language,
+  setLanguage: (lang) => {
+    set({ language: lang })
+    try { localStorage.setItem('app-language', lang) } catch { /* ignore */ }
+  },
+}})
+
+// Hydrate persisted values from localStorage on client
+if (typeof window !== 'undefined') {
+  try {
+    const ns = localStorage.getItem('notif-sound')
+    if (ns !== null) useAppStore.setState({ notifSound: ns === 'true' })
+  } catch { /* ignore */ }
+  try {
+    const lang = localStorage.getItem('app-language')
+    if (lang === 'fr' || lang === 'ar') useAppStore.setState({ language: lang as Language })
+  } catch { /* ignore */ }
+}
