@@ -18,6 +18,7 @@ interface Product {
   fournisseur: string
   description: string
   reference: string
+  dateExpiration: string | null
   createdAt: string
   updatedAt: string
 }
@@ -174,6 +175,7 @@ export default function AlertsView() {
   const { selectedCommune, setCurrentView } = useAppStore()
 
   const [products, setProducts] = useState<Product[]>([])
+  const [allProducts, setAllProducts] = useState<Product[]>([])
   const [interventions, setInterventions] = useState<Intervention[]>([])
   const [stats, setStats] = useState<Statistics | null>(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -200,8 +202,9 @@ export default function AlertsView() {
     let cancelled = false
     const load = async () => {
       try {
-        const [productsRes, interventionsRes, statsRes] = await Promise.all([
+        const [productsRes, allProductsRes, interventionsRes, statsRes] = await Promise.all([
           fetch(`/api/products?${communeParam ? `commune=${communeParam}&` : ''}alerte=true`),
+          fetch(`/api/products?${communeParam ? `commune=${communeParam}` : ''}`),
           fetch(`/api/interventions?${communeParam ? `commune=${communeParam}&` : ''}limit=100`),
           fetch(`/api/statistics?${communeParam ? `commune=${communeParam}` : ''}`),
         ])
@@ -212,6 +215,10 @@ export default function AlertsView() {
             (p: Product) => p.quantiteStock <= p.seuilAlerte
           )
           if (!cancelled) setProducts(alertProducts)
+        }
+        if (allProductsRes.ok) {
+          const allProductsData = await allProductsRes.json()
+          if (!cancelled) setAllProducts(allProductsData.products || [])
         }
         if (interventionsRes.ok) {
           const interventionsData = await interventionsRes.json()
@@ -237,6 +244,19 @@ export default function AlertsView() {
   const stockAlerts = products.filter(p => p.quantiteStock <= p.seuilAlerte)
   const criticalStock = stockAlerts.filter(p => p.quantiteStock === 0)
   const warningStock = stockAlerts.filter(p => p.quantiteStock > 0 && p.quantiteStock <= p.seuilAlerte)
+
+  // Expired products alerts
+  const now = new Date()
+  const thirtyDaysFromNow = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000)
+  const expiredProducts = allProducts.filter(p => {
+    if (!p.dateExpiration) return false
+    return new Date(p.dateExpiration) < now
+  })
+  const expiringProducts = allProducts.filter(p => {
+    if (!p.dateExpiration) return false
+    const expDate = new Date(p.dateExpiration)
+    return expDate >= now && expDate <= thirtyDaysFromNow
+  })
 
   // Overdue interventions: PLANIFIEE/EN_COURS with date in the past
   const overdueInterventions = interventions.filter(
@@ -307,7 +327,7 @@ export default function AlertsView() {
       </motion.div>
 
       {/* ===== ALERT SUMMARY CARDS ===== */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
         {/* Stock Alerts */}
         <motion.div variants={itemVariants} initial="initial" animate="animate" whileHover="hover" {...cardHover}
           className="bg-white rounded-2xl p-5 shadow-sm border border-red-100 border-r-4 border-r-red-500 hover:shadow-md transition-shadow">
@@ -318,6 +338,19 @@ export default function AlertsView() {
           <h3 className="text-sm font-bold text-slate-700">تنبيهات المخزون</h3>
           <p className="text-xs text-slate-400 mt-1">
             {criticalStock.length} نفاد · {warningStock.length} انخفاض
+          </p>
+        </motion.div>
+
+        {/* Expired Products */}
+        <motion.div variants={itemVariants} initial="initial" animate="animate" whileHover="hover" {...cardHover}
+          className="bg-white rounded-2xl p-5 shadow-sm border border-rose-100 border-r-4 border-r-rose-500 hover:shadow-md transition-shadow">
+          <div className="flex items-center justify-between mb-3">
+            <div className="w-11 h-11 rounded-xl bg-rose-50 flex items-center justify-center text-xl">💊</div>
+            <span className="text-3xl font-extrabold text-rose-600">{expiredProducts.length}</span>
+          </div>
+          <h3 className="text-sm font-bold text-slate-700">منتجات منتهية الصلاحية</h3>
+          <p className="text-xs text-slate-400 mt-1">
+            {expiringProducts.length} قريب الانتهاء
           </p>
         </motion.div>
 
@@ -449,13 +482,104 @@ export default function AlertsView() {
           </div>
         </motion.div>
 
-        {/* ===== OVERDUE INTERVENTIONS SECTION ===== */}
+        {/* ===== EXPIRED PRODUCTS SECTION ===== */}
         <motion.div
           variants={containerVariants}
           initial="initial"
           animate="animate"
           className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden"
         >
+          <div className="p-5 border-b border-slate-100 bg-gradient-to-l from-rose-50 to-white">
+            <h3 className="text-base font-bold text-slate-800 flex items-center gap-2">
+              <span className="text-lg">💊</span>
+              صلاحية المنتجات
+              <span className="bg-rose-100 text-rose-700 text-xs font-bold px-2 py-0.5 rounded-full">{expiredProducts.length + expiringProducts.length}</span>
+            </h3>
+          </div>
+          <div className="max-h-96 overflow-y-auto">
+            {expiredProducts.length === 0 && expiringProducts.length === 0 ? (
+              <div className="p-8 text-center">
+                <div className="text-4xl mb-3">✅</div>
+                <p className="text-sm text-slate-500 font-medium">جميع المنتجات صالحة</p>
+                <p className="text-xs text-slate-400 mt-1">لا توجد منتجات منتهية أو قريبة الانتهاء</p>
+              </div>
+            ) : (
+              <div className="divide-y divide-slate-50">
+                {expiredProducts.map((product) => (
+                  <motion.div
+                    key={`expired-${product.id}`}
+                    variants={itemVariants}
+                    onClick={() => setCurrentView('inventory')}
+                    className="p-4 border-r-4 border-r-red-500 bg-red-50/50 hover:bg-slate-50/50 transition-colors cursor-pointer"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1.5">
+                          <span className="font-bold text-sm text-slate-800 truncate">{product.nom}</span>
+                          <span className="bg-red-100 text-red-700 text-[10px] font-bold px-1.5 py-0.5 rounded-full whitespace-nowrap">
+                            ⚠️ منتهي الصلاحية
+                          </span>
+                        </div>
+                        <div className="text-xs text-slate-500">
+                          انتهت في: {product.dateExpiration ? new Date(product.dateExpiration).toLocaleDateString('ar-MA') : '—'}
+                        </div>
+                      </div>
+                      <div className="flex flex-col items-end gap-1.5">
+                        {product.commune && (
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full text-white"
+                            style={{ backgroundColor: COMMUNE_COLORS[product.commune] || '#64748b' }}>
+                            {COMMUNE_LABELS[product.commune] || product.commune}
+                          </span>
+                        )}
+                        <span className="text-[10px] text-slate-400">{product.reference}</span>
+                      </div>
+                    </div>
+                  </motion.div>
+                ))}
+                {expiringProducts.map((product) => (
+                  <motion.div
+                    key={`expiring-${product.id}`}
+                    variants={itemVariants}
+                    onClick={() => setCurrentView('inventory')}
+                    className="p-4 border-r-4 border-r-amber-400 bg-amber-50/30 hover:bg-slate-50/50 transition-colors cursor-pointer"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1.5">
+                          <span className="font-bold text-sm text-slate-800 truncate">{product.nom}</span>
+                          <span className="bg-amber-100 text-amber-700 text-[10px] font-bold px-1.5 py-0.5 rounded-full whitespace-nowrap">
+                            ⏰ قريب الانتهاء
+                          </span>
+                        </div>
+                        <div className="text-xs text-slate-500">
+                          تنتهي في: {product.dateExpiration ? new Date(product.dateExpiration).toLocaleDateString('ar-MA') : '—'}
+                        </div>
+                      </div>
+                      <div className="flex flex-col items-end gap-1.5">
+                        {product.commune && (
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full text-white"
+                            style={{ backgroundColor: COMMUNE_COLORS[product.commune] || '#64748b' }}>
+                            {COMMUNE_LABELS[product.commune] || product.commune}
+                          </span>
+                        )}
+                        <span className="text-[10px] text-slate-400">{product.reference}</span>
+                      </div>
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
+            )}
+          </div>
+        </motion.div>
+      </div>
+
+      {/* ===== OVERDUE INTERVENTIONS SECTION ===== */}
+      <motion.div
+        variants={containerVariants}
+        initial="initial"
+        animate="animate"
+        className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden"
+      >
           <div className="p-5 border-b border-slate-100 bg-gradient-to-l from-amber-50 to-white">
             <h3 className="text-base font-bold text-slate-800 flex items-center gap-2">
               <span className="text-lg">⏰</span>
@@ -534,7 +658,6 @@ export default function AlertsView() {
             )}
           </div>
         </motion.div>
-      </div>
 
       {/* ===== UPCOMING INTERVENTIONS SECTION ===== */}
       <motion.div

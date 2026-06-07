@@ -725,12 +725,13 @@ function buildNewInterventionPopup(lat: number, lng: number, commune: string | n
   `
 }
 
-export default function MapComponent({ interventions, quartiers, selectedCommune, onMapClick, mapClickEnabled, showCommunePopups, onInterventionCreated }: { 
+export default function MapComponent({ interventions, quartiers, selectedCommune, onMapClick, mapClickEnabled, showCommunePopups, onInterventionCreated, centerOn }: { 
   interventions: Intervention[]; quartiers: Quartier[]; selectedCommune: string;
   onMapClick?: (lat: number, lng: number, commune: string | null) => void;
   mapClickEnabled?: boolean;
   showCommunePopups?: boolean;
   onInterventionCreated?: () => void;
+  centerOn?: { lat: number; lng: number } | null;
 }) {
   const mapRef = useRef<L.Map | null>(null)
   const mapContainerRef = useRef<HTMLDivElement>(null)
@@ -743,6 +744,7 @@ export default function MapComponent({ interventions, quartiers, selectedCommune
   const mapClickEnabledRef = useRef(mapClickEnabled ?? true)
   const showCommunePopupsRef = useRef(showCommunePopups ?? true)
   const onInterventionCreatedRef = useRef(onInterventionCreated)
+  const searchMarkerRef = useRef<L.Marker | null>(null)
 
   // Keep the callback ref up-to-date
   useEffect(() => {
@@ -763,6 +765,28 @@ export default function MapComponent({ interventions, quartiers, selectedCommune
   useEffect(() => {
     onInterventionCreatedRef.current = onInterventionCreated
   }, [onInterventionCreated])
+
+  // Center map on coordinates when centerOn prop changes
+  useEffect(() => {
+    if (!mapRef.current || !centerOn) return
+    const map = mapRef.current
+    map.flyTo([centerOn.lat, centerOn.lng], 16, { duration: 1.5 })
+    // Remove previous search marker
+    if (searchMarkerRef.current) {
+      map.removeLayer(searchMarkerRef.current)
+    }
+    const searchMarker = L.marker([centerOn.lat, centerOn.lng], {
+      icon: L.divIcon({
+        html: `<div style="position:relative;"><div style="background:linear-gradient(135deg,#0d9488,#14b8a6);width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;color:white;border:3px solid white;box-shadow:0 2px 12px rgba(13,148,136,0.5);">📍</div></div>`,
+        className: '',
+        iconSize: [24, 24],
+        iconAnchor: [12, 12],
+        popupAnchor: [0, -16],
+      }),
+    })
+    searchMarker.addTo(map)
+    searchMarkerRef.current = searchMarker
+  }, [centerOn])
 
   useEffect(() => {
     if (!mapContainerRef.current || mapRef.current) return

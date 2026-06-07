@@ -1,6 +1,6 @@
 'use client'
 
-import React from 'react'
+import React, { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -15,7 +15,48 @@ import {
   cardVariants,
 } from '@/lib/constants'
 
-function DashboardView({ stats, onNavigate, selectedCommune, canSeeAllCommunes, onRetry }: { stats: Statistics | null; onNavigate: (v: ViewType) => void; selectedCommune: CommuneType | 'ALL'; canSeeAllCommunes: boolean; onRetry?: () => void }) {
+// Helper: compute trend badge between current and previous values
+function getTrendBadge(current: number, previous: number | undefined): { text: string; color: string; bg: string } | null {
+  if (previous === undefined || previous === null) {
+    return { text: '🆕 جديد', color: '#7c3aed', bg: 'rgba(124,58,237,0.15)' }
+  }
+  if (current === previous) {
+    return { text: '— 0%', color: '#94a3b8', bg: 'rgba(148,163,184,0.15)' }
+  }
+  const pct = Math.round(((current - previous) / Math.max(previous, 1)) * 100)
+  if (current > previous) {
+    return { text: `↑ ${pct}%`, color: '#10b981', bg: 'rgba(16,185,129,0.15)' }
+  }
+  return { text: `↓ ${Math.abs(pct)}%`, color: '#ef4444', bg: 'rgba(239,68,68,0.15)' }
+}
+
+function DashboardView({ stats, onNavigate, selectedCommune, canSeeAllCommunes, onRetry, selectedYear }: { stats: Statistics | null; onNavigate: (v: ViewType) => void; selectedCommune: CommuneType | 'ALL'; canSeeAllCommunes: boolean; onRetry?: () => void; selectedYear?: string }) {
+  // Previous year stats for trend comparison
+  const [prevStats, setPrevStats] = useState<Pick<Statistics, 'total' | 'byType'> | null>(null)
+
+  useEffect(() => {
+    if (!selectedYear) return
+    const year = parseInt(selectedYear)
+    if (isNaN(year) || year <= 2020) return
+    const prevYear = year - 1
+    const params = new URLSearchParams()
+    params.set('year', prevYear.toString())
+    if (selectedCommune !== 'ALL') params.set('commune', selectedCommune)
+    fetch(`/api/statistics?${params.toString()}`)
+      .then(res => res.ok ? res.json() : null)
+      .then(data => {
+        if (data && typeof data.total === 'number') {
+          setPrevStats({ total: data.total, byType: data.byType })
+        } else {
+          setPrevStats(null)
+        }
+      })
+      .catch(() => setPrevStats(null))
+  }, [selectedYear, selectedCommune])
+
+  // Clear previous stats when year is not selected
+  const effectivePrevStats = selectedYear ? prevStats : null
+
   // Error state: stats failed to load
   if (!stats && onRetry) {
     return (
@@ -113,10 +154,18 @@ function DashboardView({ stats, onNavigate, selectedCommune, canSeeAllCommunes, 
     تدخلات: q.count,
   }))
 
+  // KPI cards with trend data
+  const kpiCards = [
+    { title: 'إجمالي التدخلات', value: stats.total, prevValue: effectivePrevStats?.total, icon: '📋', gradient: 'from-slate-700 to-slate-900', shadow: 'shadow-slate-300' },
+    { title: 'مكافحة القوارض', value: stats.byType.DERATISATION || 0, prevValue: effectivePrevStats?.byType?.DERATISATION, icon: '🐀', gradient: 'from-red-500 to-red-700', shadow: 'shadow-red-200' },
+    { title: 'مكافحة الحشرات', value: stats.byType.DESINSECTISATION || 0, prevValue: effectivePrevStats?.byType?.DESINSECTISATION, icon: '🦟', gradient: 'from-amber-500 to-amber-700', shadow: 'shadow-amber-200' },
+    { title: 'التطهير والتعقيم', value: stats.byType.DESINFECTION || 0, prevValue: effectivePrevStats?.byType?.DESINFECTION, icon: '🧴', gradient: 'from-emerald-500 to-emerald-700', shadow: 'shadow-emerald-200' },
+  ]
+
   return (
     <div className="p-4 lg:p-6 space-y-6 pb-24 lg:pb-6">
       {/* Title */}
-      <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col sm:flex-row sm:items-center gap-2">
+      <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
         <div>
           <h2 className="text-2xl font-bold text-slate-800">لوحة القيادة</h2>
           <p className="text-slate-500 text-sm mt-1">
@@ -125,36 +174,50 @@ function DashboardView({ stats, onNavigate, selectedCommune, canSeeAllCommunes, 
               : `نظرة عامة على عمليات 3D — ${COMMUNE_LABELS[selectedCommune]}`}
           </p>
         </div>
-        {selectedCommune !== 'ALL' && (
-          <motion.span initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold self-start"
-            style={{ backgroundColor: COMMUNE_COLORS[selectedCommune] + '18', color: COMMUNE_COLORS[selectedCommune] }}>
-            <div className="w-2 h-2 rounded-full" style={{ backgroundColor: COMMUNE_COLORS[selectedCommune] }} />
-            {COMMUNE_LABELS[selectedCommune]}
-          </motion.span>
-        )}
+        <div className="flex items-center gap-2">
+          {selectedCommune !== 'ALL' && (
+            <motion.span initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold"
+              style={{ backgroundColor: COMMUNE_COLORS[selectedCommune] + '18', color: COMMUNE_COLORS[selectedCommune] }}>
+              <div className="w-2 h-2 rounded-full" style={{ backgroundColor: COMMUNE_COLORS[selectedCommune] }} />
+              {COMMUNE_LABELS[selectedCommune]}
+            </motion.span>
+          )}
+          <button
+            onClick={() => window.print()}
+            className="no-print inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white border border-slate-200 text-sm font-medium text-slate-600 hover:bg-emerald-50 hover:text-emerald-600 hover:border-emerald-200 transition-all shadow-sm"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5 4v3H4a2 2 0 00-2 2v3a2 2 0 002 2h1v2a2 2 0 002 2h6a2 2 0 002-2v-2h1a2 2 0 002-2V9a2 2 0 00-2-2h-1V4a2 2 0 00-2-2H7a2 2 0 00-2 2zm8 0H7v3h6V4zm0 8H7v4h6v-4z" clipRule="evenodd" /></svg>
+            طباعة التقرير
+          </button>
+        </div>
       </motion.div>
 
-      {/* KPI Cards */}
+      {/* KPI Cards with YoY Trends */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {[
-          { title: 'إجمالي التدخلات', value: stats.total, icon: '📋', gradient: 'from-slate-700 to-slate-900', shadow: 'shadow-slate-300' },
-          { title: 'مكافحة القوارض', value: stats.byType.DERATISATION || 0, icon: '🐀', gradient: 'from-red-500 to-red-700', shadow: 'shadow-red-200' },
-          { title: 'مكافحة الحشرات', value: stats.byType.DESINSECTISATION || 0, icon: '🦟', gradient: 'from-amber-500 to-amber-700', shadow: 'shadow-amber-200' },
-          { title: 'التطهير والتعقيم', value: stats.byType.DESINFECTION || 0, icon: '🧴', gradient: 'from-emerald-500 to-emerald-700', shadow: 'shadow-emerald-200' },
-        ].map((card, i) => (
-          <motion.div key={card.title} variants={cardVariants} initial="initial" animate="animate" whileHover="hover"
-            transition={{ delay: i * 0.08 }}
-            className={`bg-gradient-to-br ${card.gradient} text-white rounded-2xl p-5 ${card.shadow} shadow-lg relative overflow-hidden`}>
-            <div className="absolute top-0 left-0 w-24 h-24 bg-white/10 rounded-full -translate-x-8 -translate-y-8" />
-            <div className="absolute bottom-0 right-0 w-16 h-16 bg-white/5 rounded-full translate-x-4 translate-y-4" />
-            <div className="relative z-10">
-              <span className="text-3xl opacity-90">{card.icon}</span>
-              <div className="text-3xl lg:text-4xl font-bold mt-3 tracking-tight">{card.value}</div>
-              <div className="text-sm opacity-80 mt-1 font-medium">{card.title}</div>
-            </div>
-          </motion.div>
-        ))}
+        {kpiCards.map((card, i) => {
+          const trend = getTrendBadge(card.value, card.prevValue)
+          return (
+            <motion.div key={card.title} variants={cardVariants} initial="initial" animate="animate" whileHover="hover"
+              transition={{ delay: i * 0.08 }}
+              className={`bg-gradient-to-br ${card.gradient} text-white rounded-2xl p-5 ${card.shadow} shadow-lg relative overflow-hidden`}>
+              <div className="absolute top-0 left-0 w-24 h-24 bg-white/10 rounded-full -translate-x-8 -translate-y-8" />
+              <div className="absolute bottom-0 right-0 w-16 h-16 bg-white/5 rounded-full translate-x-4 translate-y-4" />
+              <div className="relative z-10">
+                <span className="text-3xl opacity-90">{card.icon}</span>
+                <div className="text-3xl lg:text-4xl font-bold mt-3 tracking-tight">{card.value}</div>
+                <div className="text-sm opacity-80 mt-1 font-medium">{card.title}</div>
+                {/* Trend badge */}
+                {trend && (
+                  <div className="mt-2 inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-bold backdrop-blur-sm"
+                    style={{ color: trend.color, backgroundColor: trend.bg }}>
+                    {trend.text}
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          )
+        })}
       </div>
 
       {/* Commune Breakdown - Only show for admin users viewing ALL communes */}

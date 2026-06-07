@@ -36,6 +36,7 @@ export interface Intervention {
   agentNom: string; produitUtilise: string; quantite: string; superficie: string
   nombrePrestations: number; observations: string; reference: string
   commune: string; createdAt: string; updatedAt: string
+  heureDebut?: string | null; heureFin?: string | null
   materials?: InterventionMaterial[]
   documents?: InterventionDocument[]
 }

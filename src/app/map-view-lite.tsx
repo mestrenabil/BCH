@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { motion } from 'framer-motion'
 import { useAppStore, type CommuneType } from '@/lib/store'
 import {
@@ -14,9 +14,20 @@ const COMMUNE_INFO: { name: string; key: string; color: string; population: stri
   { name: 'جماعة عامر', key: 'عامر', color: '#d97706', population: '75,942', populationMunicipale: '75,896', populationCompteeAPart: '46', menages: '18,540', isBouknadel: false },
 ]
 
+interface MapComponentProps {
+  interventions: Intervention[]
+  quartiers: Quartier[]
+  selectedCommune: string
+  onMapClick?: (lat: number, lng: number, commune: string | null) => void
+  mapClickEnabled?: boolean
+  showCommunePopups?: boolean
+  onInterventionCreated?: () => void
+  centerOn?: { lat: number; lng: number } | null
+}
+
 function MapView({ interventions, quartiers, selectedCommune, canSeeAllCommunes, onMapClick, onRefresh }: { interventions: Intervention[]; quartiers: Quartier[]; selectedCommune: CommuneType | 'ALL'; canSeeAllCommunes: boolean; onMapClick: (lat: number, lng: number, commune: string | null) => void; onRefresh?: () => void }) {
   const [mapLoaded, setMapLoaded] = useState(false)
-  const [MapComponent, setMapComponent] = useState<React.ComponentType<{ interventions: Intervention[]; quartiers: Quartier[]; selectedCommune: string; onMapClick?: (lat: number, lng: number, commune: string | null) => void; mapClickEnabled?: boolean; showCommunePopups?: boolean; onInterventionCreated?: () => void }> | null>(null)
+  const [MapComponent, setMapComponent] = useState<React.ComponentType<MapComponentProps> | null>(null)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [hoveredCommune, setHoveredCommune] = useState<string | null>(null)
   const { setSelectedCommune, settings } = useAppStore()
@@ -24,10 +35,81 @@ function MapView({ interventions, quartiers, selectedCommune, canSeeAllCommunes,
   const [mapError, setMapError] = useState(false)
   const [mapLoadAttempt, setMapLoadAttempt] = useState(0)
 
+  // Search state
+  const [searchQuery, setSearchQuery] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
+  const [searchResults, setSearchResults] = useState<Quartier[]>([])
+  const [showSearchDropdown, setShowSearchDropdown] = useState(false)
+  const [centerOnCoords, setCenterOnCoords] = useState<{ lat: number; lng: number } | null>(null)
+  const searchInputRef = useRef<HTMLInputElement>(null)
+  const searchDropdownRef = useRef<HTMLDivElement>(null)
+
+  // Debounce search (300ms)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchQuery)
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [searchQuery])
+
+  // Filter search results when debounced search changes
+  useEffect(() => {
+    if (!debouncedSearch.trim()) {
+      setSearchResults([])
+      setShowSearchDropdown(false)
+      return
+    }
+    const q = debouncedSearch.trim().toLowerCase()
+    const filtered = quartiers.filter(qt =>
+      qt.nom.toLowerCase().includes(q) ||
+      qt.commune.toLowerCase().includes(q)
+    )
+    setSearchResults(filtered.slice(0, 10))
+    setShowSearchDropdown(filtered.length > 0)
+  }, [debouncedSearch, quartiers])
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (searchDropdownRef.current && !searchDropdownRef.current.contains(e.target as Node) &&
+          searchInputRef.current && !searchInputRef.current.contains(e.target as Node)) {
+        setShowSearchDropdown(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
+  // Handle search result selection
+  const handleSearchSelect = useCallback((quartier: Quartier) => {
+    setShowSearchDropdown(false)
+    setSearchQuery(quartier.nom)
+    setCenterOnCoords({ lat: quartier.latitude, lng: quartier.longitude })
+  }, [])
+
+  // Clear search
+  const handleClearSearch = useCallback(() => {
+    setSearchQuery('')
+    setDebouncedSearch('')
+    setSearchResults([])
+    setShowSearchDropdown(false)
+    setCenterOnCoords(null)
+  }, [])
+
+  // Filter interventions by search
+  const filteredInterventions = React.useMemo(() => {
+    if (!debouncedSearch.trim()) return interventions
+    const q = debouncedSearch.trim().toLowerCase()
+    return interventions.filter(inv =>
+      inv.quartier.toLowerCase().includes(q) ||
+      inv.adresse.toLowerCase().includes(q)
+    )
+  }, [interventions, debouncedSearch])
+
   useEffect(() => {
     setMapError(false)
     import('./map-component').then((mod) => {
-      setMapComponent(() => mod.default)
+      setMapComponent(() => mod.default as unknown as React.ComponentType<MapComponentProps>)
       setMapLoaded(true)
     }).catch(() => {
       setMapError(true)
@@ -40,14 +122,24 @@ function MapView({ interventions, quartiers, selectedCommune, canSeeAllCommunes,
   // Intervention counts by type for current filter
   const typeCounts = Object.entries(TYPE_LABELS).map(([key, label]) => ({
     key, label, color: TYPE_COLORS[key], icon: TYPE_ICONS[key],
-    count: interventions.filter(i => i.type === key).length,
+    count: filteredInterventions.filter(i => i.type === key).length,
   }))
 
   // Status counts
   const statusCounts = Object.entries(STATUT_LABELS).map(([key, label]) => ({
     key, label, color: STATUT_COLORS[key],
-    count: interventions.filter(i => i.statut === key).length,
+    count: filteredInterventions.filter(i => i.statut === key).length,
   }))
+
+  // Filtered quartiers for sidebar list
+  const filteredQuartiersForSidebar = React.useMemo(() => {
+    if (!debouncedSearch.trim()) return quartiers
+    const q = debouncedSearch.trim().toLowerCase()
+    return quartiers.filter(qt =>
+      qt.nom.toLowerCase().includes(q) ||
+      qt.commune.toLowerCase().includes(q)
+    )
+  }, [quartiers, debouncedSearch])
 
   return (
     <div className="h-[calc(100vh-8rem)] lg:h-[calc(100vh-6rem)] pb-16 lg:pb-0 relative flex">
@@ -88,10 +180,65 @@ function MapView({ interventions, quartiers, selectedCommune, canSeeAllCommunes,
               </div>
             </div>
 
+            {/* Search Input */}
+            <div className="p-3 pb-2 relative">
+              <div className="relative">
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">🔍</span>
+                <input
+                  ref={searchInputRef}
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onFocus={() => { if (searchResults.length > 0) setShowSearchDropdown(true) }}
+                  placeholder="ابحث عن حي أو عنوان..."
+                  className="w-full pr-9 pl-9 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-emerald-400 focus:ring-1 focus:ring-emerald-200 transition-all"
+                  dir="rtl"
+                />
+                {searchQuery && (
+                  <button
+                    onClick={handleClearSearch}
+                    className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                    </svg>
+                  </button>
+                )}
+              </div>
+              {/* Search Results Dropdown */}
+              {showSearchDropdown && searchResults.length > 0 && (
+                <div
+                  ref={searchDropdownRef}
+                  className="absolute left-3 right-3 top-full mt-1 bg-white rounded-xl border border-slate-200 shadow-xl z-50 max-h-60 overflow-y-auto"
+                >
+                  <div className="p-2">
+                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1.5 px-2">
+                      نتائج البحث ({searchResults.length})
+                    </p>
+                    {searchResults.map((qt) => (
+                      <button
+                        key={qt.id}
+                        onClick={() => handleSearchSelect(qt)}
+                        className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg hover:bg-emerald-50 transition-colors text-right"
+                      >
+                        <div className="w-7 h-7 rounded-md bg-emerald-100 flex items-center justify-center text-xs flex-shrink-0">
+                          📍
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-slate-700 truncate">{qt.nom}</p>
+                          <p className="text-[10px] text-slate-400">{qt.commune}</p>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
             {/* Quick Stats */}
             <div className="grid grid-cols-3 gap-2 p-3">
               <div className="bg-emerald-50 rounded-xl p-2 text-center border border-emerald-100">
-                <div className="text-lg font-bold text-emerald-700">{interventions.length}</div>
+                <div className="text-lg font-bold text-emerald-700">{filteredInterventions.length}</div>
                 <div className="text-[9px] text-emerald-600 font-semibold">التدخلات</div>
               </div>
               <div className="bg-violet-50 rounded-xl p-2 text-center border border-violet-100">
@@ -213,9 +360,9 @@ function MapView({ interventions, quartiers, selectedCommune, canSeeAllCommunes,
                       <div className="text-[10px] text-slate-400">👥 {info.population} نسمة</div>
                     </div>
                     <div className="text-[10px] font-bold text-slate-500 flex-shrink-0">
-                      {interventions.length > 0 && (
+                      {filteredInterventions.length > 0 && (
                         <span className="bg-slate-100 px-1.5 py-0.5 rounded-md">
-                          {interventions.filter(i => i.commune === info.key).length}
+                          {filteredInterventions.filter(i => i.commune === info.key).length}
                         </span>
                       )}
                     </div>
@@ -223,6 +370,35 @@ function MapView({ interventions, quartiers, selectedCommune, canSeeAllCommunes,
                 ))}
               </div>
             </div>
+
+            {/* Quartiers List (filtered by search) */}
+            {filteredQuartiersForSidebar.length > 0 && (
+              <div className="px-3 pb-2">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">
+                  📍 الأحياء {debouncedSearch ? `(${filteredQuartiersForSidebar.length})` : ''}
+                </p>
+                <div className="space-y-1 max-h-48 overflow-y-auto">
+                  {filteredQuartiersForSidebar.slice(0, 20).map((qt) => {
+                    const qtInvs = filteredInterventions.filter(i => i.quartier === qt.nom)
+                    return (
+                      <button
+                        key={qt.id}
+                        onClick={() => handleSearchSelect(qt)}
+                        className="w-full flex items-center gap-2 p-1.5 rounded-lg hover:bg-emerald-50/50 transition-colors text-right"
+                      >
+                        <div className="w-4 h-4 rounded-full bg-teal-100 flex items-center justify-center flex-shrink-0">
+                          <div className="w-1.5 h-1.5 rounded-full bg-teal-500" />
+                        </div>
+                        <span className="text-[11px] text-slate-600 truncate flex-1">{qt.nom}</span>
+                        {qtInvs.length > 0 && (
+                          <span className="text-[9px] bg-slate-100 px-1.5 py-0.5 rounded-md font-bold text-slate-500 flex-shrink-0">{qtInvs.length}</span>
+                        )}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
 
             {/* Intervention Types */}
             <div className="px-3 pb-2">
@@ -238,7 +414,7 @@ function MapView({ interventions, quartiers, selectedCommune, canSeeAllCommunes,
                         <div className="text-xs text-slate-600 font-medium">{t.label}</div>
                         <div className="w-full bg-slate-200 rounded-full h-1 mt-0.5">
                           <div className="h-full rounded-full transition-all duration-500" style={{
-                            width: `${interventions.length > 0 ? (t.count / interventions.length * 100) : 0}%`,
+                            width: `${filteredInterventions.length > 0 ? (t.count / filteredInterventions.length * 100) : 0}%`,
                             backgroundColor: t.color,
                           }} />
                         </div>
@@ -249,7 +425,7 @@ function MapView({ interventions, quartiers, selectedCommune, canSeeAllCommunes,
                 </div>
                 <div className="border-t border-slate-200 mt-2 pt-2 flex items-center justify-between">
                   <span className="text-[10px] text-slate-500 font-semibold">المجموع</span>
-                  <span className="text-sm font-bold text-emerald-600">{interventions.length}</span>
+                  <span className="text-sm font-bold text-emerald-600">{filteredInterventions.length}</span>
                 </div>
               </div>
             </div>
@@ -295,7 +471,7 @@ function MapView({ interventions, quartiers, selectedCommune, canSeeAllCommunes,
               </motion.button>
             </div>
           </div>
-        ) : mapLoaded && MapComponent ? <MapComponent interventions={interventions} quartiers={quartiers} selectedCommune={selectedCommune} onMapClick={onMapClick} mapClickEnabled={settings.mapClickEnabled} showCommunePopups={settings.showCommunePopups} onInterventionCreated={onRefresh} /> : (
+        ) : mapLoaded && MapComponent ? <MapComponent interventions={filteredInterventions} quartiers={quartiers} selectedCommune={selectedCommune} onMapClick={onMapClick} mapClickEnabled={settings.mapClickEnabled} showCommunePopups={settings.showCommunePopups} onInterventionCreated={onRefresh} centerOn={centerOnCoords} /> : (
           <div className="h-full flex items-center justify-center bg-slate-50">
             <div className="text-center space-y-4">
               <div className="w-14 h-14 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mx-auto" />

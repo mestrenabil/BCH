@@ -88,7 +88,7 @@ export async function POST(request: NextRequest) {
     const { user } = authResult
 
     const body = await request.json()
-    const { nom, categorie, commune, unite, quantiteStock, seuilAlerte, prixUnitaire, fournisseur, description } = body
+    const { nom, categorie, commune, unite, quantiteStock, seuilAlerte, prixUnitaire, fournisseur, description, dateExpiration } = body
 
     if (!nom || !categorie) {
       return NextResponse.json({ error: 'يرجى ملء جميع الحقول المطلوبة' }, { status: 400 })
@@ -120,6 +120,7 @@ export async function POST(request: NextRequest) {
         fournisseur: fournisseur || '',
         description: description || '',
         reference,
+        ...(dateExpiration ? { dateExpiration: new Date(dateExpiration) } : {}),
       },
     })
 

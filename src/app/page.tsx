@@ -769,7 +769,7 @@ export default function HomePage() {
               </motion.div>
             ) : (
               <motion.div key={currentView} variants={pageVariants} initial="initial" animate="animate" exit="exit">
-                {currentView === 'dashboard' && <DashboardView stats={stats} onNavigate={setCurrentView} selectedCommune={selectedCommune} canSeeAllCommunes={canSeeAllCommunes} onRetry={fetchStats} />}
+                {currentView === 'dashboard' && <DashboardView stats={stats} onNavigate={setCurrentView} selectedCommune={selectedCommune} canSeeAllCommunes={canSeeAllCommunes} onRetry={fetchStats} selectedYear={selectedYear} />}
                 {currentView === 'map' && <MapView interventions={interventions} quartiers={quartiers} selectedCommune={selectedCommune} canSeeAllCommunes={canSeeAllCommunes} onMapClick={(lat: number, lng: number, commune: string | null) => {
                   const { settings: currentSettings } = useAppStore.getState()
                   if (!currentSettings.mapClickEnabled) return
@@ -875,6 +875,7 @@ function InterventionFormDialog({ interventionId, quartiers, mapClickCoords, pre
 
   const [formData, setFormData] = useState({
     type: 'DERATISATION', date: presetDate || new Date().toISOString().split('T')[0],
+    heureDebut: '', heureFin: '',
     quartier: '', adresse: '', commune: enforcedCommune,
     latitude: mapClickCoords ? mapClickCoords.latitude.toString() : '34.052', 
     longitude: mapClickCoords ? mapClickCoords.longitude.toString() : '-6.735',
@@ -919,6 +920,7 @@ function InterventionFormDialog({ interventionId, quartiers, mapClickCoords, pre
       fetch(`/api/interventions/${interventionId}`).then(res => res.json()).then(data => {
         setFormData({
           type: data.type, date: new Date(data.date).toISOString().split('T')[0],
+          heureDebut: data.heureDebut || '', heureFin: data.heureFin || '',
           quartier: data.quartier, adresse: data.adresse, commune: data.commune || '',
           latitude: data.latitude.toString(), longitude: data.longitude.toString(),
           statut: data.statut, description: data.description || '', agentNom: data.agentNom,
@@ -1075,6 +1077,18 @@ function InterventionFormDialog({ interventionId, quartiers, mapClickCoords, pre
               <div>
                 <label className="block text-sm font-semibold text-slate-700 mb-1.5">التاريخ *</label>
                 <input type="date" value={formData.date} onChange={(e) => updateField('date', e.target.value)} required
+                  className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-300" />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-1.5">⏰ وقت البداية</label>
+                <input type="time" value={formData.heureDebut} onChange={(e) => updateField('heureDebut', e.target.value)}
+                  className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-300" />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-1.5">⏰ وقت النهاية</label>
+                <input type="time" value={formData.heureFin} onChange={(e) => updateField('heureFin', e.target.value)}
                   className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-300" />
               </div>
             </div>

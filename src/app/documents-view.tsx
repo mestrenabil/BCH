@@ -216,6 +216,13 @@ export default function DocumentsView() {
   // Detail panel
   const [detailDoc, setDetailDoc] = useState<DocumentRecord | null>(null)
 
+  // Bulk operations
+  const [multiSelectMode, setMultiSelectMode] = useState(false)
+  const [selectedDocIds, setSelectedDocIds] = useState<Set<string>>(new Set())
+  const [showBulkCategoryDialog, setShowBulkCategoryDialog] = useState(false)
+  const [bulkCategory, setBulkCategory] = useState('عام')
+  const [isBulkOperating, setIsBulkOperating] = useState(false)
+
   // Debounce search query (300ms)
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(searchQuery), 300)
@@ -417,6 +424,72 @@ export default function DocumentsView() {
     setViewerType(null)
   }
 
+  // Bulk operations handlers
+  const toggleDocSelection = (id: string) => {
+    setSelectedDocIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const handleBulkDelete = async () => {
+    if (selectedDocIds.size === 0) return
+    setIsBulkOperating(true)
+    let successCount = 0
+    let failCount = 0
+    for (const id of selectedDocIds) {
+      try {
+        const res = await fetch(`/api/documents/${id}`, { method: 'DELETE' })
+        if (res.ok) successCount++
+        else failCount++
+      } catch {
+        failCount++
+      }
+    }
+    setIsBulkOperating(false)
+    setMultiSelectMode(false)
+    setSelectedDocIds(new Set())
+    if (failCount === 0) {
+      toast.success(`تم حذف ${successCount} مستند بنجاح`)
+    } else {
+      toast.error(`تم حذف ${successCount} مستند، فشل حذف ${failCount} مستند`)
+    }
+    fetchDocuments()
+  }
+
+  const handleBulkCategoryChange = async () => {
+    if (selectedDocIds.size === 0 || !bulkCategory) return
+    setIsBulkOperating(true)
+    let successCount = 0
+    let failCount = 0
+    for (const id of selectedDocIds) {
+      try {
+        const doc = documents.find(d => d.id === id)
+        const res = await fetch(`/api/documents/${id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ categorie: bulkCategory, titre: doc?.titre, description: doc?.description, reference: doc?.reference, dateDocument: doc?.dateDocument }),
+        })
+        if (res.ok) successCount++
+        else failCount++
+      } catch {
+        failCount++
+      }
+    }
+    setIsBulkOperating(false)
+    setShowBulkCategoryDialog(false)
+    setMultiSelectMode(false)
+    setSelectedDocIds(new Set())
+    if (failCount === 0) {
+      toast.success(`تم تغيير تصنيف ${successCount} مستند بنجاح`)
+    } else {
+      toast.error(`تم تغيير تصنيف ${successCount} مستند، فشل ${failCount} مستند`)
+    }
+    fetchDocuments()
+  }
+
   return (
     <div className="p-4 lg:p-6 space-y-6" dir="rtl">
       {/* Header */}
@@ -559,6 +632,16 @@ export default function DocumentsView() {
               ☰ قائمة
             </button>
           </div>
+          {/* Multi-select Toggle */}
+          <button
+            onClick={() => {
+              setMultiSelectMode(!multiSelectMode)
+              setSelectedDocIds(new Set())
+            }}
+            className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all border ${multiSelectMode ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm' : 'bg-white text-slate-600 border-slate-200 hover:border-emerald-300'}`}
+          >
+            ☑️ تحديد متعدد
+          </button>
         </div>
 
         {/* Category chips */}
@@ -620,9 +703,21 @@ export default function DocumentsView() {
               initial={{ opacity: 0, y: 15 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: i * 0.03 }}
-              className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden hover:shadow-md hover:border-emerald-200 transition-all group cursor-pointer"
-              onClick={() => setDetailDoc(doc)}
+              className={`bg-white rounded-2xl shadow-sm overflow-hidden hover:shadow-md transition-all group cursor-pointer ${multiSelectMode && selectedDocIds.has(doc.id) ? 'border-2 border-emerald-500 ring-2 ring-emerald-200' : multiSelectMode ? 'border-2 border-transparent hover:border-emerald-200' : 'border border-slate-100 hover:border-emerald-200'}`}
+              onClick={() => multiSelectMode ? toggleDocSelection(doc.id) : setDetailDoc(doc)}
             >
+              {/* Multi-select checkbox */}
+              {multiSelectMode && (
+                <div className="absolute top-2 right-2 z-10">
+                  <div className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all ${selectedDocIds.has(doc.id) ? 'bg-emerald-500 border-emerald-500' : 'bg-white/80 border-slate-300 backdrop-blur-sm'}`}>
+                    {selectedDocIds.has(doc.id) && (
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-white" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                      </svg>
+                    )}
+                  </div>
+                </div>
+              )}
               {/* File Preview Area */}
               <div className="h-32 bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center relative overflow-hidden">
                 {doc.typeFichier === 'pdf' ? (
@@ -728,6 +823,7 @@ export default function DocumentsView() {
           <table className="w-full">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-100">
+                {multiSelectMode && <th className="w-10 px-2 py-3"></th>}
                 <th className="text-right px-4 py-3 text-xs font-bold text-slate-500">المستند</th>
                 <th className="text-right px-4 py-3 text-xs font-bold text-slate-500 hidden md:table-cell">الفئة</th>
                 <th className="text-right px-4 py-3 text-xs font-bold text-slate-500 hidden lg:table-cell">الجماعة</th>
@@ -743,9 +839,20 @@ export default function DocumentsView() {
                   initial={{ opacity: 0, x: 10 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: i * 0.02 }}
-                  className="border-b border-slate-50 hover:bg-emerald-50/30 transition-colors cursor-pointer"
-                  onClick={() => setDetailDoc(doc)}
+                  className={`border-b transition-colors cursor-pointer ${multiSelectMode && selectedDocIds.has(doc.id) ? 'bg-emerald-50/50 border-emerald-200' : 'border-slate-50 hover:bg-emerald-50/30'}`}
+                  onClick={() => multiSelectMode ? toggleDocSelection(doc.id) : setDetailDoc(doc)}
                 >
+                  {multiSelectMode && (
+                    <td className="px-2 py-3 w-10">
+                      <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${selectedDocIds.has(doc.id) ? 'bg-emerald-500 border-emerald-500' : 'bg-white border-slate-300'}`}>
+                        {selectedDocIds.has(doc.id) && (
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 text-white" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                          </svg>
+                        )}
+                      </div>
+                    </td>
+                  )}
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-3">
                       <span className="text-2xl">{getFileIcon(doc.typeFichier)}</span>
@@ -811,6 +918,95 @@ export default function DocumentsView() {
           </table>
         </div>
       )}
+
+      {/* ===== FLOATING BULK ACTION BAR ===== */}
+      <AnimatePresence>
+        {multiSelectMode && selectedDocIds.size > 0 && (
+          <motion.div
+            initial={{ y: 100, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 100, opacity: 0 }}
+            transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+            className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[50] bg-white rounded-2xl shadow-2xl border border-slate-200 px-5 py-3 flex items-center gap-3"
+            dir="rtl"
+          >
+            <span className="bg-emerald-100 text-emerald-700 px-3 py-1 rounded-lg text-xs font-bold">
+              تم تحديد {selectedDocIds.size} مستندات
+            </span>
+            <button
+              onClick={handleBulkDelete}
+              disabled={isBulkOperating}
+              className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-xl text-xs font-medium transition-colors disabled:opacity-50 flex items-center gap-1.5"
+            >
+              🗑️ حذف المحدد
+            </button>
+            <button
+              onClick={() => setShowBulkCategoryDialog(true)}
+              disabled={isBulkOperating}
+              className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-medium transition-colors disabled:opacity-50 flex items-center gap-1.5"
+            >
+              📂 تغيير التصنيف
+            </button>
+            <button
+              onClick={() => { setMultiSelectMode(false); setSelectedDocIds(new Set()) }}
+              className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-xs font-medium transition-colors"
+            >
+              إلغاء التحديد
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ===== BULK CATEGORY CHANGE DIALOG ===== */}
+      <AnimatePresence>
+        {showBulkCategoryDialog && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[60] flex items-center justify-center p-4"
+            onClick={() => setShowBulkCategoryDialog(false)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-5"
+              onClick={(e) => e.stopPropagation()}
+              dir="rtl"
+            >
+              <h3 className="text-base font-bold text-slate-800 mb-3 flex items-center gap-2">
+                📂 تغيير تصنيف {selectedDocIds.size} مستند
+              </h3>
+              <select
+                value={bulkCategory}
+                onChange={(e) => setBulkCategory(e.target.value)}
+                className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-300 mb-4"
+              >
+                {CATEGORIES.filter(c => c.id !== 'ALL').map(cat => (
+                  <option key={cat.id} value={cat.id}>{cat.icon} {cat.label}</option>
+                ))}
+              </select>
+              <div className="flex gap-2">
+                <motion.button
+                  whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+                  onClick={handleBulkCategoryChange}
+                  disabled={isBulkOperating}
+                  className="flex-1 bg-gradient-to-l from-emerald-600 to-teal-600 text-white px-4 py-2.5 rounded-xl font-medium shadow-lg shadow-emerald-200 disabled:opacity-50 text-sm"
+                >
+                  {isBulkOperating ? 'جاري التغيير...' : 'تأكيد التغيير'}
+                </motion.button>
+                <button
+                  onClick={() => setShowBulkCategoryDialog(false)}
+                  className="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50 transition-colors text-sm"
+                >
+                  إلغاء
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* ===== DOCUMENT DETAIL PANEL ===== */}
       <AnimatePresence>

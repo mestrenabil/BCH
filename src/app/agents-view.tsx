@@ -46,6 +46,7 @@ export default function AgentsView() {
 
   // Data state
   const [agents, setAgents] = useState<Agent[]>([])
+  const [agentInterventionCounts, setAgentInterventionCounts] = useState<Record<string, number>>({})
   const [isLoading, setIsLoading] = useState(true)
 
   // Search & filter state
@@ -76,10 +77,28 @@ export default function AgentsView() {
     try {
       const params = new URLSearchParams()
       if (effectiveCommune && effectiveCommune !== 'ALL') params.set('commune', effectiveCommune)
-      const res = await fetch(`/api/agents?${params.toString()}`)
-      if (!res.ok) throw new Error()
-      const data = await res.json()
-      setAgents(data.agents || [])
+      const [agentsRes, interventionsRes] = await Promise.all([
+        fetch(`/api/agents?${params.toString()}`),
+        fetch(`/api/interventions?${effectiveCommune && effectiveCommune !== 'ALL' ? 'commune=' + effectiveCommune + '&' : ''}limit=9999`),
+      ])
+      if (!agentsRes.ok) throw new Error()
+      const agentsData = await agentsRes.json()
+      const fetchedAgents = agentsData.agents || []
+      setAgents(fetchedAgents)
+
+      // Count interventions per agent
+      if (interventionsRes.ok) {
+        const interventionsData = await interventionsRes.json()
+        const interventions = interventionsData.interventions || []
+        const counts: Record<string, number> = {}
+        for (const agent of fetchedAgents) {
+          const fullName = `${agent.nom} ${agent.prenom}`.trim()
+          counts[agent.id] = interventions.filter((i: { agentNom: string }) =>
+            i.agentNom === agent.nom || i.agentNom === fullName
+          ).length
+        }
+        setAgentInterventionCounts(counts)
+      }
     } catch {
       toast.error('فشل في تحميل بيانات الأعوان')
     }
@@ -475,6 +494,7 @@ export default function AgentsView() {
                 key={agent.id}
                 agent={agent}
                 index={i}
+                interventionCount={agentInterventionCounts[agent.id] || 0}
                 onEdit={handleEdit}
                 onDelete={setDeletingAgent}
                 onToggleActive={handleToggleActive}
@@ -489,6 +509,7 @@ export default function AgentsView() {
                 key={agent.id}
                 agent={agent}
                 index={i}
+                interventionCount={agentInterventionCounts[agent.id] || 0}
                 onEdit={handleEdit}
                 onDelete={setDeletingAgent}
                 onToggleActive={handleToggleActive}
@@ -661,6 +682,17 @@ export default function AgentsView() {
                   </button>
                 </div>
 
+                {/* Intervention count (read-only, only shown when editing) */}
+                {editingAgent && (
+                  <div className="bg-teal-50 rounded-xl p-3 flex items-center gap-3">
+                    <span className="text-xl">📋</span>
+                    <div>
+                      <span className="text-sm font-bold text-teal-700">عدد التدخلات</span>
+                      <p className="text-2xl font-extrabold text-teal-600">{agentInterventionCounts[editingAgent.id] || 0} تدخل</p>
+                    </div>
+                  </div>
+                )}
+
                 {/* Submit buttons */}
                 <div className="flex items-center gap-3 pt-2">
                   <motion.button
@@ -752,12 +784,14 @@ export default function AgentsView() {
 function AgentCard({
   agent,
   index,
+  interventionCount,
   onEdit,
   onDelete,
   onToggleActive,
 }: {
   agent: Agent
   index: number
+  interventionCount: number
   onEdit: (agent: Agent) => void
   onDelete: (agent: Agent) => void
   onToggleActive: (agent: Agent) => void
@@ -834,6 +868,11 @@ function AgentCard({
             <span>{fonctionIcon}</span>
             {agent.fonction}
           </span>
+
+          {/* Intervention count badge */}
+          <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-teal-50 text-teal-700 flex items-center gap-1">
+            📋 {interventionCount} تدخل
+          </span>
         </div>
 
         {/* Action buttons */}
@@ -895,12 +934,14 @@ function AgentCard({
 function AgentCardMobile({
   agent,
   index,
+  interventionCount,
   onEdit,
   onDelete,
   onToggleActive,
 }: {
   agent: Agent
   index: number
+  interventionCount: number
   onEdit: (agent: Agent) => void
   onDelete: (agent: Agent) => void
   onToggleActive: (agent: Agent) => void
@@ -941,6 +982,9 @@ function AgentCardMobile({
             )}
             <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md text-white flex items-center gap-0.5" style={{ backgroundColor: fonctionColor }}>
               {fonctionIcon} {agent.fonction}
+            </span>
+            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-teal-50 text-teal-700 flex items-center gap-0.5">
+              📋 {interventionCount}
             </span>
             {agent.telephone && (
               <span className="text-[10px] text-slate-400" dir="ltr">{agent.telephone}</span>

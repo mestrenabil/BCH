@@ -672,6 +672,46 @@ export function UserManagementSection() {
 // ===== USERS VIEW =====
 function UsersView() {
   const { user: authUser } = useAppStore()
+  const [selfChangePasswordOpen, setSelfChangePasswordOpen] = useState(false)
+  const [selfChangePasswordForm, setSelfChangePasswordForm] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' })
+  const [selfChangePasswordError, setSelfChangePasswordError] = useState('')
+  const [selfChangePasswordSubmitting, setSelfChangePasswordSubmitting] = useState(false)
+
+  const handleSelfChangePassword = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setSelfChangePasswordError('')
+    if (selfChangePasswordForm.newPassword !== selfChangePasswordForm.confirmPassword) {
+      setSelfChangePasswordError('كلمة المرور الجديدة غير متطابقة')
+      return
+    }
+    if (selfChangePasswordForm.newPassword.length < 4) {
+      setSelfChangePasswordError('كلمة المرور الجديدة يجب أن تكون 4 أحرف على الأقل')
+      return
+    }
+    setSelfChangePasswordSubmitting(true)
+    try {
+      const res = await fetch('/api/auth/change-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          currentPassword: selfChangePasswordForm.currentPassword,
+          newPassword: selfChangePasswordForm.newPassword,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setSelfChangePasswordError(data.error || 'حدث خطأ')
+        return
+      }
+      toast.success('تم تغيير كلمة المرور بنجاح')
+      setSelfChangePasswordOpen(false)
+      setSelfChangePasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' })
+    } catch {
+      setSelfChangePasswordError('حدث خطأ في الاتصال')
+    } finally {
+      setSelfChangePasswordSubmitting(false)
+    }
+  }
 
   return (
     <div className="p-4 lg:p-6 space-y-6 pb-24 lg:pb-6">
@@ -702,9 +742,22 @@ function UsersView() {
               @{authUser?.username} • {authUser?.commune === 'ALL' ? 'مسؤول عام — صلاحية كاملة' : COMMUNE_LABELS[authUser?.commune || ''] || authUser?.commune}
             </div>
           </div>
-          <div className="flex items-center gap-1.5">
-            <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-            <span className="text-xs font-medium text-emerald-600">متصل</span>
+          <div className="flex items-center gap-2">
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={() => { setSelfChangePasswordOpen(true); setSelfChangePasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' }); setSelfChangePasswordError('') }}
+              className="bg-gradient-to-l from-amber-500 to-orange-500 text-white px-3 py-2 rounded-xl text-xs font-bold shadow-lg shadow-amber-200 flex items-center gap-1.5 hover:from-amber-600 hover:to-orange-600 transition-all"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
+              </svg>
+              تغيير كلمة المرور
+            </motion.button>
+            <div className="flex items-center gap-1.5">
+              <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              <span className="text-xs font-medium text-emerald-600">متصل</span>
+            </div>
           </div>
         </div>
       </motion.div>
@@ -724,6 +777,61 @@ function UsersView() {
           <UserManagementSection />
         </div>
       </motion.div>
+
+      {/* Self Change Password Dialog */}
+      <AnimatePresence>
+        {selfChangePasswordOpen && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            onClick={() => setSelfChangePasswordOpen(false)}>
+            <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden"
+              onClick={(e) => e.stopPropagation()}>
+              <div className="bg-gradient-to-l from-amber-600 to-orange-600 text-white px-6 py-4">
+                <h3 className="font-bold text-base">🔑 تغيير كلمة المرور</h3>
+                <p className="text-amber-200 text-xs mt-0.5">{authUser?.nom} — @{authUser?.username}</p>
+              </div>
+              <form onSubmit={handleSelfChangePassword} className="p-6 space-y-4">
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-1.5">كلمة المرور الحالية</label>
+                  <input type="password" value={selfChangePasswordForm.currentPassword}
+                    onChange={(e) => setSelfChangePasswordForm({ ...selfChangePasswordForm, currentPassword: e.target.value })} required dir="ltr"
+                    className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-300"
+                    placeholder="أدخل كلمة المرور الحالية" />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-1.5">كلمة المرور الجديدة</label>
+                  <input type="password" value={selfChangePasswordForm.newPassword}
+                    onChange={(e) => setSelfChangePasswordForm({ ...selfChangePasswordForm, newPassword: e.target.value })} required dir="ltr"
+                    className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-300"
+                    placeholder="4 أحرف على الأقل" />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-1.5">تأكيد كلمة المرور الجديدة</label>
+                  <input type="password" value={selfChangePasswordForm.confirmPassword}
+                    onChange={(e) => setSelfChangePasswordForm({ ...selfChangePasswordForm, confirmPassword: e.target.value })} required dir="ltr"
+                    className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-300"
+                    placeholder="أعد إدخال كلمة المرور الجديدة" />
+                </div>
+                {selfChangePasswordError && (
+                  <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-red-600 text-xs font-medium">{selfChangePasswordError}</div>
+                )}
+                <div className="flex gap-2 pt-2">
+                  <button type="button" onClick={() => setSelfChangePasswordOpen(false)}
+                    className="flex-1 px-4 py-2.5 bg-slate-100 text-slate-600 rounded-xl text-sm font-medium hover:bg-slate-200 transition-colors">
+                    إلغاء
+                  </button>
+                  <motion.button type="submit" disabled={selfChangePasswordSubmitting}
+                    whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+                    className="flex-1 px-4 py-2.5 bg-gradient-to-l from-amber-600 to-orange-600 text-white rounded-xl text-sm font-bold shadow-lg disabled:opacity-50">
+                    {selfChangePasswordSubmitting ? 'جاري التغيير...' : 'تغيير كلمة المرور'}
+                  </motion.button>
+                </div>
+              </form>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }

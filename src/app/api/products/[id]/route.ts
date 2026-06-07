@@ -40,7 +40,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     }
 
     const body = await request.json()
-    const { nom, categorie, commune, unite, quantiteStock, seuilAlerte, prixUnitaire, fournisseur, description } = body
+    const { nom, categorie, commune, unite, quantiteStock, seuilAlerte, prixUnitaire, fournisseur, description, dateExpiration } = body
 
     // Non-admin users cannot change the commune to a different commune
     const enforcedCommune = user.commune !== 'ALL'
@@ -59,6 +59,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         ...(prixUnitaire !== undefined && { prixUnitaire: parseFloat(prixUnitaire) || 0 }),
         ...(fournisseur !== undefined && { fournisseur }),
         ...(description !== undefined && { description }),
+        ...(dateExpiration !== undefined && { dateExpiration: dateExpiration ? new Date(dateExpiration) : null }),
       },
     })
 

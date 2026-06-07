@@ -163,6 +163,8 @@ function InterventionsView({ interventions, total, page, setPage, onEdit, onRefr
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
   const [filterStatut, setFilterStatut] = useState('ALL')
   const [localCommuneFilter, setLocalCommuneFilter] = useState('ALL')
+  const [quartierFilter, setQuartierFilter] = useState('ALL')
+  const [quartiers, setQuartiers] = useState<{ id: string; nom: string; commune: string }[]>([])
   const [detailIntervention, setDetailIntervention] = useState<Intervention | null>(null)
   const [showDocPicker, setShowDocPicker] = useState(false)
   const [linkedDocs, setLinkedDocs] = useState<InterventionDocument[]>([])
@@ -230,10 +232,121 @@ function InterventionsView({ interventions, total, page, setPage, onEdit, onRefr
     } catch (err) { console.error('Delete failed:', err); toast.error('حدث خطأ أثناء الحذف') }
   }
 
+  // Fetch quartiers when commune filter changes
+  useEffect(() => {
+    const fetchQuartiers = async () => {
+      try {
+        const params = new URLSearchParams()
+        if (localCommuneFilter !== 'ALL') params.set('commune', localCommuneFilter)
+        const res = await fetch(`/api/quartiers?${params.toString()}`)
+        if (res.ok) {
+          const data = await res.json()
+          setQuartiers(data.quartiers || [])
+        }
+      } catch { /* ignore */ }
+    }
+    fetchQuartiers()
+  }, [localCommuneFilter])
+
   const filteredInterventions = interventions.filter(i => 
     (filterStatut === 'ALL' || i.statut === filterStatut) && 
-    (localCommuneFilter === 'ALL' || i.commune === localCommuneFilter)
+    (localCommuneFilter === 'ALL' || i.commune === localCommuneFilter) &&
+    (quartierFilter === 'ALL' || i.quartier === quartierFilter)
   )
+
+  // Print handler for single intervention
+  const handlePrintIntervention = useCallback((intervention: Intervention) => {
+    const printWindow = window.open('', '_blank')
+    if (!printWindow) {
+      toast.error('يرجى السماح بالنوافذ المنبثقة للطباعة')
+      return
+    }
+
+    const materialsList = intervention.materials && intervention.materials.length > 0
+      ? intervention.materials.map((m: { product: { nom: string; unite: string }; quantity: number }) => `${m.product.nom} (${m.quantity} ${m.product.unite})`).join(' | ')
+      : intervention.produitUtilise || '—'
+
+    const heureStr = intervention.heureDebut && intervention.heureFin
+      ? `${intervention.heureDebut} - ${intervention.heureFin}`
+      : intervention.heureDebut || '—'
+
+    const html = `<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <title>تقرير تدخل ${intervention.reference}</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Arabic:wght@400;600;700;800&display=swap');
+    @page { size: A4; margin: 15mm; }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Noto Sans Arabic', 'Segoe UI', Tahoma, sans-serif; direction: rtl; color: #1e293b; line-height: 1.6; font-size: 12px; }
+    .header { text-align: center; padding-bottom: 14px; border-bottom: 3px solid #1f2937; margin-bottom: 16px; position: relative; }
+    .header::after { content: ''; position: absolute; bottom: -5px; left: 0; right: 0; height: 1.5px; background: #1f2937; }
+    .header h1 { font-size: 16px; font-weight: 900; color: #1f2937; }
+    .header p { font-size: 10px; color: #6b7280; font-style: italic; }
+    .header .commune { font-size: 12px; font-weight: 700; color: #374151; margin-top: 4px; }
+    .ref-bar { display: flex; justify-content: space-between; background: #f3f4f6; border: 1px solid #d1d5db; border-radius: 8px; padding: 10px 16px; margin-bottom: 16px; }
+    .ref-bar .label { font-size: 9px; color: #6b7280; font-weight: 600; }
+    .ref-bar .value { font-size: 12px; color: #1f2937; font-weight: 700; }
+    .title-section { text-align: center; margin-bottom: 16px; padding: 10px; background: #f3f4f6; border-radius: 8px; border: 1px solid #d1d5db; }
+    .title-section h2 { font-size: 14px; font-weight: 800; }
+    .badges { display: flex; justify-content: center; gap: 8px; margin-top: 6px; }
+    .badge { padding: 2px 10px; border-radius: 12px; font-size: 10px; font-weight: 700; color: white; }
+    .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 16px; }
+    .info-card { border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px; background: #f8fafc; }
+    .info-card .label { font-size: 9px; color: #64748b; font-weight: 600; margin-bottom: 2px; }
+    .info-card .value { font-size: 11px; color: #1e293b; font-weight: 600; }
+    .full-width { grid-column: 1 / -1; }
+    .signature-section { margin-top: 40px; padding-top: 16px; }
+    .signature-grid { display: flex; justify-content: space-between; gap: 20px; }
+    .signature-box { flex: 1; text-align: center; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 8px; }
+    .signature-box .role { font-size: 10px; font-weight: 700; color: #1f2937; margin-bottom: 20px; }
+    .signature-box .line { border-top: 1px solid #374151; width: 70%; margin: 0 auto; }
+    @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div style="font-size:10px;font-weight:700;background:#1f2937;color:white;padding:3px 12px;border-radius:4px;display:inline-block;">المملكة المغربية</div>
+    <h1 style="margin-top:6px;">مكتب حفظ الصحة الجماعي</h1>
+    <p>Bureau Communal de l'Hygiène</p>
+    <div class="commune">${intervention.commune ? COMMUNE_LABELS[intervention.commune as keyof typeof COMMUNE_LABELS] || intervention.commune : ''}</div>
+  </div>
+  <div class="ref-bar">
+    <div><div class="label">المرجع / Référence</div><div class="value" style="font-family:monospace;">${intervention.reference}</div></div>
+    <div style="text-align:left;"><div class="label">التاريخ / Date</div><div class="value">${new Date(intervention.date).toLocaleDateString('ar-MA')}</div></div>
+  </div>
+  <div class="title-section">
+    <h2>تقرير التدخل</h2>
+    <div class="badges">
+      <span class="badge" style="background:${TYPE_COLORS[intervention.type] || '#374151'}">${TYPE_LABELS[intervention.type] || intervention.type}</span>
+      <span class="badge" style="background:${STATUT_COLORS[intervention.statut] || '#6b7280'}">${STATUT_LABELS[intervention.statut] || intervention.statut}</span>
+    </div>
+  </div>
+  <div class="info-grid">
+    <div class="info-card"><div class="label">📅 التاريخ</div><div class="value">${new Date(intervention.date).toLocaleDateString('ar-MA')}</div></div>
+    <div class="info-card"><div class="label">⏰ الوقت</div><div class="value">${heureStr}</div></div>
+    <div class="info-card"><div class="label">🏘️ الجماعة</div><div class="value">${intervention.commune ? COMMUNE_LABELS[intervention.commune as keyof typeof COMMUNE_LABELS] || intervention.commune : '—'}</div></div>
+    <div class="info-card"><div class="label">📍 الحي</div><div class="value">${intervention.quartier || '—'}</div></div>
+    <div class="info-card full-width"><div class="label">📍 العنوان</div><div class="value">${intervention.adresse || '—'}</div></div>
+    <div class="info-card"><div class="label">👤 العون</div><div class="value">${intervention.agentNom || '—'}</div></div>
+    <div class="info-card"><div class="label">📐 المساحة</div><div class="value">${intervention.superficie || '—'}</div></div>
+    <div class="info-card full-width"><div class="label">💊 المواد المستعملة</div><div class="value">${materialsList}</div></div>
+    ${intervention.observations ? `<div class="info-card full-width"><div class="label">💬 الملاحظات</div><div class="value">${intervention.observations}</div></div>` : ''}
+  </div>
+  <div class="signature-section">
+    <div class="signature-grid">
+      <div class="signature-box"><div class="role">العون المنفذ</div><div class="line"></div></div>
+      <div class="signature-box"><div class="role">رئيس المصالح</div><div class="line"></div></div>
+      <div class="signature-box"><div class="role">الرئيس</div><div class="line"></div></div>
+    </div>
+  </div>
+  <script>window.onload = function() { window.print(); }</script>
+</body>
+</html>`
+    printWindow.document.write(html)
+    printWindow.document.close()
+  }, [])
 
   const formatFileSize = (bytes: number): string => {
     if (bytes === 0) return '0 بايت'
@@ -281,12 +394,19 @@ function InterventionsView({ interventions, total, page, setPage, onEdit, onRefr
             <option value="ALL">كل الحالات</option>
             {Object.entries(STATUT_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
           </select>
-          <select value={localCommuneFilter} onChange={(e) => setLocalCommuneFilter(e.target.value)}
+          <select value={localCommuneFilter} onChange={(e) => { setLocalCommuneFilter(e.target.value); setQuartierFilter('ALL') }}
             className="px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-emerald-500/20">
             <option value="ALL">كل الجماعات</option>
             <option value="سلا">جماعة سلا</option>
             <option value="سيدي أبي القنادل">جماعة سيدي أبي القنادل</option>
             <option value="عامر">جماعة عامر</option>
+          </select>
+          <select value={quartierFilter} onChange={(e) => setQuartierFilter(e.target.value)}
+            className="px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 max-w-[160px]">
+            <option value="ALL">كل الأحياء</option>
+            {quartiers.map(q => (
+              <option key={q.id} value={q.nom}>{q.nom}</option>
+            ))}
           </select>
         </div>
       </motion.div>
@@ -353,7 +473,7 @@ function InterventionsView({ interventions, total, page, setPage, onEdit, onRefr
                       </div>
                       <p className="text-sm text-slate-500 mt-1">{intervention.quartier} — {intervention.adresse}</p>
                       <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-xs text-slate-400">
-                        <span className="flex items-center gap-1">📅 {new Date(intervention.date).toLocaleDateString('ar-MA')}</span>
+                        <span className="flex items-center gap-1">📅 {new Date(intervention.date).toLocaleDateString('ar-MA')}{intervention.heureDebut && intervention.heureFin ? ` ⏰ ${intervention.heureDebut} - ${intervention.heureFin}` : intervention.heureDebut ? ` ⏰ ${intervention.heureDebut}` : ''}</span>
                         <span className="flex items-center gap-1">👤 {intervention.agentNom}</span>
                         {intervention.materials && intervention.materials.length > 0 ? (
                           <span className="flex items-center gap-1">📦 {intervention.materials.map(m => `${m.product.nom} (${m.quantity} ${m.product.unite})`).join('، ')}</span>
@@ -368,6 +488,12 @@ function InterventionsView({ interventions, total, page, setPage, onEdit, onRefr
                     </div>
                   </div>
                   <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                    <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
+                      onClick={() => handlePrintIntervention(intervention)}
+                      className="px-3 py-2 text-xs rounded-xl bg-slate-50 hover:bg-teal-50 hover:text-teal-600 font-medium transition-colors"
+                      title="طباعة">
+                      🖨️
+                    </motion.button>
                     <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
                       onClick={() => onEdit(intervention.id)}
                       className="px-3 py-2 text-xs rounded-xl bg-slate-50 hover:bg-emerald-50 hover:text-emerald-600 font-medium transition-colors">
@@ -455,7 +581,7 @@ function InterventionsView({ interventions, total, page, setPage, onEdit, onRefr
                 <div className="grid grid-cols-2 gap-3">
                   <div className="bg-slate-50 rounded-xl p-3">
                     <p className="text-[10px] text-slate-400 font-medium">التاريخ</p>
-                    <p className="text-xs font-bold text-slate-700 mt-0.5">📅 {new Date(detailIntervention.date).toLocaleDateString('ar-MA')}</p>
+                    <p className="text-xs font-bold text-slate-700 mt-0.5">📅 {new Date(detailIntervention.date).toLocaleDateString('ar-MA')}{detailIntervention.heureDebut && detailIntervention.heureFin ? ` ⏰ ${detailIntervention.heureDebut} - ${detailIntervention.heureFin}` : detailIntervention.heureDebut ? ` ⏰ ${detailIntervention.heureDebut}` : ''}</p>
                   </div>
                   <div className="bg-slate-50 rounded-xl p-3">
                     <p className="text-[10px] text-slate-400 font-medium">العون</p>

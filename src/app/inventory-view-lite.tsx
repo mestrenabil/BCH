@@ -11,7 +11,11 @@ import {
 interface Product {
   id: string; nom: string; categorie: string; unite: string; quantiteStock: number
   seuilAlerte: number; prixUnitaire: number; fournisseur: string; description: string
-  reference: string; commune: string; createdAt: string; updatedAt: string
+  reference: string; commune: string; dateExpiration: string | null; createdAt: string; updatedAt: string
+}
+
+interface StockMovement {
+  id: string; productId: string; type: string; quantity: number; reason: string | null; note: string | null; commune: string; createdAt: string
 }
 
 // ===== PRODUCT FORM DIALOG =====
@@ -21,6 +25,11 @@ function ProductFormDialog({ product, categories, units, onSave, onClose }: {
 }) {
   const isEdit = !!product
   const formRef = useRef<HTMLFormElement>(null)
+
+  // Format dateExpiration for date input (YYYY-MM-DD)
+  const expiryDateValue = product?.dateExpiration
+    ? new Date(product.dateExpiration).toISOString().split('T')[0]
+    : ''
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
@@ -96,6 +105,11 @@ function ProductFormDialog({ product, categories, units, onSave, onClose }: {
               <input name="fournisseur" defaultValue={product?.fournisseur || ''} placeholder="اسم المورد"
                 className="w-full px-3 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none text-sm" />
             </div>
+            <div>
+              <label className="block text-xs font-bold text-slate-500 mb-1.5">تاريخ الانتهاء</label>
+              <input name="dateExpiration" type="date" defaultValue={expiryDateValue}
+                className="w-full px-3 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none text-sm" />
+            </div>
             <div className="col-span-2">
               <label className="block text-xs font-bold text-slate-500 mb-1.5">وصف المنتج</label>
               <textarea name="description" defaultValue={product?.description || ''} rows={2} placeholder="وصف مختصر للمنتج..."
@@ -116,9 +130,80 @@ function ProductFormDialog({ product, categories, units, onSave, onClose }: {
   )
 }
 
+// ===== STOCK MOVEMENT DIALOG =====
+function StockMovementDialog({ product, movements, onClose }: {
+  product: Product; movements: StockMovement[]; onClose: () => void
+}) {
+  return (
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+      onClick={onClose}>
+      <motion.div initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.9, y: 20 }}
+        onClick={(e) => e.stopPropagation()}
+        className="bg-white rounded-2xl max-w-md w-full shadow-2xl max-h-[85vh] overflow-hidden">
+        <div className="bg-gradient-to-l from-teal-600 to-cyan-600 p-5 rounded-t-2xl text-white">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center text-xl backdrop-blur-sm">📋</div>
+              <div>
+                <h3 className="font-bold text-base">سجل حركة المخزون</h3>
+                <p className="text-teal-100 text-xs">{product.nom}</p>
+              </div>
+            </div>
+            <button onClick={onClose} className="w-8 h-8 rounded-lg bg-white/20 flex items-center justify-center hover:bg-white/30 transition-colors">✕</button>
+          </div>
+        </div>
+        <div className="max-h-96 overflow-y-auto p-4">
+          {movements.length === 0 ? (
+            <div className="text-center py-8">
+              <div className="text-4xl mb-3">📭</div>
+              <p className="text-sm text-slate-500 font-medium">لا توجد حركات مسجلة</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {movements.map((m) => {
+                const isIn = m.type === 'IN'
+                const reasonLabels: Record<string, string> = {
+                  purchase: 'شراء', usage: 'استعمال', adjustment: 'تعديل', initial: 'رصيد أولي'
+                }
+                const d = new Date(m.createdAt)
+                const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+                return (
+                  <div key={m.id} className={`rounded-xl border p-3 flex items-center gap-3 ${isIn ? 'bg-emerald-50/50 border-emerald-100' : 'bg-red-50/50 border-red-100'}`}>
+                    <div className={`w-9 h-9 rounded-lg flex items-center justify-center text-sm font-bold shrink-0 ${isIn ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
+                      {isIn ? '📥' : '📤'}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className={`text-sm font-bold ${isIn ? 'text-emerald-700' : 'text-red-700'}`}>
+                          {isIn ? 'وارد' : 'صادر'}
+                        </span>
+                        <span className="text-sm font-extrabold text-slate-800">{isIn ? '+' : '-'}{m.quantity}</span>
+                        <span className="text-[10px] text-slate-400">{dateStr}</span>
+                      </div>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        {m.reason && (
+                          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-600">
+                            {reasonLabels[m.reason] || m.reason}
+                          </span>
+                        )}
+                        {m.note && <span className="text-[10px] text-slate-400 truncate">{m.note}</span>}
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      </motion.div>
+    </motion.div>
+  )
+}
+
 function InventoryView() {
   const [products, setProducts] = useState<Product[]>([])
-  const [stats, setStats] = useState({ totalProducts: 0, totalStockValue: 0, lowStockCount: 0, outOfStockCount: 0 })
+  const [stats, setStats] = useState({ totalProducts: 0, totalStockValue: 0, lowStockCount: 0, outOfStockCount: 0, expiredCount: 0 })
   const [isLoading, setIsLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
@@ -128,6 +213,10 @@ function InventoryView() {
   const [editingProduct, setEditingProduct] = useState<Product | null>(null)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null)
   const [refreshKey, setRefreshKey] = useState(0)
+
+  // Stock movement dialog state
+  const [movementProduct, setMovementProduct] = useState<Product | null>(null)
+  const [stockMovements, setStockMovements] = useState<StockMovement[]>([])
 
   const PRODUCT_CATEGORIES: Record<string, string> = {
     DERATISATION: 'مكافحة القوارض', DESINSECTISATION: 'مكافحة الحشرات', DESINFECTION: 'التطهير والتعقيم', GENERAL: 'مواد عامة',
@@ -155,8 +244,19 @@ function InventoryView() {
         const res = await fetch(`/api/products?${params}`)
         const data = await res.json()
         if (!cancelled) {
-          setProducts(data.products || [])
-          setStats(data.stats || { totalProducts: 0, totalStockValue: 0, lowStockCount: 0, outOfStockCount: 0 })
+          const prods: Product[] = data.products || []
+          setProducts(prods)
+
+          // Compute expired count
+          const now = new Date()
+          const thirtyDaysFromNow = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000)
+          const expiredCount = prods.filter(p => {
+            if (!p.dateExpiration) return false
+            return new Date(p.dateExpiration) < now
+          }).length
+
+          const baseStats = data.stats || { totalProducts: 0, totalStockValue: 0, lowStockCount: 0, outOfStockCount: 0 }
+          setStats({ ...baseStats, expiredCount })
           setIsLoading(false)
         }
       } catch (err) { console.error('Failed to fetch products:', err); if (!cancelled) setIsLoading(false) }
@@ -176,6 +276,7 @@ function InventoryView() {
       prixUnitaire: formData.get('prixUnitaire') as string,
       fournisseur: formData.get('fournisseur') as string,
       description: formData.get('description') as string,
+      dateExpiration: formData.get('dateExpiration') as string || null,
     }
     if (!data.nom || !data.categorie) { toast.error('يرجى ملء جميع الحقول المطلوبة'); return }
     try {
@@ -203,14 +304,58 @@ function InventoryView() {
     setShowDeleteConfirm(null)
   }
 
-  const handleStockUpdate = async (id: string, newQty: number) => {
+  const handleStockUpdate = async (id: string, newQty: number, oldQty: number) => {
     try {
       await fetch(`/api/products/${id}`, {
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ quantiteStock: newQty }),
       })
+      // Create stock movement record
+      const diff = newQty - oldQty
+      if (diff !== 0) {
+        await fetch('/api/stock-movements', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            productId: id,
+            type: diff > 0 ? 'IN' : 'OUT',
+            quantity: Math.abs(diff),
+            reason: 'adjustment',
+            note: `تعديل يدوي: ${oldQty} → ${newQty}`,
+          }),
+        })
+      }
       refreshProducts()
     } catch { toast.error('حدث خطأ') }
+  }
+
+  const handleShowMovements = async (product: Product) => {
+    setMovementProduct(product)
+    try {
+      const res = await fetch(`/api/stock-movements?productId=${product.id}`)
+      if (res.ok) {
+        const data = await res.json()
+        setStockMovements(data.movements || [])
+      } else {
+        setStockMovements([])
+      }
+    } catch {
+      setStockMovements([])
+    }
+  }
+
+  // Expiry date helper
+  const getExpiryBadge = (dateExpiration: string | null) => {
+    if (!dateExpiration) return null
+    const now = new Date()
+    const expiry = new Date(dateExpiration)
+    const thirtyDaysFromNow = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000)
+    if (expiry < now) {
+      return <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-red-100 text-red-700 whitespace-nowrap">⚠️ منتهي الصلاحية</span>
+    }
+    if (expiry <= thirtyDaysFromNow) {
+      return <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-700 whitespace-nowrap">⏰ قريب الانتهاء</span>
+    }
+    return null
   }
 
   return (
@@ -229,12 +374,13 @@ function InventoryView() {
       </motion.div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         {[
           { title: 'إجمالي المنتجات', value: stats.totalProducts, icon: '📦', gradient: 'from-indigo-500 to-indigo-700', shadow: 'shadow-indigo-200' },
           { title: 'قيمة المخزون', value: `${stats.totalStockValue.toLocaleString('ar-MA')} د.م`, icon: '💰', gradient: 'from-emerald-500 to-emerald-700', shadow: 'shadow-emerald-200' },
           { title: 'مخزون منخفض', value: stats.lowStockCount, icon: '⚠️', gradient: 'from-amber-500 to-amber-700', shadow: 'shadow-amber-200' },
           { title: 'نفذ المخزون', value: stats.outOfStockCount, icon: '🚫', gradient: 'from-red-500 to-red-700', shadow: 'shadow-red-200' },
+          { title: 'منتهي الصلاحية', value: stats.expiredCount, icon: '💊', gradient: 'from-rose-500 to-rose-700', shadow: 'shadow-rose-200' },
         ].map((card, i) => (
           <motion.div key={card.title} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.08 }}
             className={`bg-gradient-to-br ${card.gradient} text-white rounded-2xl p-4 ${card.shadow} shadow-lg relative overflow-hidden`}>
@@ -293,6 +439,7 @@ function InventoryView() {
               {products.map((product, i) => {
                 const isLow = product.quantiteStock <= product.seuilAlerte && product.quantiteStock > 0
                 const isOut = product.quantiteStock === 0
+                const expiryBadge = getExpiryBadge(product.dateExpiration)
                 return (
                   <motion.div key={product.id} initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }}
                     transition={{ delay: i * 0.03 }}
@@ -316,18 +463,18 @@ function InventoryView() {
                     <div className="flex items-center justify-between">
                       <span className="text-xs text-slate-500">الكمية ({product.unite})</span>
                       <div className="flex items-center gap-2">
-                        <button onClick={() => handleStockUpdate(product.id, Math.max(0, product.quantiteStock - 1))}
+                        <button onClick={() => handleStockUpdate(product.id, Math.max(0, product.quantiteStock - 1), product.quantiteStock)}
                           className="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 text-sm font-bold transition-colors flex items-center justify-center">−</button>
                         <span className={`min-w-[2rem] text-center font-bold text-sm ${isOut ? 'text-red-600' : isLow ? 'text-amber-600' : 'text-slate-800'}`}>
                           {product.quantiteStock}
                         </span>
-                        <button onClick={() => handleStockUpdate(product.id, product.quantiteStock + 1)}
+                        <button onClick={() => handleStockUpdate(product.id, product.quantiteStock + 1, product.quantiteStock)}
                           className="w-7 h-7 rounded-lg bg-emerald-100 hover:bg-emerald-200 text-emerald-600 text-sm font-bold transition-colors flex items-center justify-center">+</button>
                       </div>
                     </div>
-                    {/* Commune badge + Status */}
+                    {/* Commune badge + Status + Expiry */}
                     <div className="flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         {product.commune ? (
                           <span className="px-2 py-0.5 rounded-full text-[10px] font-bold text-white"
                             style={{ backgroundColor: COMMUNE_COLORS[product.commune as keyof typeof COMMUNE_COLORS] || '#64748b' }}>
@@ -339,8 +486,11 @@ function InventoryView() {
                         {isOut ? <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-100 text-red-700">🚫 نفذ</span> :
                          isLow ? <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-700">⚠️ منخفض</span> :
                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700">✅ متوفر</span>}
+                        {expiryBadge}
                       </div>
                       <div className="flex items-center gap-1">
+                        <button onClick={() => handleShowMovements(product)}
+                          className="w-8 h-8 rounded-lg hover:bg-teal-50 text-teal-500 text-sm flex items-center justify-center transition-colors" title="سجل الحركة">📋</button>
                         <button onClick={() => { setEditingProduct(product); setShowForm(true) }}
                           className="w-8 h-8 rounded-lg hover:bg-blue-50 text-blue-500 text-sm flex items-center justify-center transition-colors" title="تعديل">✏️</button>
                         <button onClick={() => setShowDeleteConfirm(product.id)}
@@ -364,6 +514,7 @@ function InventoryView() {
                     <th className="text-center px-4 py-3 font-bold text-slate-500 text-xs">السعر</th>
                     <th className="text-right px-4 py-3 font-bold text-slate-500 text-xs">المورد</th>
                     <th className="text-center px-4 py-3 font-bold text-slate-500 text-xs">الحالة</th>
+                    <th className="text-center px-4 py-3 font-bold text-slate-500 text-xs">الصلاحية</th>
                     <th className="text-center px-4 py-3 font-bold text-slate-500 text-xs">إجراءات</th>
                   </tr>
                 </thead>
@@ -371,6 +522,7 @@ function InventoryView() {
                   {products.map((product, i) => {
                     const isLow = product.quantiteStock <= product.seuilAlerte && product.quantiteStock > 0
                     const isOut = product.quantiteStock === 0
+                    const expiryBadge = getExpiryBadge(product.dateExpiration)
                     return (
                       <motion.tr key={product.id} initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }}
                         transition={{ delay: i * 0.03 }}
@@ -405,12 +557,12 @@ function InventoryView() {
                         </td>
                         <td className="px-4 py-3 text-center">
                           <div className="flex items-center justify-center gap-1">
-                            <button onClick={() => handleStockUpdate(product.id, Math.max(0, product.quantiteStock - 1))}
+                            <button onClick={() => handleStockUpdate(product.id, Math.max(0, product.quantiteStock - 1), product.quantiteStock)}
                               className="w-[44px] h-[44px] rounded-md bg-slate-100 hover:bg-slate-200 text-slate-500 text-xs font-bold transition-colors flex items-center justify-center">−</button>
                             <span className={`min-w-[2.5rem] text-center font-bold text-sm ${isOut ? 'text-red-600' : isLow ? 'text-amber-600' : 'text-slate-800'}`}>
                               {product.quantiteStock}
                             </span>
-                            <button onClick={() => handleStockUpdate(product.id, product.quantiteStock + 1)}
+                            <button onClick={() => handleStockUpdate(product.id, product.quantiteStock + 1, product.quantiteStock)}
                               className="w-[44px] h-[44px] rounded-md bg-emerald-100 hover:bg-emerald-200 text-emerald-600 text-xs font-bold transition-colors flex items-center justify-center">+</button>
                           </div>
                         </td>
@@ -423,7 +575,12 @@ function InventoryView() {
                            <span className="px-2 py-1 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700">✅ متوفر</span>}
                         </td>
                         <td className="px-4 py-3 text-center">
+                          {expiryBadge || <span className="text-[10px] text-slate-300">—</span>}
+                        </td>
+                        <td className="px-4 py-3 text-center">
                           <div className="flex items-center justify-center gap-1">
+                            <button onClick={() => handleShowMovements(product)}
+                              className="w-7 h-7 rounded-lg hover:bg-teal-50 text-teal-500 text-sm flex items-center justify-center transition-colors" title="سجل الحركة">📋</button>
                             <button onClick={() => { setEditingProduct(product); setShowForm(true) }}
                               className="w-7 h-7 rounded-lg hover:bg-blue-50 text-blue-500 text-sm flex items-center justify-center transition-colors" title="تعديل">✏️</button>
                             <button onClick={() => setShowDeleteConfirm(product.id)}
@@ -445,6 +602,14 @@ function InventoryView() {
         {showForm && (
           <ProductFormDialog product={editingProduct} categories={PRODUCT_CATEGORIES} units={UNITS}
             onSave={handleSave} onClose={() => { setShowForm(false); setEditingProduct(null) }} />
+        )}
+      </AnimatePresence>
+
+      {/* Stock Movement Dialog */}
+      <AnimatePresence>
+        {movementProduct && (
+          <StockMovementDialog product={movementProduct} movements={stockMovements}
+            onClose={() => { setMovementProduct(null); setStockMovements([]) }} />
         )}
       </AnimatePresence>
 
