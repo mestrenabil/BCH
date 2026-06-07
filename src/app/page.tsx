@@ -748,7 +748,8 @@ export default function HomePage() {
                 {currentView === 'interventions' && (
                   <InterventionsView interventions={interventions} total={interventionsTotal}
                     page={interventionsPage} setPage={setInterventionsPage}
-                    onEdit={setEditingInterventionId} onRefresh={fetchInterventions} selectedCommune={selectedCommune} />
+                    onEdit={setEditingInterventionId} onRefresh={fetchInterventions} selectedCommune={selectedCommune}
+                    onAdd={() => setIsFormOpen(true)} />
                 )}
                 {currentView === 'reports' && <ReportsView stats={stats} selectedCommune={selectedCommune} canSeeAllCommunes={canSeeAllCommunes} />}
                 {currentView === 'inventory' && <InventoryView />}

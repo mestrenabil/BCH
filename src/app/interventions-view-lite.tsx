@@ -154,9 +154,10 @@ function DocumentPickerDialog({ interventionId, commune, existingDocIds, onSelec
 }
 
 // ===== INTERVENTIONS VIEW =====
-function InterventionsView({ interventions, total, page, setPage, onEdit, onRefresh, selectedCommune }: {
+function InterventionsView({ interventions, total, page, setPage, onEdit, onRefresh, selectedCommune, onAdd }: {
   interventions: Intervention[]; total: number; page: number; setPage: (p: number) => void
   onEdit: (id: string) => void; onRefresh: () => void; selectedCommune: CommuneType | 'ALL'
+  onAdd?: () => void
 }) {
   const [localSearch, setLocalSearch] = useState('')
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
@@ -259,7 +260,17 @@ function InterventionsView({ interventions, total, page, setPage, onEdit, onRefr
             )}
           </div>
         </div>
-        <div className="flex gap-2 w-full sm:w-auto">
+        <div className="flex gap-2 w-full sm:w-auto items-center flex-wrap">
+          {onAdd && (
+            <motion.button
+              whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}
+              onClick={onAdd}
+              className="bg-gradient-to-l from-emerald-600 to-teal-600 text-white px-4 py-2.5 rounded-xl font-medium shadow-lg shadow-emerald-200 flex items-center gap-2 text-sm whitespace-nowrap"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" /></svg>
+              إضافة تدخل
+            </motion.button>
+          )}
           <div className="relative flex-1 sm:w-64">
             <svg xmlns="http://www.w3.org/2000/svg" className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
             <input type="text" placeholder="بحث..." value={localSearch} onChange={(e) => setLocalSearch(e.target.value)}
