@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { motion } from 'framer-motion'
 import {
   RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
@@ -8,59 +8,11 @@ import {
   ResponsiveContainer, PieChart, Pie, Cell, AreaChart, Area,
 } from 'recharts'
 import { useAppStore, type CommuneType } from '@/lib/store'
-
-// ===== TYPE DEFINITIONS =====
-interface Intervention {
-  id: string; type: string; date: string; quartier: string; adresse: string
-  latitude: number; longitude: number; statut: string; description: string
-  agentNom: string; produitUtilise: string; quantite: string; superficie: string
-  nombrePrestations: number; observations: string; reference: string
-  commune: string; createdAt: string; updatedAt: string
-}
-
-interface CommuneBreakdown {
-  total: number
-  DERATISATION: number
-  DESINSECTISATION: number
-  DESINFECTION: number
-}
-
-interface Statistics {
-  total: number; byType: Record<string, number>; byStatut: Record<string, number>
-  byQuartier: { quartier: string; count: number }[]
-  byCommune: Record<string, CommuneBreakdown>
-  monthly: Record<string, Record<string, number>>
-  recent: Intervention[]
-  quartiers: { id: string; nom: string; latitude: number; longitude: number; commune?: string }[]
-}
-
-// ===== CONSTANTS =====
-const COMMUNE_LABELS: Record<string, string> = {
-  'سلا': 'جماعة سلا',
-  'سيدي أبي القنادل': 'جماعة سيدي أبي القنادل',
-  'عامر': 'جماعة عامر',
-}
-const COMMUNE_COLORS: Record<string, string> = {
-  'سلا': '#059669',
-  'سيدي أبي القنادل': '#7c3aed',
-  'عامر': '#d97706',
-}
-const TYPE_COLORS: Record<string, string> = {
-  DERATISATION: '#ef4444', DESINSECTISATION: '#f59e0b', DESINFECTION: '#10b981',
-}
-const TYPE_LABELS: Record<string, string> = {
-  DERATISATION: 'مكافحة القوارض', DESINSECTISATION: 'مكافحة الحشرات', DESINFECTION: 'التطهير والتعقيم',
-}
-const STATUT_LABELS: Record<string, string> = {
-  PLANIFIEE: 'مبرمجة', EN_COURS: 'جارية', TERMINEE: 'منجزة', ANNULEE: 'ملغاة',
-}
-const STATUT_COLORS: Record<string, string> = {
-  PLANIFIEE: '#3b82f6', EN_COURS: '#f59e0b', TERMINEE: '#10b981', ANNULEE: '#6b7280',
-}
-const MONTH_NAMES_AR = [
-  'يناير', 'فبراير', 'مارس', 'أبريل', 'ماي', 'يونيو',
-  'يوليوز', 'غشت', 'شتنبر', 'أكتوبر', 'نونبر', 'دجنبر',
-]
+import {
+  type Statistics,
+  TYPE_LABELS, TYPE_COLORS, STATUT_LABELS, STATUT_COLORS,
+  COMMUNE_LABELS, COMMUNE_COLORS, MONTH_NAMES_AR,
+} from '@/lib/constants'
 
 // ===== ANIMATED NUMBER COUNTER =====
 function AnimatedCounter({ value, duration = 1200, suffix = '', decimals = 0 }: {
@@ -81,11 +33,11 @@ function AnimatedCounter({ value, duration = 1200, suffix = '', decimals = 0 }: 
       const eased = progress === 1 ? 1 : 1 - Math.pow(2, -10 * progress)
       const current = start + (end - start) * eased
       setDisplay(current)
-      if (progress < 1) requestAnimationFrame(animate)
+      if (progress < 1) rafId = requestAnimationFrame(animate)
     }
-    requestAnimationFrame(animate)
+    let rafId = requestAnimationFrame(animate)
     prevValue.current = value
-    return () => { prevValue.current = end }
+    return () => { cancelAnimationFrame(rafId); prevValue.current = end }
   }, [value, duration])
 
   return (
@@ -171,29 +123,53 @@ export default function KpiView() {
   const { selectedCommune, selectedYear, user } = useAppStore()
   const [stats, setStats] = useState<Statistics | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [hasError, setHasError] = useState(false)
 
   const canSeeAllCommunes = user?.role === 'admin' || user?.commune === 'ALL'
 
   useEffect(() => {
     let cancelled = false
     const load = async () => {
+      setIsLoading(true)
+      setHasError(false)
       try {
         const params = new URLSearchParams()
         if (selectedYear) params.set('year', selectedYear)
         if (selectedCommune !== 'ALL') params.set('commune', selectedCommune)
         const res = await fetch(`/api/statistics?${params.toString()}`)
-        const data = await res.json()
-        if (!cancelled) {
-          setStats(data)
-          setIsLoading(false)
+        if (!res.ok) {
+          if (!cancelled) { setHasError(true); setStats(null); setIsLoading(false) }
+          return
         }
+        const data = await res.json()
+        if (!cancelled) { setStats(data); setIsLoading(false) }
       } catch (err) {
         console.error('Failed to fetch stats:', err)
-        if (!cancelled) setIsLoading(false)
+        if (!cancelled) { setHasError(true); setIsLoading(false) }
       }
     }
     load()
     return () => { cancelled = true }
+  }, [selectedYear, selectedCommune])
+
+  const handleRetry = useCallback(() => {
+    setIsLoading(true)
+    setHasError(false)
+    const load = async () => {
+      try {
+        const params = new URLSearchParams()
+        if (selectedYear) params.set('year', selectedYear)
+        if (selectedCommune !== 'ALL') params.set('commune', selectedCommune)
+        const res = await fetch(`/api/statistics?${params.toString()}`)
+        if (!res.ok) { setHasError(true); setStats(null); setIsLoading(false); return }
+        const data = await res.json()
+        setStats(data); setIsLoading(false)
+      } catch (err) {
+        console.error('Failed to fetch stats:', err)
+        setHasError(true); setIsLoading(false)
+      }
+    }
+    load()
   }, [selectedYear, selectedCommune])
 
   // ===== Loading State =====
@@ -208,7 +184,30 @@ export default function KpiView() {
     )
   }
 
-  if (!stats) return null
+  if (!stats) return (
+    <div className="flex items-center justify-center min-h-[400px]" dir="rtl">
+      <div className="text-center space-y-4 max-w-md mx-auto px-4">
+        <div className="w-20 h-20 rounded-full bg-red-50 flex items-center justify-center text-4xl mx-auto">
+          ⚠️
+        </div>
+        <h3 className="text-xl font-bold text-slate-800">حدث خطأ في تحميل البيانات</h3>
+        <p className="text-slate-500 text-sm">لم نتمكن من تحميل مؤشرات الأداء. يرجى التحقق من اتصالك والمحاولة مرة أخرى.</p>
+        {hasError && (
+          <motion.button
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={handleRetry}
+            className="bg-gradient-to-l from-emerald-600 to-teal-600 text-white px-6 py-2.5 rounded-xl font-medium shadow-lg shadow-emerald-200 inline-flex items-center gap-2"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+              <path fillRule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clipRule="evenodd" />
+            </svg>
+            إعادة المحاولة
+          </motion.button>
+        )}
+      </div>
+    </div>
+  )
 
   // ===== KPI Calculations =====
   const total = stats.total || 0

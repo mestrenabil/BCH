@@ -34,7 +34,7 @@ function DocumentPickerDialog({ interventionId, commune, existingDocIds, onSelec
       setIsLoading(false)
     }
     fetchDocs()
-  })
+  }, [])
 
   const filteredDocs = documents.filter(d =>
     !existingDocIds.includes(d.id) &&

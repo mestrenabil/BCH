@@ -843,7 +843,7 @@ function SettingsView() {
             <button onClick={() => handleUpdateAndSave({ mapClickEnabled: !settings.mapClickEnabled })}
               className={`relative w-14 h-8 rounded-full transition-colors duration-300 ${settings.mapClickEnabled ? 'bg-emerald-500' : 'bg-slate-300'}`}>
               <motion.div className="absolute top-1 w-6 h-6 bg-white rounded-full shadow-md"
-                animate={{ left: settings.mapClickEnabled ? '2rem' : '0.25rem' }}
+                animate={{ right: settings.mapClickEnabled ? '0.25rem' : '2rem' }}
                 transition={{ type: 'spring', stiffness: 500, damping: 30 }} />
             </button>
           </div>
@@ -859,7 +859,7 @@ function SettingsView() {
             <button onClick={() => handleUpdateAndSave({ showCommunePopups: !settings.showCommunePopups })}
               className={`relative w-14 h-8 rounded-full transition-colors duration-300 ${settings.showCommunePopups ? 'bg-emerald-500' : 'bg-slate-300'}`}>
               <motion.div className="absolute top-1 w-6 h-6 bg-white rounded-full shadow-md"
-                animate={{ left: settings.showCommunePopups ? '2rem' : '0.25rem' }}
+                animate={{ right: settings.showCommunePopups ? '0.25rem' : '2rem' }}
                 transition={{ type: 'spring', stiffness: 500, damping: 30 }} />
             </button>
           </div>
@@ -899,7 +899,7 @@ function SettingsView() {
             <button onClick={() => handleUpdateAndSave({ animationsEnabled: !settings.animationsEnabled })}
               className={`relative w-14 h-8 rounded-full transition-colors duration-300 ${settings.animationsEnabled ? 'bg-emerald-500' : 'bg-slate-300'}`}>
               <motion.div className="absolute top-1 w-6 h-6 bg-white rounded-full shadow-md"
-                animate={{ left: settings.animationsEnabled ? '2rem' : '0.25rem' }}
+                animate={{ right: settings.animationsEnabled ? '0.25rem' : '2rem' }}
                 transition={{ type: 'spring', stiffness: 500, damping: 30 }} />
             </button>
           </div>
@@ -942,7 +942,7 @@ function SettingsView() {
             <button onClick={() => handleUpdateAndSave({ compactMode: !settings.compactMode })}
               className={`relative w-14 h-8 rounded-full transition-colors duration-300 ${settings.compactMode ? 'bg-emerald-500' : 'bg-slate-300'}`}>
               <motion.div className="absolute top-1 w-6 h-6 bg-white rounded-full shadow-md"
-                animate={{ left: settings.compactMode ? '2rem' : '0.25rem' }}
+                animate={{ right: settings.compactMode ? '0.25rem' : '2rem' }}
                 transition={{ type: 'spring', stiffness: 500, damping: 30 }} />
             </button>
           </div>
@@ -966,7 +966,7 @@ function SettingsView() {
             <button onClick={() => handleUpdateAndSave({ stockAlertEnabled: !settings.stockAlertEnabled })}
               className={`relative w-14 h-8 rounded-full transition-colors duration-300 ${settings.stockAlertEnabled ? 'bg-emerald-500' : 'bg-slate-300'}`}>
               <motion.div className="absolute top-1 w-6 h-6 bg-white rounded-full shadow-md"
-                animate={{ left: settings.stockAlertEnabled ? '2rem' : '0.25rem' }}
+                animate={{ right: settings.stockAlertEnabled ? '0.25rem' : '2rem' }}
                 transition={{ type: 'spring', stiffness: 500, damping: 30 }} />
             </button>
           </div>
@@ -998,7 +998,7 @@ function SettingsView() {
             <button onClick={() => handleUpdateAndSave({ deadlineReminderEnabled: !settings.deadlineReminderEnabled })}
               className={`relative w-14 h-8 rounded-full transition-colors duration-300 ${settings.deadlineReminderEnabled ? 'bg-emerald-500' : 'bg-slate-300'}`}>
               <motion.div className="absolute top-1 w-6 h-6 bg-white rounded-full shadow-md"
-                animate={{ left: settings.deadlineReminderEnabled ? '2rem' : '0.25rem' }}
+                animate={{ right: settings.deadlineReminderEnabled ? '0.25rem' : '2rem' }}
                 transition={{ type: 'spring', stiffness: 500, damping: 30 }} />
             </button>
           </div>
@@ -1076,6 +1076,120 @@ function SettingsView() {
         </div>
       </motion.div>
 
+      {/* Document & Print Settings */}
+      <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.45 }}
+        className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+        <div className="bg-gradient-to-l from-violet-600 to-purple-600 text-white px-6 py-4">
+          <h3 className="font-bold text-base">🖨️ إعدادات المستندات والطباعة</h3>
+          <p className="text-violet-200 text-xs mt-0.5">تخصيص المستندات والتقارير المطبوعة</p>
+        </div>
+        <div className="p-6 space-y-6">
+          {/* Officials */}
+          <div>
+            <h4 className="text-sm font-bold text-slate-700 mb-3 flex items-center gap-2">
+              <span className="w-6 h-6 rounded-md bg-violet-100 text-violet-600 flex items-center justify-center text-xs">👤</span>
+              المسؤولون
+            </h4>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 mb-1.5">اسم الرئيس</label>
+                <input type="text" value={settings.presidentName} onChange={(e) => handleUpdateAndSave({ presidentName: e.target.value })}
+                  placeholder="رئيس الجماعة" className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50/50 text-sm outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-300 transition-all" />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 mb-1.5">اسم رئيس المصالح</label>
+                <input type="text" value={settings.chefServiceName} onChange={(e) => handleUpdateAndSave({ chefServiceName: e.target.value })}
+                  placeholder="رئيس المصالح" className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50/50 text-sm outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-300 transition-all" />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 mb-1.5">اسم المسؤول</label>
+                <input type="text" value={settings.responsableName} onChange={(e) => handleUpdateAndSave({ responsableName: e.target.value })}
+                  placeholder="المسؤول" className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50/50 text-sm outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-300 transition-all" />
+              </div>
+            </div>
+          </div>
+
+          {/* Commune Info */}
+          <div>
+            <h4 className="text-sm font-bold text-slate-700 mb-3 flex items-center gap-2">
+              <span className="w-6 h-6 rounded-md bg-emerald-100 text-emerald-600 flex items-center justify-center text-xs">🏛️</span>
+              معلومات الجماعة
+            </h4>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 mb-1.5">اسم الجماعة (عربي)</label>
+                <input type="text" value={settings.communeNameAr} onChange={(e) => handleUpdateAndSave({ communeNameAr: e.target.value })}
+                  placeholder="جماعة ..." className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50/50 text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-300 transition-all" />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 mb-1.5">اسم الجماعة (فرنسي)</label>
+                <input type="text" value={settings.communeNameFr} onChange={(e) => handleUpdateAndSave({ communeNameFr: e.target.value })}
+                  placeholder="Commune de ..." dir="ltr" className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50/50 text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-300 transition-all" />
+              </div>
+              <div className="sm:col-span-2">
+                <label className="block text-xs font-semibold text-slate-500 mb-1.5">عنوان الجماعة</label>
+                <input type="text" value={settings.communeAddress} onChange={(e) => handleUpdateAndSave({ communeAddress: e.target.value })}
+                  placeholder="عنوان مقر الجماعة" className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50/50 text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-300 transition-all" />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 mb-1.5">الهاتف</label>
+                <input type="tel" value={settings.communePhone} onChange={(e) => handleUpdateAndSave({ communePhone: e.target.value })}
+                  placeholder="05XXXXXXXX" dir="ltr" className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50/50 text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-300 transition-all" />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 mb-1.5">الفاكس</label>
+                <input type="tel" value={settings.communeFax} onChange={(e) => handleUpdateAndSave({ communeFax: e.target.value })}
+                  placeholder="05XXXXXXXX" dir="ltr" className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50/50 text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-300 transition-all" />
+              </div>
+              <div className="sm:col-span-2">
+                <label className="block text-xs font-semibold text-slate-500 mb-1.5">البريد الإلكتروني</label>
+                <input type="email" value={settings.communeEmail} onChange={(e) => handleUpdateAndSave({ communeEmail: e.target.value })}
+                  placeholder="contact@commune.ma" dir="ltr" className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50/50 text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-300 transition-all" />
+              </div>
+            </div>
+          </div>
+
+          {/* Print Options */}
+          <div>
+            <h4 className="text-sm font-bold text-slate-700 mb-3 flex items-center gap-2">
+              <span className="w-6 h-6 rounded-md bg-amber-100 text-amber-600 flex items-center justify-center text-xs">🖨️</span>
+              خيارات الطباعة
+            </h4>
+            <div className="space-y-4">
+              {/* Watermark toggle */}
+              <div className="flex items-center justify-between bg-slate-50 rounded-xl p-3">
+                <div className="flex items-center gap-3">
+                  <span className="text-sm">💧</span>
+                  <div>
+                    <p className="text-sm font-medium text-slate-700">علامة مائية</p>
+                    <p className="text-[11px] text-slate-400">إظهار علامة مائية على المستندات المطبوعة</p>
+                  </div>
+                </div>
+                <button type="button" onClick={() => handleUpdateAndSave({ showWatermark: !settings.showWatermark })}
+                  className={`relative w-12 h-7 rounded-full transition-colors duration-200 ${settings.showWatermark ? 'bg-emerald-500' : 'bg-slate-300'}`}>
+                  <span className={`absolute top-1 w-5 h-5 bg-white rounded-full shadow-sm transition-all duration-200 ${settings.showWatermark ? 'right-1' : 'right-6'}`} />
+                </button>
+              </div>
+              {/* Watermark text */}
+              {settings.showWatermark && (
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 mb-1.5">نص العلامة المائية</label>
+                  <input type="text" value={settings.watermarkText} onChange={(e) => handleUpdateAndSave({ watermarkText: e.target.value })}
+                    placeholder="BCH" className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50/50 text-sm outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-300 transition-all" />
+                </div>
+              )}
+              {/* Document footer */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 mb-1.5">تذييل المستند</label>
+                <textarea value={settings.documentFooter} onChange={(e) => handleUpdateAndSave({ documentFooter: e.target.value })}
+                  placeholder="نص يظهر في أسفل المستندات المطبوعة" rows={2}
+                  className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50/50 text-sm outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-300 transition-all resize-none" />
+              </div>
+            </div>
+          </div>
+        </div>
+      </motion.div>
+
       {/* Backup & Restore */}
       <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }}
         className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
@@ -1130,7 +1244,59 @@ function SettingsView() {
                   const text = await file.text()
                   const backup = JSON.parse(text)
                   if (!backup.version) { toast.error('ملف النسخة الاحتياطية غير صالح'); return }
-                  toast.success(`تم العثور على ${backup.interventions?.total || 0} تدخل، ${backup.quartiers?.length || 0} حي، ${backup.agents?.length || 0} عون`)
+                  const interventionCount = backup.interventions?.total || 0
+                  const quartierCount = backup.quartiers?.length || 0
+                  const agentCount = backup.agents?.length || 0
+                  const productCount = backup.products?.length || 0
+                  // Show confirmation dialog
+                  const confirmed = window.confirm(
+                    `سيتم استعادة البيانات التالية:\n` +
+                    `• ${interventionCount} تدخل\n` +
+                    `• ${productCount} منتج\n` +
+                    `• ${quartierCount} حي\n` +
+                    `• ${agentCount} عون\n\n` +
+                    `سيتم إعادة تهيئة قاعدة البيانات أولاً. هل أنت متأكد؟`
+                  )
+                  if (!confirmed) return
+                  // Step 1: Reset the database via seed endpoint
+                  toast.loading('جاري إعادة تهيئة قاعدة البيانات...', { id: 'restore' })
+                  const seedRes = await fetch('/api/seed', { method: 'POST' })
+                  if (!seedRes.ok) {
+                    toast.error('فشل في إعادة تهيئة قاعدة البيانات', { id: 'restore' })
+                    return
+                  }
+                  toast.loading('جاري استعادة البيانات...', { id: 'restore' })
+                  // Step 2: Restore quartiers
+                  if (backup.quartiers?.length) {
+                    for (const q of backup.quartiers) {
+                      await fetch('/api/quartiers', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ nom: q.nom, commune: q.commune, latitude: q.latitude, longitude: q.longitude }),
+                      })
+                    }
+                  }
+                  // Step 3: Restore agents
+                  if (backup.agents?.length) {
+                    for (const a of backup.agents) {
+                      await fetch('/api/agents', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ nom: a.nom, prenom: a.prenom, telephone: a.telephone, commune: a.commune, fonction: a.fonction, actif: a.actif }),
+                      })
+                    }
+                  }
+                  // Step 4: Restore products
+                  if (backup.products?.length) {
+                    for (const p of backup.products) {
+                      await fetch('/api/products', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ nom: p.nom, categorie: p.categorie, commune: p.commune, unite: p.unite, quantiteStock: p.quantiteStock, seuilAlerte: p.seuilAlerte, prixUnitaire: p.prixUnitaire, fournisseur: p.fournisseur, description: p.description }),
+                      })
+                    }
+                  }
+                  toast.success(`تمت استعادة البيانات بنجاح: ${interventionCount} تدخل، ${productCount} منتج، ${quartierCount} حي، ${agentCount} عون`, { id: 'restore' })
                 } catch { toast.error('حدث خطأ أثناء قراءة الملف') }
               }
               input.click()

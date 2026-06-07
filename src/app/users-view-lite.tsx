@@ -540,7 +540,7 @@ export function UserManagementSection() {
                   <button type="button" onClick={() => setEditFormData({ ...editFormData, actif: !editFormData.actif })}
                     className={`relative w-14 h-8 rounded-full transition-colors duration-300 ${editFormData.actif ? 'bg-emerald-500' : 'bg-slate-300'}`}>
                     <motion.div className="absolute top-1 w-6 h-6 bg-white rounded-full shadow-md"
-                      animate={{ left: editFormData.actif ? '2rem' : '0.25rem' }}
+                      animate={{ right: editFormData.actif ? '0.25rem' : '2rem' }}
                       transition={{ type: 'spring', stiffness: 500, damping: 30 }} />
                   </button>
                 </div>
@@ -643,7 +643,8 @@ export function UserManagementSection() {
         )}
       </AnimatePresence>
 
-      {/* Default login info */}
+      {/* Default login info — admin only */}
+      {canSeeAllCommunes && (
       <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
         <h4 className="text-sm font-bold text-amber-800 mb-2">🔑 معلومات الدخول الافتراضية</h4>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
@@ -663,6 +664,7 @@ export function UserManagementSection() {
           </div>
         </div>
       </div>
+      )}
     </div>
   )
 }

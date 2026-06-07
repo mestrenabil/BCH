@@ -2,7 +2,8 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { useAppStore, type CommuneType } from '@/lib/store'
+import { useAppStore } from '@/lib/store'
+import { COMMUNE_LABELS, COMMUNE_COLORS } from '@/lib/constants'
 import { toast } from 'sonner'
 
 // ===== TYPE DEFINITIONS =====
@@ -19,16 +20,6 @@ interface Agent {
 }
 
 // ===== CONSTANTS =====
-const COMMUNE_LABELS: Record<string, string> = {
-  'سلا': 'جماعة سلا',
-  'سيدي أبي القنادل': 'جماعة سيدي أبي القنادل',
-  'عامر': 'جماعة عامر',
-}
-const COMMUNE_COLORS: Record<string, string> = {
-  'سلا': '#059669',
-  'سيدي أبي القنادل': '#7c3aed',
-  'عامر': '#d97706',
-}
 
 const FONCTION_OPTIONS = [
   { value: 'عون صحية', label: 'عون صحية', icon: '🛡️', color: '#059669' },
@@ -109,6 +100,7 @@ export default function AgentsView() {
       result = result.filter(a =>
         a.nom.toLowerCase().includes(q) ||
         a.prenom.toLowerCase().includes(q) ||
+        a.telephone.toLowerCase().includes(q) ||
         (a.nom + ' ' + a.prenom).toLowerCase().includes(q)
       )
     }

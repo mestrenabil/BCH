@@ -3,7 +3,7 @@
 import React from 'react'
 import { motion } from 'framer-motion'
 import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, RadarChart, Radar, PolarGrid,
   PolarAngleAxis, PolarRadiusAxis,
 } from 'recharts'
@@ -15,8 +15,84 @@ import {
   cardVariants,
 } from '@/lib/constants'
 
-function DashboardView({ stats, onNavigate, selectedCommune, canSeeAllCommunes }: { stats: Statistics | null; onNavigate: (v: ViewType) => void; selectedCommune: CommuneType | 'ALL'; canSeeAllCommunes: boolean }) {
-  if (!stats) return null
+function DashboardView({ stats, onNavigate, selectedCommune, canSeeAllCommunes, onRetry }: { stats: Statistics | null; onNavigate: (v: ViewType) => void; selectedCommune: CommuneType | 'ALL'; canSeeAllCommunes: boolean; onRetry?: () => void }) {
+  // Error state: stats failed to load
+  if (!stats && onRetry) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]" dir="rtl">
+        <div className="text-center space-y-4 max-w-md mx-auto px-4">
+          <div className="w-20 h-20 rounded-full bg-red-50 flex items-center justify-center text-4xl mx-auto">
+            ⚠️
+          </div>
+          <h3 className="text-xl font-bold text-slate-800">حدث خطأ في تحميل البيانات</h3>
+          <p className="text-slate-500 text-sm">لم نتمكن من تحميل بيانات لوحة القيادة. يرجى التحقق من اتصالك والمحاولة مرة أخرى.</p>
+          <motion.button
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={onRetry}
+            className="bg-gradient-to-l from-emerald-600 to-teal-600 text-white px-6 py-2.5 rounded-xl font-medium shadow-lg shadow-emerald-200 inline-flex items-center gap-2"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+              <path fillRule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clipRule="evenodd" />
+            </svg>
+            إعادة المحاولة
+          </motion.button>
+        </div>
+      </div>
+    )
+  }
+
+  // Loading skeleton state
+  if (!stats) {
+    return (
+      <div className="p-4 lg:p-6 space-y-6 pb-24 lg:pb-6">
+        {/* Title skeleton */}
+        <div className="space-y-2">
+          <div className="h-8 w-48 bg-slate-200 rounded-lg animate-pulse" />
+          <div className="h-4 w-72 bg-slate-100 rounded-lg animate-pulse" />
+        </div>
+        {/* KPI Cards skeleton */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          {[1, 2, 3, 4].map(i => (
+            <div key={i} className="bg-slate-100 rounded-2xl p-5 animate-pulse">
+              <div className="h-8 w-8 bg-slate-200 rounded-lg mb-3" />
+              <div className="h-8 w-16 bg-slate-200 rounded-lg mb-2" />
+              <div className="h-4 w-24 bg-slate-200 rounded-lg" />
+            </div>
+          ))}
+        </div>
+        {/* Commune breakdown skeleton */}
+        <div className="bg-slate-50 rounded-2xl p-6 animate-pulse">
+          <div className="h-5 w-40 bg-slate-200 rounded-lg mb-4" />
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            {[1, 2, 3].map(i => (
+              <div key={i} className="bg-white rounded-xl p-4 border border-slate-100">
+                <div className="h-4 w-20 bg-slate-200 rounded-lg mb-2" />
+                <div className="h-6 w-12 bg-slate-200 rounded-lg mb-3" />
+                <div className="h-2 w-full bg-slate-200 rounded-full" />
+              </div>
+            ))}
+          </div>
+        </div>
+        {/* Main grid skeleton */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {[1, 2, 3].map(i => (
+            <div key={i} className="bg-slate-50 rounded-2xl p-6 animate-pulse">
+              <div className="h-5 w-32 bg-slate-200 rounded-lg mb-2" />
+              <div className="h-3 w-48 bg-slate-100 rounded-lg mb-4" />
+              <div className="h-36 bg-slate-100 rounded-xl" />
+            </div>
+          ))}
+        </div>
+        {/* Chart skeleton */}
+        <div className="bg-slate-50 rounded-2xl p-6 animate-pulse">
+          <div className="h-5 w-40 bg-slate-200 rounded-lg mb-2" />
+          <div className="h-3 w-56 bg-slate-100 rounded-lg mb-4" />
+          <div className="h-72 bg-slate-100 rounded-xl" />
+        </div>
+      </div>
+    )
+  }
   const completionRate = stats.total > 0 ? Math.round(((stats.byStatut.TERMINEE || 0) / stats.total) * 100) : 0
   const inProgressRate = stats.total > 0 ? Math.round(((stats.byStatut.EN_COURS || 0) / stats.total) * 100) : 0
 
@@ -286,7 +362,7 @@ function DashboardView({ stats, onNavigate, selectedCommune, canSeeAllCommunes }
               <p className="text-xs text-slate-400">أحدث العمليات المسجلة</p>
             </div>
             <button onClick={() => onNavigate('interventions')}
-              className="text-xs text-emerald-600 hover:text-emerald-700 font-semibold hover:underline">عرض الكل ←</button>
+              className="text-xs text-emerald-600 hover:text-emerald-700 font-semibold hover:underline">عرض الكل →</button>
           </div>
           <div className="space-y-2 max-h-72 overflow-y-auto">
             {stats.recent.slice(0, 8).map((intervention, i) => (

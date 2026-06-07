@@ -1,6 +1,6 @@
 import { db } from '@/lib/db'
 import { NextResponse } from 'next/server'
-import { hashPassword } from '@/lib/auth'
+import { hashPassword, requireAuth } from '@/lib/auth'
 
 // Quartiers for each commune with realistic coordinates
 const quartiersByCommune = {
@@ -75,6 +75,9 @@ function generateReference(index: number, type: string, year: number): string {
 }
 
 export async function POST() {
+  const authResult = await requireAuth()
+  if ('error' in authResult) return authResult.error
+
   try {
     await db.intervention.deleteMany()
     await db.product.deleteMany()

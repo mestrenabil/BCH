@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { useAppStore, type CommuneType } from '@/lib/store'
+import { useAppStore } from '@/lib/store'
 import { toast } from 'sonner'
 import dynamic from 'next/dynamic'
 
@@ -175,6 +175,7 @@ export default function DocumentsView() {
   const [isLoading, setIsLoading] = useState(true)
   const [selectedCategory, setSelectedCategory] = useState('ALL')
   const [searchQuery, setSearchQuery] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
   const [sortBy, setSortBy] = useState('newest')
 
@@ -215,13 +216,19 @@ export default function DocumentsView() {
   // Detail panel
   const [detailDoc, setDetailDoc] = useState<DocumentRecord | null>(null)
 
+  // Debounce search query (300ms)
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(searchQuery), 300)
+    return () => clearTimeout(timer)
+  }, [searchQuery])
+
   const fetchDocuments = useCallback(async () => {
     setIsLoading(true)
     try {
       const params = new URLSearchParams()
       if (effectiveCommune && effectiveCommune !== 'ALL') params.set('commune', effectiveCommune)
       if (selectedCategory !== 'ALL') params.set('categorie', selectedCategory)
-      if (searchQuery) params.set('search', searchQuery)
+      if (debouncedSearch) params.set('search', debouncedSearch)
       const res = await fetch(`/api/documents?${params.toString()}`)
       if (!res.ok) throw new Error()
       const data = await res.json()
@@ -232,7 +239,7 @@ export default function DocumentsView() {
       toast.error('فشل في تحميل المستندات')
     }
     setIsLoading(false)
-  }, [effectiveCommune, selectedCategory, searchQuery])
+  }, [effectiveCommune, selectedCategory, debouncedSearch])
 
   useEffect(() => {
     fetchDocuments()
@@ -357,7 +364,7 @@ export default function DocumentsView() {
       description: doc.description,
       categorie: doc.categorie,
       reference: doc.reference,
-      dateDocument: doc.dateDocument ? new Date(doc.dateDocument).toISOString().split('T')[0] : '',
+      dateDocument: doc.dateDocument ? (() => { const d = new Date(doc.dateDocument); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; })() : '',
     })
   }
 
@@ -411,7 +418,7 @@ export default function DocumentsView() {
   }
 
   return (
-    <div className="p-4 lg:p-6 space-y-6">
+    <div className="p-4 lg:p-6 space-y-6" dir="rtl">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
@@ -1270,36 +1277,38 @@ export default function DocumentsView() {
       </AnimatePresence>
 
       {/* ===== INTERVENTION PICKER DIALOG ===== */}
-      {showInterventionPicker && detailDoc && (
-        <InterventionPickerDialog
-          documentId={detailDoc.id}
-          commune={detailDoc.commune}
-          existingInterventionIds={(detailDoc.interventions || []).map(i => i.interventionId)}
-          onSelect={async (interventionIds) => {
-            try {
-              for (const intId of interventionIds) {
-                await fetch(`/api/interventions/${intId}/documents`, {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ documentId: detailDoc.id }),
-                })
+      <AnimatePresence>
+        {showInterventionPicker && detailDoc && (
+          <InterventionPickerDialog
+            documentId={detailDoc.id}
+            commune={detailDoc.commune}
+            existingInterventionIds={(detailDoc.interventions || []).map(i => i.interventionId)}
+            onSelect={async (interventionIds) => {
+              try {
+                for (const intId of interventionIds) {
+                  await fetch(`/api/interventions/${intId}/documents`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ documentId: detailDoc.id }),
+                  })
+                }
+                toast.success(`تم ربط المستند بـ ${interventionIds.length} تدخل بنجاح`)
+                setShowInterventionPicker(false)
+                fetchDocuments()
+                // Refresh the detail doc
+                const freshRes = await fetch(`/api/documents/${detailDoc.id}`)
+                if (freshRes.ok) {
+                  const freshData = await freshRes.json()
+                  setDetailDoc(freshData)
+                }
+              } catch {
+                toast.error('حدث خطأ أثناء ربط التدخلات')
               }
-              toast.success(`تم ربط المستند بـ ${interventionIds.length} تدخل بنجاح`)
-              setShowInterventionPicker(false)
-              fetchDocuments()
-              // Refresh the detail doc
-              const freshRes = await fetch(`/api/documents/${detailDoc.id}`)
-              if (freshRes.ok) {
-                const freshData = await freshRes.json()
-                setDetailDoc(freshData)
-              }
-            } catch {
-              toast.error('حدث خطأ أثناء ربط التدخلات')
-            }
-          }}
-          onClose={() => setShowInterventionPicker(false)}
-        />
-      )}
+            }}
+            onClose={() => setShowInterventionPicker(false)}
+          />
+        )}
+      </AnimatePresence>
     </div>
   )
 }

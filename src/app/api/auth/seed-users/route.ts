@@ -1,6 +1,6 @@
 import { db } from '@/lib/db'
 import { NextResponse } from 'next/server'
-import { hashPassword } from '@/lib/auth'
+import { hashPassword, requireAuth } from '@/lib/auth'
 
 const DEFAULT_USERS = [
   {
@@ -34,6 +34,9 @@ const DEFAULT_USERS = [
 ]
 
 export async function POST() {
+  const authResult = await requireAuth()
+  if ('error' in authResult) return authResult.error
+
   try {
     // Only create users that don't already exist
     const createdUsers = []
@@ -69,6 +72,9 @@ export async function POST() {
 }
 
 export async function GET() {
+  const authResult = await requireAuth()
+  if ('error' in authResult) return authResult.error
+
   try {
     const users = await db.user.findMany({
       select: {

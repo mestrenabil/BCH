@@ -333,7 +333,7 @@ export default function NotificationsView() {
     let cancelled = false
     const load = async () => {
       await fetchNotifications()
-      void cancelled
+      if (cancelled) return
     }
     load()
     return () => { cancelled = true }
@@ -521,7 +521,7 @@ export default function NotificationsView() {
                     onClick={() => setNotifSettings(prev => ({ ...prev, stockAlerts: !prev.stockAlerts }))}
                     className={`w-11 h-6 rounded-full relative transition-colors cursor-pointer ${notifSettings.stockAlerts ? 'bg-emerald-500' : 'bg-slate-300'}`}
                   >
-                    <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${notifSettings.stockAlerts ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                    <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-all ${notifSettings.stockAlerts ? 'right-0.5' : 'right-6'}`} />
                   </button>
                 </div>
 
@@ -539,7 +539,7 @@ export default function NotificationsView() {
                     onClick={() => setNotifSettings(prev => ({ ...prev, overdueAlerts: !prev.overdueAlerts }))}
                     className={`w-11 h-6 rounded-full relative transition-colors cursor-pointer ${notifSettings.overdueAlerts ? 'bg-emerald-500' : 'bg-slate-300'}`}
                   >
-                    <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${notifSettings.overdueAlerts ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                    <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-all ${notifSettings.overdueAlerts ? 'right-0.5' : 'right-6'}`} />
                   </button>
                 </div>
 
@@ -557,7 +557,7 @@ export default function NotificationsView() {
                     onClick={() => setNotifSettings(prev => ({ ...prev, upcomingReminders: !prev.upcomingReminders }))}
                     className={`w-11 h-6 rounded-full relative transition-colors cursor-pointer ${notifSettings.upcomingReminders ? 'bg-emerald-500' : 'bg-slate-300'}`}
                   >
-                    <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${notifSettings.upcomingReminders ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                    <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-all ${notifSettings.upcomingReminders ? 'right-0.5' : 'right-6'}`} />
                   </button>
                 </div>
 

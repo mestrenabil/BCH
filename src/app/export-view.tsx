@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { useAppStore, type CommuneType } from '@/lib/store'
+import { useAppStore } from '@/lib/store'
 import { toast } from 'sonner'
 import PrintDocument from './print-document'
 
@@ -32,7 +32,7 @@ const STATUT_COLORS: Record<string, string> = {
 
 // ===== EXPORT TYPE DEFINITIONS =====
 type ExportType = 'interventions' | 'statistics' | 'inventory' | 'monthly' | 'commune' | 'custom'
-type ExportFormat = 'csv' | 'pdf' | 'print'
+type ExportFormat = 'csv' | 'pdf'
 
 interface ExportTypeOption {
   id: ExportType
@@ -70,7 +70,7 @@ const CUSTOM_FIELDS = [
 const QUICK_EXPORTS = [
   { id: 'current-month', label: 'تقرير الشهر الحالي', icon: '📅', description: 'تقرير عمليات الشهر الجاري' },
   { id: 'year-report', label: 'تقرير السنة', icon: '📆', description: 'تقرير سنوي شامل' },
-  { id: 'quick-print', label: 'طباعة سريعة', icon: '🖨️', description: 'فتح معاينة الطباعة مباشرة' },
+  { id: 'quick-print', label: 'طباعة / PDF', icon: '🖨️', description: 'فتح معاينة الطباعة أو حفظ كـ PDF' },
   { id: 'low-stock', label: 'المخزون المنخفض', icon: '⚠️', description: 'المنتجات التي تحتاج تجديد' },
 ]
 
@@ -152,7 +152,7 @@ export default function ExportView() {
       if (filterType !== 'ALL') params.set('type', filterType)
       if (filterStatut !== 'ALL') params.set('statut', filterStatut)
 
-      if (selectedExportType === 'inventory' || selectedExportType === 'custom' && filterType !== 'ALL') {
+      if ((selectedExportType === 'inventory') || (selectedExportType === 'custom' && filterType !== 'ALL')) {
         // Load products for inventory
         const res = await fetch(`/api/products?${params.toString()}`)
         if (!res.ok) throw new Error('فشل في تحميل البيانات')
@@ -316,17 +316,7 @@ export default function ExportView() {
     }
   }, [selectedExportType, buildExportUrl, addToHistory, previewTotal, downloadCsv, filterCommune, filterYear])
 
-  // Handle PDF / Print preview
-  const handlePrintExport = useCallback(() => {
-    if (!selectedExportType) {
-      toast.error('يرجى اختيار نوع التقرير أولاً')
-      return
-    }
-    addToHistory(selectedExportType, 'print', previewTotal)
-    setIsPrintOpen(true)
-  }, [selectedExportType, addToHistory, previewTotal])
-
-  // Handle PDF summary generation
+  // Handle PDF / Print preview (combined — uses browser print dialog which allows Save as PDF)
   const handlePdfExport = useCallback(() => {
     if (!selectedExportType) {
       toast.error('يرجى اختيار نوع التقرير أولاً')
@@ -707,17 +697,7 @@ export default function ExportView() {
                         : 'bg-white text-slate-600 border-slate-200 hover:border-emerald-300 hover:text-emerald-600'
                     }`}
                   >
-                    📕 PDF ملخص
-                  </button>
-                  <button
-                    onClick={() => setExportFormat('print')}
-                    className={`px-5 py-2 rounded-full text-sm font-medium transition-all border-2 ${
-                      exportFormat === 'print'
-                        ? 'bg-emerald-600 text-white border-emerald-600 shadow-md shadow-emerald-200'
-                        : 'bg-white text-slate-600 border-slate-200 hover:border-emerald-300 hover:text-emerald-600'
-                    }`}
-                  >
-                    🖨️ طباعة
+                    📕 طباعة / PDF
                   </button>
                 </div>
               </div>
@@ -725,7 +705,7 @@ export default function ExportView() {
               {/* Export Action Button */}
               <div className="flex items-center gap-3 pt-2">
                 <motion.button
-                  onClick={exportFormat === 'csv' ? handleCsvExport : exportFormat === 'pdf' ? handlePdfExport : handlePrintExport}
+                  onClick={exportFormat === 'csv' ? handleCsvExport : handlePdfExport}
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
                   className="bg-gradient-to-l from-emerald-600 to-teal-600 text-white px-6 py-3 rounded-xl font-bold shadow-lg shadow-emerald-200 flex items-center gap-2 text-sm"
@@ -733,7 +713,7 @@ export default function ExportView() {
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                     <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" />
                   </svg>
-                  تصدير {exportFormat === 'csv' ? 'CSV' : exportFormat === 'pdf' ? 'PDF' : 'طباعة'}
+                  تصدير {exportFormat === 'csv' ? 'CSV' : 'طباعة / PDF'}
                 </motion.button>
                 <button
                   onClick={loadPreview}
@@ -773,7 +753,7 @@ export default function ExportView() {
             {isLoadingPreview ? (
               <div className="flex items-center justify-center h-32">
                 <div className="text-center space-y-3">
-                  <div className="w-8 h-8 border-3 border-emerald-500 border-t-transparent rounded-full animate-spin mx-auto" />
+                  <div className="w-8 h-8 border-[3px] border-emerald-500 border-t-transparent rounded-full animate-spin mx-auto" />
                   <p className="text-xs text-slate-400">جاري تحميل المعاينة...</p>
                 </div>
               </div>
@@ -807,7 +787,7 @@ export default function ExportView() {
                       >
                         <td className="px-3 py-2 text-[11px] text-slate-400 font-mono">{i + 1}</td>
                         {previewColumns.map((col) => {
-                          const val = row[col] || '—'
+                          const val = row[col] ?? '—'
                           // Color-code certain columns
                           let cellClass = 'text-xs text-slate-700'
                           let cellContent = String(val)

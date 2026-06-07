@@ -15,6 +15,30 @@ import {
 function ReportsView({ stats, selectedCommune, canSeeAllCommunes }: { stats: Statistics | null; selectedCommune: CommuneType | 'ALL'; canSeeAllCommunes: boolean }) {
   if (!stats) return null
 
+  // Empty state check
+  const isMonthlyEmpty = !stats.monthly || Object.keys(stats.monthly).length === 0
+  const isQuartierEmpty = !stats.byQuartier || stats.byQuartier.length === 0
+
+  if (isMonthlyEmpty && isQuartierEmpty) {
+    return (
+      <div className="p-4 lg:p-6 flex items-center justify-center min-h-[400px]" dir="rtl">
+        <div className="text-center space-y-4 max-w-md mx-auto">
+          <div className="w-24 h-24 rounded-full bg-slate-100 flex items-center justify-center text-5xl mx-auto">
+            📊
+          </div>
+          <h3 className="text-xl font-bold text-slate-800">لا توجد بيانات كافية لعرض التقارير</h3>
+          <p className="text-slate-500 text-sm">لم يتم تسجيل أي تدخلات بعد. ستظهر التقارير والإحصائيات تلقائياً بمجرد إضافة تدخلات جديدة.</p>
+          <div className="flex items-center justify-center gap-3 pt-2">
+            <div className="flex items-center gap-1.5 text-xs text-slate-400">
+              <div className="w-2 h-2 rounded-full bg-emerald-400" />
+              أضف تدخلات لعرض التحليلات
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   const monthlyChartData = Object.entries(stats.monthly).sort(([a], [b]) => a.localeCompare(b)).map(([month, data]) => ({
     name: MONTH_NAMES_AR[parseInt(month.split('-')[1]) - 1],
     'مكافحة القوارض': data.DERATISATION || 0,
@@ -34,7 +58,7 @@ function ReportsView({ stats, selectedCommune, canSeeAllCommunes }: { stats: Sta
   }))
 
   return (
-    <div className="p-4 lg:p-6 space-y-6 pb-24 lg:pb-6">
+    <div className="p-4 lg:p-6 space-y-6 pb-24 lg:pb-6" dir="rtl">
       <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col sm:flex-row sm:items-center gap-2">
         <div>
           <h2 className="text-2xl font-bold text-slate-800">الإحصائيات والتقارير</h2>
@@ -173,7 +197,7 @@ function ReportsView({ stats, selectedCommune, canSeeAllCommunes }: { stats: Sta
                 const dr = data.DERATISATION || 0; const di = data.DESINSECTISATION || 0; const df = data.DESINFECTION || 0; const total = dr + di + df
                 const monthNum = parseInt(month.split('-')[1]) - 1
                 return (
-                  <tr key={month} className={`border-b border-slate-50 hover:bg-emerald-50/30 transition-colors ${i % 2 ? 'bg-slate-25' : ''}`}>
+                  <tr key={month} className={`border-b border-slate-50 hover:bg-emerald-50/30 transition-colors ${i % 2 ? 'bg-slate-50/50' : ''}`}>
                     <td className="py-2.5 px-4 font-medium text-slate-700">{MONTH_NAMES_AR[monthNum]} {month.split('-')[0]}</td>
                     <td className="py-2.5 px-4 text-center"><span className="inline-block px-2 py-0.5 rounded-md text-xs font-bold bg-red-50 text-red-600">{dr}</span></td>
                     <td className="py-2.5 px-4 text-center"><span className="inline-block px-2 py-0.5 rounded-md text-xs font-bold bg-amber-50 text-amber-600">{di}</span></td>

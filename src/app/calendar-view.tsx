@@ -35,7 +35,7 @@ const ARABIC_MONTHS = [
 ]
 
 const ARABIC_DAYS = [
-  'الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت',
+  'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت', 'الأحد',
 ]
 
 const TYPE_LABELS: Record<string, string> = {
@@ -88,7 +88,9 @@ function getDaysInMonth(year: number, month: number): number {
 }
 
 function getFirstDayOfMonth(year: number, month: number): number {
-  return new Date(year, month, 1).getDay()
+  // Convert Sunday=0..Saturday=6 to Monday=0..Sunday=6
+  const day = new Date(year, month, 1).getDay()
+  return day === 0 ? 6 : day - 1
 }
 
 function isToday(year: number, month: number, day: number): boolean {
@@ -134,7 +136,7 @@ const statCardVariants = {
 }
 
 // ===== MAIN COMPONENT =====
-export default function CalendarView() {
+export default function CalendarView({ onAdd }: { onAdd?: (date: string) => void }) {
   const { user, selectedCommune, selectedYear } = useAppStore()
   const canSeeAllCommunes = user?.role === 'admin' || user?.commune === 'ALL'
   const effectiveCommune = canSeeAllCommunes ? selectedCommune : (user?.commune || 'ALL')
@@ -297,8 +299,6 @@ export default function CalendarView() {
     const types = new Set(dayInterventions.map((i) => i.type))
     return Array.from(types)
   }
-
-  const today = new Date()
 
   return (
     <div className="p-4 lg:p-6 space-y-5" dir="rtl">
@@ -536,7 +536,7 @@ export default function CalendarView() {
             <div
               key={day}
               className={`py-2.5 text-center text-xs font-bold ${
-                i === 5 ? 'text-amber-600' : i === 0 ? 'text-red-500' : 'text-slate-500'
+                i === 4 ? 'text-amber-600' : i === 6 ? 'text-red-500' : 'text-slate-500'
               }`}
             >
               {day}
@@ -563,8 +563,8 @@ export default function CalendarView() {
                 const isSelected = dayInfo.isCurrentMonth && selectedDay === dayInfo.day
                 const hasInterventions = dots.length > 0
                 const dayOfWeek = idx % 7
-                const isFriday = dayOfWeek === 5
-                const isSunday = dayOfWeek === 0
+                const isFriday = dayOfWeek === 4
+                const isSunday = dayOfWeek === 6
 
                 return (
                   <motion.button
@@ -696,6 +696,21 @@ export default function CalendarView() {
                 </button>
               </div>
             </div>
+
+            {/* Add Intervention Button */}
+            {onAdd && (
+              <div className="px-5 pt-4">
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={() => onAdd(formatDateString(viewYear, viewMonth, selectedDay))}
+                  className="w-full bg-gradient-to-l from-emerald-600 to-teal-600 text-white px-4 py-3 rounded-xl font-bold text-sm shadow-lg shadow-emerald-200 flex items-center justify-center gap-2 hover:shadow-emerald-300 transition-all"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" /></svg>
+                  إضافة تدخل في هذا اليوم
+                </motion.button>
+              </div>
+            )}
 
             {/* Interventions List */}
             {selectedDayInterventions.length === 0 ? (

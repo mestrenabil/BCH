@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { useAppStore, type CommuneType } from '@/lib/store'
+import { useAppStore } from '@/lib/store'
 import { toast } from 'sonner'
 
 // ===== TYPE DEFINITIONS =====
@@ -171,7 +171,7 @@ function formatRelativeTime(dateStr: string): string {
 
 // ===== MAIN COMPONENT =====
 export default function AlertsView() {
-  const { selectedCommune } = useAppStore()
+  const { selectedCommune, setCurrentView } = useAppStore()
 
   const [products, setProducts] = useState<Product[]>([])
   const [interventions, setInterventions] = useState<Intervention[]>([])
@@ -186,6 +186,14 @@ export default function AlertsView() {
   const handleRefresh = useCallback(() => {
     setIsLoading(true)
     setRefreshKey(k => k + 1)
+  }, [])
+
+  // Auto-refresh every 60 seconds
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setRefreshKey(prev => prev + 1)
+    }, 60000)
+    return () => clearInterval(interval)
   }, [])
 
   useEffect(() => {
@@ -278,6 +286,10 @@ export default function AlertsView() {
         <div>
           <h2 className="text-2xl font-extrabold text-slate-800 flex items-center gap-2">
             🔔 التنبيهات والتتبع
+            <span className="relative flex h-3 w-3">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+            </span>
           </h2>
           <p className="text-sm text-slate-500 mt-1">متابعة المخزون والتدخلات في الوقت الحقيقي</p>
         </div>
@@ -344,7 +356,7 @@ export default function AlertsView() {
           </div>
           <h3 className="text-sm font-bold text-slate-700">تدخلات مبرمجة قريباً</h3>
           <p className="text-xs text-slate-400 mt-1">
-            خلال الأيام 7 القادمة
+            خلال الـ 7 أيام القادمة
           </p>
         </motion.div>
       </div>
@@ -386,7 +398,8 @@ export default function AlertsView() {
                     <motion.div
                       key={product.id}
                       variants={itemVariants}
-                      className={`p-4 border-r-4 ${borderColor} ${bgColor} hover:bg-slate-50/50 transition-colors`}
+                      onClick={() => setCurrentView('inventory')}
+                      className={`p-4 border-r-4 ${borderColor} ${bgColor} hover:bg-slate-50/50 transition-colors cursor-pointer`}
                     >
                       <div className="flex items-start justify-between gap-3">
                         <div className="flex-1 min-w-0">
@@ -470,7 +483,8 @@ export default function AlertsView() {
                     <motion.div
                       key={intervention.id}
                       variants={itemVariants}
-                      className={`p-4 border-r-4 ${urgencyColor} hover:bg-slate-50/50 transition-colors`}
+                      onClick={() => setCurrentView('interventions')}
+                      className={`p-4 border-r-4 ${urgencyColor} hover:bg-slate-50/50 transition-colors cursor-pointer`}
                     >
                       <div className="flex items-start justify-between gap-3">
                         <div className="flex-1 min-w-0">
@@ -541,7 +555,7 @@ export default function AlertsView() {
             <div className="p-8 text-center">
               <div className="text-4xl mb-3">📭</div>
               <p className="text-sm text-slate-500 font-medium">لا توجد تدخلات مبرمجة قريباً</p>
-              <p className="text-xs text-slate-400 mt-1">لا تدخلات مبرمجة خلال الأيام 7 القادمة</p>
+              <p className="text-xs text-slate-400 mt-1">لا تدخلات مبرمجة خلال الـ 7 أيام القادمة</p>
             </div>
           ) : (
             <div className="divide-y divide-slate-50">

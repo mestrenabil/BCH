@@ -319,6 +319,8 @@ export default function HomePage() {
   const [isLoading, setIsLoading] = useState(true)
   const [isSeeded, setIsSeeded] = useState(false)
   const [isSeeding, setIsSeeding] = useState(false)
+  const [presetDate, setPresetDate] = useState<string | null>(null)
+  const [unreadNotifCount, setUnreadNotifCount] = useState(0)
 
   // Auth: check session on mount
   useEffect(() => {
@@ -438,6 +440,25 @@ export default function HomePage() {
     if (initialLoadDone.current) { fetchStats(); fetchInterventions() }
   }, [selectedYear, selectedType, selectedCommune, fetchStats, fetchInterventions])
   useEffect(() => { if (!isLoading) initialLoadDone.current = true }, [isLoading])
+
+  // Fetch unread notification count periodically
+  useEffect(() => {
+    if (!isAuthenticated) return
+    const fetchCount = async () => {
+      try {
+        const res = await fetch('/api/notifications')
+        if (res.ok) {
+          const data = await res.json()
+          const readIds: string[] = JSON.parse(localStorage.getItem('notification-read-ids') || '[]')
+          const unread = (data.notifications || []).filter((n: { id: string }) => !readIds.includes(n.id))
+          setUnreadNotifCount(unread.length)
+        }
+      } catch { /* ignore */ }
+    }
+    fetchCount()
+    const interval = setInterval(fetchCount, 60000)
+    return () => clearInterval(interval)
+  }, [isAuthenticated])
 
   const navItems: { id: ViewType; label: string; icon: string; desc: string; section?: string }[] = [
     // 📋 الأقسام الأساسية
@@ -641,8 +662,13 @@ export default function HomePage() {
                     }`}
                   >
                     <span className="text-lg">{item.icon}</span>
-                    <div className="text-right">
-                      <div className="text-[13px]">{item.label}</div>
+                    <div className="text-right flex-1">
+                      <div className="text-[13px] flex items-center gap-2">
+                        {item.label}
+                        {item.id === 'notifications' && unreadNotifCount > 0 && (
+                          <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] rounded-full bg-red-500 text-white text-[10px] font-bold px-1">{unreadNotifCount > 99 ? '99+' : unreadNotifCount}</span>
+                        )}
+                      </div>
                       <div className={`text-[10px] ${currentView === item.id ? 'text-emerald-100' : 'text-slate-400'}`}>{item.desc}</div>
                     </div>
                   </motion.button>
@@ -713,7 +739,13 @@ export default function HomePage() {
                           className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all ${
                             currentView === item.id ? 'bg-emerald-600 text-white shadow-lg' : 'text-slate-600 hover:bg-slate-50'
                           }`}>
-                          <span className="text-lg">{item.icon}</span><span className="text-[13px]">{item.label}</span>
+                          <span className="text-lg">{item.icon}</span>
+                          <span className="text-[13px] flex items-center gap-2">
+                            {item.label}
+                            {item.id === 'notifications' && unreadNotifCount > 0 && (
+                              <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] rounded-full bg-red-500 text-white text-[10px] font-bold px-1">{unreadNotifCount > 99 ? '99+' : unreadNotifCount}</span>
+                            )}
+                          </span>
                         </button>
                       </React.Fragment>
                     )
@@ -737,7 +769,7 @@ export default function HomePage() {
               </motion.div>
             ) : (
               <motion.div key={currentView} variants={pageVariants} initial="initial" animate="animate" exit="exit">
-                {currentView === 'dashboard' && <DashboardView stats={stats} onNavigate={setCurrentView} selectedCommune={selectedCommune} canSeeAllCommunes={canSeeAllCommunes} />}
+                {currentView === 'dashboard' && <DashboardView stats={stats} onNavigate={setCurrentView} selectedCommune={selectedCommune} canSeeAllCommunes={canSeeAllCommunes} onRetry={fetchStats} />}
                 {currentView === 'map' && <MapView interventions={interventions} quartiers={quartiers} selectedCommune={selectedCommune} canSeeAllCommunes={canSeeAllCommunes} onMapClick={(lat: number, lng: number, commune: string | null) => {
                   const { settings: currentSettings } = useAppStore.getState()
                   if (!currentSettings.mapClickEnabled) return
@@ -754,7 +786,7 @@ export default function HomePage() {
                 {currentView === 'reports' && <ReportsView stats={stats} selectedCommune={selectedCommune} canSeeAllCommunes={canSeeAllCommunes} />}
                 {currentView === 'inventory' && <InventoryView />}
                 {currentView === 'documents' && <DocumentsView />}
-                {currentView === 'calendar' && <CalendarView />}
+                {currentView === 'calendar' && <CalendarView onAdd={(date) => { setPresetDate(date); setEditingInterventionId(null); setMapClickCoords(null); setIsFormOpen(true) }} />}
                 {currentView === 'notifications' && <NotificationsView />}
                 {currentView === 'alerts' && <AlertsView />}
                 {currentView === 'kpi' && <KpiView />}
@@ -772,8 +804,8 @@ export default function HomePage() {
       <AnimatePresence>
         {isFormOpen && (
           <InterventionFormDialog interventionId={editingInterventionId} quartiers={quartiers}
-            mapClickCoords={mapClickCoords} userCommune={user?.commune || 'ALL'}
-            onClose={() => { setIsFormOpen(false); setEditingInterventionId(null); setMapClickCoords(null) }}
+            mapClickCoords={mapClickCoords} presetDate={presetDate} userCommune={user?.commune || 'ALL'}
+            onClose={() => { setIsFormOpen(false); setEditingInterventionId(null); setMapClickCoords(null); setPresetDate(null) }}
             onSave={async () => { await fetchStats(); await fetchInterventions() }} />
         )}
       </AnimatePresence>
@@ -805,7 +837,14 @@ export default function HomePage() {
                 className={`flex flex-col items-center gap-0.5 px-1.5 py-1.5 rounded-xl transition-all ${
                   currentView === item.id ? 'text-emerald-600 bg-emerald-50' : 'text-slate-400'
                 }`}>
-                <span className="text-lg">{item.icon}</span>
+                <span className="text-lg relative">
+                  {item.icon}
+                  {item.id === 'notifications' && unreadNotifCount > 0 && (
+                    <span className="absolute -top-1 -right-1 inline-flex items-center justify-center min-w-[14px] h-[14px] rounded-full bg-red-500 text-white text-[8px] font-bold px-0.5">
+                      {unreadNotifCount > 9 ? '9+' : unreadNotifCount}
+                    </span>
+                  )}
+                </span>
                 <span className="text-[9px] font-semibold">{item.label}</span>
               </button>
             )
@@ -826,16 +865,16 @@ interface DropdownProduct {
   id: string; nom: string; categorie: string; unite: string; quantiteStock: number; prixUnitaire: number; reference: string
 }
 
-function InterventionFormDialog({ interventionId, quartiers, mapClickCoords, userCommune, onClose, onSave }: {
+function InterventionFormDialog({ interventionId, quartiers, mapClickCoords, presetDate, userCommune, onClose, onSave }: {
   interventionId: string | null; quartiers: Quartier[]
-  mapClickCoords: MapClickCoords | null; userCommune: string
+  mapClickCoords: MapClickCoords | null; presetDate: string | null; userCommune: string
   onClose: () => void; onSave: () => Promise<void>
 }) {
   // For non-admin users, always use their assigned commune
   const enforcedCommune = userCommune !== 'ALL' ? userCommune : (mapClickCoords?.commune || '')
 
   const [formData, setFormData] = useState({
-    type: 'DERATISATION', date: new Date().toISOString().split('T')[0],
+    type: 'DERATISATION', date: presetDate || new Date().toISOString().split('T')[0],
     quartier: '', adresse: '', commune: enforcedCommune,
     latitude: mapClickCoords ? mapClickCoords.latitude.toString() : '34.052', 
     longitude: mapClickCoords ? mapClickCoords.longitude.toString() : '-6.735',
@@ -853,6 +892,13 @@ function InterventionFormDialog({ interventionId, quartiers, mapClickCoords, use
       setDropdownProducts(data.products || [])
     }).catch(console.error)
   }, [])
+
+  // When presetDate changes, update the form's date field
+  useEffect(() => {
+    if (presetDate && !interventionId) {
+      setFormData(prev => ({ ...prev, date: presetDate }))
+    }
+  }, [presetDate, interventionId])
 
   // When mapClickCoords changes, update the form's latitude/longitude/commune
   useEffect(() => {

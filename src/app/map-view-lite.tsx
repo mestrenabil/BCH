@@ -8,6 +8,12 @@ import {
   TYPE_LABELS, TYPE_COLORS, TYPE_ICONS, STATUT_LABELS, STATUT_COLORS,
 } from '@/lib/constants'
 
+const COMMUNE_INFO: { name: string; key: string; color: string; population: string; populationMunicipale: string; populationCompteeAPart: string; menages: string; isBouknadel: boolean }[] = [
+  { name: 'جماعة سلا', key: 'سلا', color: '#059669', population: '945,101', populationMunicipale: '938,475', populationCompteeAPart: '6,626', menages: '256,144', isBouknadel: false },
+  { name: 'جماعة سيدي أبي القنادل', key: 'سيدي أبي القنادل', color: '#7c3aed', population: '43,598', populationMunicipale: '43,550', populationCompteeAPart: '48', menages: '10,439', isBouknadel: true },
+  { name: 'جماعة عامر', key: 'عامر', color: '#d97706', population: '75,942', populationMunicipale: '75,896', populationCompteeAPart: '46', menages: '18,540', isBouknadel: false },
+]
+
 function MapView({ interventions, quartiers, selectedCommune, canSeeAllCommunes, onMapClick, onRefresh }: { interventions: Intervention[]; quartiers: Quartier[]; selectedCommune: CommuneType | 'ALL'; canSeeAllCommunes: boolean; onMapClick: (lat: number, lng: number, commune: string | null) => void; onRefresh?: () => void }) {
   const [mapLoaded, setMapLoaded] = useState(false)
   const [MapComponent, setMapComponent] = useState<React.ComponentType<{ interventions: Intervention[]; quartiers: Quartier[]; selectedCommune: string; onMapClick?: (lat: number, lng: number, commune: string | null) => void; mapClickEnabled?: boolean; showCommunePopups?: boolean; onInterventionCreated?: () => void }> | null>(null)
@@ -15,18 +21,18 @@ function MapView({ interventions, quartiers, selectedCommune, canSeeAllCommunes,
   const [hoveredCommune, setHoveredCommune] = useState<string | null>(null)
   const { setSelectedCommune, settings } = useAppStore()
 
+  const [mapError, setMapError] = useState(false)
+  const [mapLoadAttempt, setMapLoadAttempt] = useState(0)
+
   useEffect(() => {
+    setMapError(false)
     import('./map-component').then((mod) => {
       setMapComponent(() => mod.default)
       setMapLoaded(true)
+    }).catch(() => {
+      setMapError(true)
     })
-  }, [])
-
-  const COMMUNE_INFO: { name: string; key: string; color: string; population: string; populationMunicipale: string; populationCompteeAPart: string; menages: string; isBouknadel: boolean }[] = [
-    { name: 'جماعة سلا', key: 'سلا', color: '#059669', population: '945,101', populationMunicipale: '938,475', populationCompteeAPart: '6,626', menages: '256,144', isBouknadel: false },
-    { name: 'جماعة سيدي أبي القنادل', key: 'سيدي أبي القنادل', color: '#7c3aed', population: '43,598', populationMunicipale: '43,550', populationCompteeAPart: '48', menages: '10,439', isBouknadel: true },
-    { name: 'جماعة عامر', key: 'عامر', color: '#d97706', population: '75,942', populationMunicipale: '75,896', populationCompteeAPart: '46', menages: '18,540', isBouknadel: false },
-  ]
+  }, [mapLoadAttempt])
 
   const totalPopulation = COMMUNE_INFO.reduce((sum, c) => sum + parseInt(c.population.replace(/,/g, '')), 0)
   const activeCommune = COMMUNE_INFO.find(c => c.key === selectedCommune)
@@ -51,7 +57,6 @@ function MapView({ interventions, quartiers, selectedCommune, canSeeAllCommunes,
         animate={{ opacity: 1, x: 0, width: sidebarCollapsed ? 56 : 340 }}
         transition={{ duration: 0.3, ease: 'easeOut' }}
         className="absolute top-0 right-0 bottom-0 z-20 flex flex-col bg-white/95 backdrop-blur-xl border-l border-slate-200/60 shadow-2xl overflow-hidden"
-        style={{ width: sidebarCollapsed ? 56 : 340 }}
       >
         {/* Toggle Button */}
         <button
@@ -210,7 +215,7 @@ function MapView({ interventions, quartiers, selectedCommune, canSeeAllCommunes,
                     <div className="text-[10px] font-bold text-slate-500 flex-shrink-0">
                       {interventions.length > 0 && (
                         <span className="bg-slate-100 px-1.5 py-0.5 rounded-md">
-                          {interventions.length}
+                          {interventions.filter(i => i.commune === info.key).length}
                         </span>
                       )}
                     </div>
@@ -269,7 +274,28 @@ function MapView({ interventions, quartiers, selectedCommune, canSeeAllCommunes,
 
       {/* Map Container */}
       <div className="flex-1 relative">
-        {mapLoaded && MapComponent ? <MapComponent interventions={interventions} quartiers={quartiers} selectedCommune={selectedCommune} onMapClick={onMapClick} mapClickEnabled={settings.mapClickEnabled} showCommunePopups={settings.showCommunePopups} onInterventionCreated={onRefresh} /> : (
+        {mapError ? (
+          <div className="h-full flex items-center justify-center bg-slate-50" dir="rtl">
+            <div className="text-center space-y-4 max-w-md mx-auto px-4">
+              <div className="w-20 h-20 rounded-full bg-red-50 flex items-center justify-center text-4xl mx-auto">
+                ⚠️
+              </div>
+              <h3 className="text-xl font-bold text-slate-800">حدث خطأ في تحميل الخريطة</h3>
+              <p className="text-slate-500 text-sm">لم نتمكن من تحميل مكون الخريطة. يرجى التحقق من اتصالك والمحاولة مرة أخرى.</p>
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={() => { setMapLoaded(false); setMapComponent(null); setMapLoadAttempt(prev => prev + 1) }}
+                className="bg-gradient-to-l from-emerald-600 to-teal-600 text-white px-6 py-2.5 rounded-xl font-medium shadow-lg shadow-emerald-200 inline-flex items-center gap-2"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clipRule="evenodd" />
+                </svg>
+                إعادة المحاولة
+              </motion.button>
+            </div>
+          </div>
+        ) : mapLoaded && MapComponent ? <MapComponent interventions={interventions} quartiers={quartiers} selectedCommune={selectedCommune} onMapClick={onMapClick} mapClickEnabled={settings.mapClickEnabled} showCommunePopups={settings.showCommunePopups} onInterventionCreated={onRefresh} /> : (
           <div className="h-full flex items-center justify-center bg-slate-50">
             <div className="text-center space-y-4">
               <div className="w-14 h-14 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mx-auto" />
