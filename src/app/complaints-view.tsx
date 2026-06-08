@@ -232,6 +232,93 @@ function ComplaintsView() {
     }
   }, [fetchComplaints])
 
+  // Print complaint report
+  const handlePrintComplaint = useCallback((complaint: Complaint) => {
+    const printWindow = window.open('', '_blank')
+    if (!printWindow) {
+      toast.error('يرجى السماح بالنوافذ المنبثقة للطباعة')
+      return
+    }
+    const html = `<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <title>تقرير شكاية ${complaint.reference}</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Arabic:wght@400;600;700;800&display=swap');
+    @page { size: A4; margin: 15mm; }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Noto Sans Arabic', 'Segoe UI', Tahoma, sans-serif; direction: rtl; color: #1e293b; line-height: 1.6; font-size: 12px; }
+    .header { text-align: center; padding-bottom: 14px; border-bottom: 3px solid #1f2937; margin-bottom: 16px; position: relative; }
+    .header::after { content: ''; position: absolute; bottom: -5px; left: 0; right: 0; height: 1.5px; background: #1f2937; }
+    .header h1 { font-size: 16px; font-weight: 900; color: #1f2937; }
+    .header p { font-size: 10px; color: #6b7280; font-style: italic; }
+    .ref-bar { display: flex; justify-content: space-between; background: #f3f4f6; border: 1px solid #d1d5db; border-radius: 8px; padding: 10px 16px; margin-bottom: 16px; }
+    .ref-bar .label { font-size: 9px; color: #6b7280; font-weight: 600; }
+    .ref-bar .value { font-size: 12px; color: #1f2937; font-weight: 700; }
+    .title-section { text-align: center; margin-bottom: 16px; padding: 10px; background: #f3f4f6; border-radius: 8px; border: 1px solid #d1d5db; }
+    .title-section h2 { font-size: 14px; font-weight: 800; }
+    .badges { display: flex; justify-content: center; gap: 8px; margin-top: 6px; }
+    .badge { padding: 2px 10px; border-radius: 12px; font-size: 10px; font-weight: 700; color: white; }
+    .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 16px; }
+    .info-card { border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px; background: #f8fafc; }
+    .info-card .label { font-size: 9px; color: #64748b; font-weight: 600; margin-bottom: 2px; }
+    .info-card .value { font-size: 11px; color: #1e293b; font-weight: 600; }
+    .full-width { grid-column: 1 / -1; }
+    .signature-section { margin-top: 40px; padding-top: 16px; }
+    .signature-grid { display: flex; justify-content: space-between; gap: 20px; }
+    .signature-box { flex: 1; text-align: center; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 8px; }
+    .signature-box .role { font-size: 10px; font-weight: 700; color: #1f2937; margin-bottom: 20px; }
+    .signature-box .line { border-top: 1px solid #374151; width: 70%; margin: 0 auto; }
+    @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div style="font-size:10px;font-weight:700;background:#1f2937;color:white;padding:3px 12px;border-radius:4px;display:inline-block;">المملكة المغربية</div>
+    <h1 style="margin-top:6px;">مكتب حفظ الصحة الجماعي</h1>
+    <p>Bureau Communal de l'Hygiène — Bouknadel Salé</p>
+  </div>
+  <div class="ref-bar">
+    <div><div class="label">مرجع الشكاية / Référence</div><div class="value" style="font-family:monospace;">${complaint.reference}</div></div>
+    <div style="text-align:left;"><div class="label">تاريخ الاستقبال / Date</div><div class="value">${new Date(complaint.dateReception).toLocaleDateString('ar-MA')}</div></div>
+  </div>
+  <div class="title-section">
+    <h2>تقرير الشكاية</h2>
+    <div class="badges">
+      <span class="badge" style="background:${STATUT_COLORS[complaint.statut] || '#6b7280'}">${STATUT_LABELS[complaint.statut] || complaint.statut}</span>
+      <span class="badge" style="background:${PRIORITE_COLORS[complaint.priorite] || '#6b7280'}">${PRIORITE_LABELS[complaint.priorite] || complaint.priorite}</span>
+      <span class="badge" style="background:${TYPE_COLORS[complaint.type] || '#64748b'}">${COMPLAINT_TYPE_LABELS[complaint.type] || complaint.type}</span>
+    </div>
+  </div>
+  <div class="info-grid">
+    <div class="info-card"><div class="label">👤 اسم المواطن</div><div class="value">${complaint.nomCitoyen}</div></div>
+    <div class="info-card"><div class="label">📞 الهاتف</div><div class="value">${complaint.telephone || '—'}</div></div>
+    <div class="info-card full-width"><div class="label">📍 العنوان</div><div class="value">${complaint.adresse}</div></div>
+    <div class="info-card"><div class="label">🏘️ الحي</div><div class="value">${complaint.quartier || '—'}</div></div>
+    <div class="info-card"><div class="label">🏛️ الجماعة</div><div class="value">${COMMUNE_LABELS[complaint.commune as keyof typeof COMMUNE_LABELS] || complaint.commune}</div></div>
+    <div class="info-card"><div class="label">📋 النوع</div><div class="value">${COMPLAINT_TYPE_LABELS[complaint.type] || complaint.type}</div></div>
+    <div class="info-card"><div class="label">⚡ الأولوية</div><div class="value">${PRIORITE_LABELS[complaint.priorite] || complaint.priorite}</div></div>
+    <div class="info-card"><div class="label">📊 الحالة</div><div class="value">${STATUT_LABELS[complaint.statut] || complaint.statut}</div></div>
+    <div class="info-card"><div class="label">📅 تاريخ الاستقبال</div><div class="value">${new Date(complaint.dateReception).toLocaleDateString('ar-MA')}</div></div>
+    <div class="info-card full-width"><div class="label">📝 الوصف</div><div class="value" style="white-space:pre-wrap;">${complaint.description}</div></div>
+    ${complaint.observations ? `<div class="info-card full-width"><div class="label">💬 الملاحظات</div><div class="value">${complaint.observations}</div></div>` : ''}
+    ${complaint.intervention ? `<div class="info-card full-width" style="background:#ecfdf5;border-color:#a7f3d0;"><div class="label" style="color:#059669;">🔗 التدخل المرتبط</div><div class="value" style="color:#047857;">${complaint.intervention.reference} — ${TYPE_LABELS[complaint.intervention.type] || complaint.intervention.type}</div></div>` : ''}
+  </div>
+  <div class="signature-section">
+    <div class="signature-grid">
+      <div class="signature-box"><div class="role">المواطن(ة)</div><div class="line"></div></div>
+      <div class="signature-box"><div class="role">رئيس المصالح</div><div class="line"></div></div>
+      <div class="signature-box"><div class="role">الرئيس</div><div class="line"></div></div>
+    </div>
+  </div>
+  <script>window.onload = function() { window.print(); }</script>
+</body>
+</html>`
+    printWindow.document.write(html)
+    printWindow.document.close()
+  }, [])
+
   // Statistics
   const stats = {
     total: complaints.length,
@@ -418,6 +505,12 @@ function ComplaintsView() {
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-white" viewBox="0 0 20 20" fill="currentColor">
                     <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
                   </svg>
+                </button>
+                {/* Print button */}
+                <button onClick={() => handlePrintComplaint(detailComplaint)}
+                  className="absolute top-3 left-14 p-2 bg-white/20 hover:bg-white/30 rounded-xl transition-colors"
+                  title="طباعة الشكاية">
+                  🖨️
                 </button>
                 <div className="flex items-center gap-3 mb-2">
                   <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center text-2xl">📢</div>

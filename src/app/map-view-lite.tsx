@@ -1,11 +1,12 @@
 'use client'
 
 import React, { useState, useEffect, useRef, useCallback } from 'react'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 import { useAppStore, type CommuneType } from '@/lib/store'
 import {
   type Intervention, type Quartier,
   TYPE_LABELS, TYPE_COLORS, TYPE_ICONS, STATUT_LABELS, STATUT_COLORS,
+  COMMUNE_LABELS, COMMUNE_COLORS,
 } from '@/lib/constants'
 
 const COMMUNE_INFO: { name: string; key: string; color: string; population: string; populationMunicipale: string; populationCompteeAPart: string; menages: string; isBouknadel: boolean }[] = [
@@ -23,9 +24,11 @@ interface MapComponentProps {
   showCommunePopups?: boolean
   onInterventionCreated?: () => void
   centerOn?: { lat: number; lng: number } | null
+  onInterventionClick?: (intervention: Intervention, lat: number, lng: number) => void
+  tileLayer?: 'street' | 'satellite' | 'dark'
 }
 
-function MapView({ interventions, quartiers, selectedCommune, canSeeAllCommunes, onMapClick, onRefresh }: { interventions: Intervention[]; quartiers: Quartier[]; selectedCommune: CommuneType | 'ALL'; canSeeAllCommunes: boolean; onMapClick: (lat: number, lng: number, commune: string | null) => void; onRefresh?: () => void }) {
+function MapView({ interventions, quartiers, selectedCommune, canSeeAllCommunes, onMapClick, onRefresh, onNavigateToInterventions }: { interventions: Intervention[]; quartiers: Quartier[]; selectedCommune: CommuneType | 'ALL'; canSeeAllCommunes: boolean; onMapClick: (lat: number, lng: number, commune: string | null) => void; onRefresh?: () => void; onNavigateToInterventions?: () => void }) {
   const [mapLoaded, setMapLoaded] = useState(false)
   const [MapComponent, setMapComponent] = useState<React.ComponentType<MapComponentProps> | null>(null)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
@@ -43,6 +46,22 @@ function MapView({ interventions, quartiers, selectedCommune, canSeeAllCommunes,
   const [centerOnCoords, setCenterOnCoords] = useState<{ lat: number; lng: number } | null>(null)
   const searchInputRef = useRef<HTMLInputElement>(null)
   const searchDropdownRef = useRef<HTMLDivElement>(null)
+
+  // === NEW FEATURES STATE ===
+  // Floating overlay
+  const [overlayIntervention, setOverlayIntervention] = useState<Intervention | null>(null)
+  const [overlayPosition, setOverlayPosition] = useState({ x: 100, y: 100 })
+  const [isDragging, setIsDragging] = useState(false)
+  const dragOffsetRef = useRef({ x: 0, y: 0 })
+
+  // Fullscreen
+  const [isFullscreen, setIsFullscreen] = useState(false)
+
+  // Map stats bar
+  const [showMapStats, setShowMapStats] = useState(true)
+
+  // Tile layer
+  const [tileLayer, setTileLayer] = useState<'street' | 'satellite' | 'dark'>('street')
 
   // Debounce search (300ms)
   useEffect(() => {
@@ -141,14 +160,86 @@ function MapView({ interventions, quartiers, selectedCommune, canSeeAllCommunes,
     )
   }, [quartiers, debouncedSearch])
 
+  // === HANDLERS FOR NEW FEATURES ===
+
+  // Intervention click → show floating overlay
+  const handleInterventionClick = useCallback((intervention: Intervention, lat: number, lng: number) => {
+    setOverlayIntervention(intervention)
+    // Position the overlay near center of the map area
+    const mapEl = document.getElementById('map-area-container')
+    if (mapEl) {
+      const rect = mapEl.getBoundingClientRect()
+      // Try to compute pixel position from lat/lng via map container
+      // Default to a nice position
+      const x = Math.min(Math.max(rect.width * 0.1, 20), rect.width - 380)
+      const y = Math.min(Math.max(rect.height * 0.15, 20), rect.height - 350)
+      setOverlayPosition({ x, y })
+    }
+  }, [])
+
+  // Draggable overlay handlers
+  const handleDragStart = useCallback((e: React.MouseEvent | React.TouchEvent) => {
+    setIsDragging(true)
+    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX
+    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY
+    dragOffsetRef.current = {
+      x: clientX - overlayPosition.x,
+      y: clientY - overlayPosition.y,
+    }
+  }, [overlayPosition])
+
+  const handleDragMove = useCallback((e: React.MouseEvent | React.TouchEvent) => {
+    if (!isDragging) return
+    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX
+    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY
+    setOverlayPosition({
+      x: clientX - dragOffsetRef.current.x,
+      y: clientY - dragOffsetRef.current.y,
+    })
+  }, [isDragging])
+
+  const handleDragEnd = useCallback(() => {
+    setIsDragging(false)
+  }, [])
+
+  // Global mouse/touch move and up handlers for dragging
+  useEffect(() => {
+    if (!isDragging) return
+    const handleMove = (e: MouseEvent | TouchEvent) => {
+      const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX
+      const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY
+      setOverlayPosition({
+        x: clientX - dragOffsetRef.current.x,
+        y: clientY - dragOffsetRef.current.y,
+      })
+    }
+    const handleUp = () => { setIsDragging(false) }
+    window.addEventListener('mousemove', handleMove)
+    window.addEventListener('mouseup', handleUp)
+    window.addEventListener('touchmove', handleMove)
+    window.addEventListener('touchend', handleUp)
+    return () => {
+      window.removeEventListener('mousemove', handleMove)
+      window.removeEventListener('mouseup', handleUp)
+      window.removeEventListener('touchmove', handleMove)
+      window.removeEventListener('touchend', handleUp)
+    }
+  }, [isDragging])
+
+  // Compute completion rate for stats bar
+  const completionRate = filteredInterventions.length > 0
+    ? Math.round((filteredInterventions.filter(i => i.statut === 'TERMINEE').length / filteredInterventions.length) * 100)
+    : 0
+
   return (
     <div className="h-[calc(100vh-8rem)] lg:h-[calc(100vh-6rem)] pb-16 lg:pb-0 relative flex">
       {/* Professional Sidebar */}
       <motion.div
         initial={{ opacity: 0, x: 40 }}
-        animate={{ opacity: 1, x: 0, width: sidebarCollapsed ? 56 : 340 }}
+        animate={{ opacity: isFullscreen ? 0 : 1, x: isFullscreen ? 40 : 0, width: sidebarCollapsed ? 56 : 340 }}
         transition={{ duration: 0.3, ease: 'easeOut' }}
         className="absolute top-0 right-0 bottom-0 z-20 flex flex-col bg-white/95 backdrop-blur-xl border-l border-slate-200/60 shadow-2xl overflow-hidden"
+        style={{ pointerEvents: isFullscreen ? 'none' : 'auto' }}
       >
         {/* Toggle Button */}
         <button
@@ -449,7 +540,7 @@ function MapView({ interventions, quartiers, selectedCommune, canSeeAllCommunes,
       </motion.div>
 
       {/* Map Container */}
-      <div className="flex-1 relative">
+      <div id="map-area-container" className="flex-1 relative">
         {mapError ? (
           <div className="h-full flex items-center justify-center bg-slate-50" dir="rtl">
             <div className="text-center space-y-4 max-w-md mx-auto px-4">
@@ -471,7 +562,7 @@ function MapView({ interventions, quartiers, selectedCommune, canSeeAllCommunes,
               </motion.button>
             </div>
           </div>
-        ) : mapLoaded && MapComponent ? <MapComponent interventions={filteredInterventions} quartiers={quartiers} selectedCommune={selectedCommune} onMapClick={onMapClick} mapClickEnabled={settings.mapClickEnabled} showCommunePopups={settings.showCommunePopups} onInterventionCreated={onRefresh} centerOn={centerOnCoords} /> : (
+        ) : mapLoaded && MapComponent ? <MapComponent interventions={filteredInterventions} quartiers={quartiers} selectedCommune={selectedCommune} onMapClick={onMapClick} mapClickEnabled={settings.mapClickEnabled} showCommunePopups={settings.showCommunePopups} onInterventionCreated={onRefresh} centerOn={centerOnCoords} onInterventionClick={handleInterventionClick} tileLayer={tileLayer} /> : (
           <div className="h-full flex items-center justify-center bg-slate-50">
             <div className="text-center space-y-4">
               <div className="w-14 h-14 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mx-auto" />
@@ -479,9 +570,310 @@ function MapView({ interventions, quartiers, selectedCommune, canSeeAllCommunes,
             </div>
           </div>
         )}
+
+        {/* === FLOATING MAP CONTROLS === */}
+
+        {/* 1. Fullscreen Toggle Button - top-left */}
+        <motion.button
+          initial={{ opacity: 0, scale: 0.8 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ delay: 0.5 }}
+          whileHover={{ scale: 1.08 }}
+          whileTap={{ scale: 0.92 }}
+          onClick={() => setIsFullscreen(!isFullscreen)}
+          className="absolute top-3 left-3 z-30 w-10 h-10 bg-white/90 backdrop-blur-sm rounded-xl shadow-lg border border-slate-200/60 flex items-center justify-center hover:bg-white transition-colors"
+          title={isFullscreen ? 'عرض عادي' : 'ملء الشاشة'}
+        >
+          {isFullscreen ? (
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-slate-600" viewBox="0 0 20 20" fill="currentColor">
+              <path fillRule="evenodd" d="M5 10a1 1 0 01-1 1H3a1 1 0 110-2h1a1 1 0 011 1zm12 0a1 1 0 01-1 1h-1a1 1 0 110-2h1a1 1 0 011 1zm-7-5a1 1 0 011-1h1a1 1 0 110 2h-1a1 1 0 01-1-1zM8 15a1 1 0 011 1h1a1 1 0 110-2H9a1 1 0 01-1 1z" clipRule="evenodd" />
+            </svg>
+          ) : (
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-slate-600" viewBox="0 0 20 20" fill="currentColor">
+              <path fillRule="evenodd" d="M3 4a1 1 0 011-1h4a1 1 0 010 2H6.414l2.293 2.293a1 1 0 11-1.414 1.414L5 6.414V8a1 1 0 01-2 0V4zm9 1a1 1 0 010-2h4a1 1 0 011 1v4a1 1 0 01-2 0V6.414l-2.293 2.293a1 1 0 11-1.414-1.414L13.586 5H12zm-9 7a1 1 0 012 0v1.586l2.293-2.293a1 1 0 111.414 1.414L6.414 15H8a1 1 0 010 2H4a1 1 0 01-1-1v-4zm13.707 1.707a1 1 0 01-1.414-1.414L17.586 14H16a1 1 0 010-2h4a1 1 0 011 1v4a1 1 0 01-2 0v-1.586l-2.293 2.293z" clipRule="evenodd" />
+            </svg>
+          )}
+        </motion.button>
+
+        {/* 2. Map Layer Toggle - top-left, below fullscreen */}
+        <div className="absolute top-16 left-3 z-30 flex flex-col gap-2">
+          {(['street', 'satellite', 'dark'] as const).map((layer) => {
+            const isActive = tileLayer === layer
+            const icons: Record<string, string> = { street: '🗺️', satellite: '🛰️', dark: '🌙' }
+            const labels: Record<string, string> = { street: 'خريطة', satellite: 'ساتلية', dark: 'داكنة' }
+            return (
+              <motion.button
+                key={layer}
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.6 + (layer === 'satellite' ? 0.1 : layer === 'dark' ? 0.2 : 0) }}
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => setTileLayer(layer)}
+                className={`w-10 h-10 rounded-xl shadow-lg border flex items-center justify-center transition-all text-sm ${
+                  isActive
+                    ? 'bg-emerald-600 text-white border-emerald-500 shadow-emerald-200'
+                    : 'bg-white/90 backdrop-blur-sm text-slate-600 border-slate-200/60 hover:bg-white'
+                }`}
+                title={labels[layer]}
+              >
+                {icons[layer]}
+              </motion.button>
+            )
+          })}
+        </div>
+
+        {/* 3. Collapsible Map Stats Summary Overlay - top center */}
+        <AnimatePresence>
+          {showMapStats && (
+            <motion.div
+              initial={{ opacity: 0, y: -20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              transition={{ duration: 0.3 }}
+              className="absolute top-3 left-1/2 -translate-x-1/2 z-30"
+            >
+              <div className="bg-white/90 backdrop-blur-md rounded-2xl shadow-xl border border-slate-200/60 px-4 py-2.5 flex items-center gap-4" dir="rtl">
+                {/* Total */}
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-white text-sm shadow-md">📋</div>
+                  <div>
+                    <div className="text-sm font-bold text-slate-800">{filteredInterventions.length}</div>
+                    <div className="text-[9px] text-slate-500 font-medium">إجمالي التدخلات</div>
+                  </div>
+                </div>
+
+                {/* Divider */}
+                <div className="w-px h-8 bg-slate-200" />
+
+                {/* By Type */}
+                <div className="flex items-center gap-2">
+                  {typeCounts.map((t) => (
+                    <div key={t.key} className="flex items-center gap-1">
+                      <div className="w-6 h-6 rounded-md flex items-center justify-center text-[10px]" style={{ backgroundColor: t.color + '18' }}>
+                        {t.icon}
+                      </div>
+                      <span className="text-xs font-bold" style={{ color: t.color }}>{t.count}</span>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Divider */}
+                <div className="w-px h-8 bg-slate-200" />
+
+                {/* Completion Rate */}
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-teal-500 to-emerald-600 flex items-center justify-center shadow-md">
+                    <span className="text-[9px] font-bold text-white">{completionRate}%</span>
+                  </div>
+                  <div>
+                    <div className="text-xs font-bold text-emerald-700">{completionRate}%</div>
+                    <div className="text-[9px] text-slate-500">نسبة الإنجاز</div>
+                  </div>
+                </div>
+
+                {/* Close button */}
+                <button
+                  onClick={() => setShowMapStats(false)}
+                  className="w-6 h-6 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center transition-colors mr-1"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 text-slate-400" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                  </svg>
+                </button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Show stats button when collapsed */}
+        {!showMapStats && (
+          <motion.button
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            whileHover={{ scale: 1.08 }}
+            whileTap={{ scale: 0.92 }}
+            onClick={() => setShowMapStats(true)}
+            className="absolute top-3 left-1/2 -translate-x-1/2 z-30 w-9 h-9 bg-white/90 backdrop-blur-sm rounded-xl shadow-lg border border-slate-200/60 flex items-center justify-center hover:bg-white transition-colors"
+            title="إظهار الإحصائيات"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-slate-600" viewBox="0 0 20 20" fill="currentColor">
+              <path d="M2 11a1 1 0 011-1h2a1 1 0 011 1v5a1 1 0 01-1 1H3a1 1 0 01-1-1v-5zm6-4a1 1 0 011-1h2a1 1 0 011 1v9a1 1 0 01-1 1H9a1 1 0 01-1-1V7zm6-3a1 1 0 011-1h2a1 1 0 011 1v12a1 1 0 01-1 1h-2a1 1 0 01-1-1V4z" />
+            </svg>
+          </motion.button>
+        )}
+
+        {/* 4. Floating Intervention Overlay Panel */}
+        <AnimatePresence>
+          {overlayIntervention && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.85 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.85 }}
+              transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+              className="absolute z-40"
+              style={{
+                left: overlayPosition.x,
+                top: overlayPosition.y,
+                cursor: isDragging ? 'grabbing' : 'default',
+              }}
+            >
+              <div
+                className="w-[340px] bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-slate-200/60 overflow-hidden"
+                dir="rtl"
+              >
+                {/* Draggable Header */}
+                <div
+                  onMouseDown={handleDragStart}
+                  onTouchStart={handleDragStart}
+                  className="cursor-grab active:cursor-grabbing select-none"
+                  style={{ background: `linear-gradient(135deg, ${TYPE_COLORS[overlayIntervention.type] || '#059669'}, ${TYPE_COLORS[overlayIntervention.type] || '#059669'}cc)` }}
+                >
+                  <div className="px-4 py-3 text-white relative">
+                    {/* Decorative circles */}
+                    <div className="absolute -top-4 -left-4 w-16 h-16 rounded-full bg-white/8" />
+                    <div className="absolute -bottom-6 -right-3 w-12 h-12 rounded-full bg-white/5" />
+
+                    <div className="flex items-center justify-between relative z-10">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center text-xl backdrop-blur-sm">
+                          {TYPE_ICONS[overlayIntervention.type] || '📋'}
+                        </div>
+                        <div>
+                          <h4 className="font-bold text-sm leading-tight">{TYPE_LABELS[overlayIntervention.type] || overlayIntervention.type}</h4>
+                          <p className="text-[10px] text-white/75 mt-0.5">{overlayIntervention.reference}</p>
+                        </div>
+                      </div>
+                      {/* Close Button */}
+                      <button
+                        onClick={() => setOverlayIntervention(null)}
+                        className="w-7 h-7 rounded-lg bg-white/20 hover:bg-white/35 flex items-center justify-center transition-colors backdrop-blur-sm"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-white" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                        </svg>
+                      </button>
+                    </div>
+
+                    {/* Status & Type Badges */}
+                    <div className="flex items-center gap-2 mt-2.5 relative z-10">
+                      <span className="bg-white/20 px-3 py-1 rounded-full text-[10px] font-bold backdrop-blur-sm border border-white/20">
+                        {TYPE_ICONS[overlayIntervention.type]} {TYPE_LABELS[overlayIntervention.type]}
+                      </span>
+                      <span
+                        className="px-3 py-1 rounded-full text-[10px] font-bold backdrop-blur-sm border"
+                        style={{
+                          backgroundColor: (STATUT_COLORS[overlayIntervention.statut] || '#6b7280') + '30',
+                          borderColor: (STATUT_COLORS[overlayIntervention.statut] || '#6b7280') + '40',
+                          color: 'white',
+                        }}
+                      >
+                        {STATUT_LABELS[overlayIntervention.statut] || overlayIntervention.statut}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Content */}
+                <div className="p-4 space-y-3">
+                  {/* Location Info */}
+                  <div className="flex items-start gap-2.5 bg-slate-50 rounded-xl p-3 border border-slate-100">
+                    <div className="w-7 h-7 rounded-lg flex items-center justify-center text-sm flex-shrink-0" style={{ backgroundColor: (TYPE_COLORS[overlayIntervention.type] || '#059669') + '15' }}>
+                      📍
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-bold text-slate-800 truncate">{overlayIntervention.quartier}</p>
+                      {overlayIntervention.adresse && (
+                        <p className="text-xs text-slate-500 mt-0.5 truncate">🏠 {overlayIntervention.adresse}</p>
+                      )}
+                      <p className="text-xs text-slate-500 mt-0.5">
+                        📅 {new Date(overlayIntervention.date).toLocaleDateString('ar-MA')}
+                        {overlayIntervention.heureDebut && (
+                          <span className="mr-2">⏰ {overlayIntervention.heureDebut}{overlayIntervention.heureFin ? ` - ${overlayIntervention.heureFin}` : ''}</span>
+                        )}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Details Grid */}
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="bg-slate-50 rounded-xl p-2.5 border border-slate-100">
+                      <div className="text-[9px] text-slate-400 font-semibold mb-1">👤 العون</div>
+                      <div className="text-xs font-bold text-slate-700 truncate">{overlayIntervention.agentNom || '—'}</div>
+                    </div>
+                    <div className="bg-slate-50 rounded-xl p-2.5 border border-slate-100">
+                      <div className="text-[9px] text-slate-400 font-semibold mb-1">📐 المساحة</div>
+                      <div className="text-xs font-bold text-slate-700">{overlayIntervention.superficie || '—'}</div>
+                    </div>
+                    <div className="bg-slate-50 rounded-xl p-2.5 border border-slate-100">
+                      <div className="text-[9px] text-slate-400 font-semibold mb-1">🏛️ الجماعة</div>
+                      <div className="text-xs font-bold text-slate-700">{COMMUNE_LABELS[overlayIntervention.commune] || overlayIntervention.commune || '—'}</div>
+                    </div>
+                    <div className="bg-slate-50 rounded-xl p-2.5 border border-slate-100">
+                      <div className="text-[9px] text-slate-400 font-semibold mb-1">💊 المنتج</div>
+                      <div className="text-xs font-bold text-slate-700 truncate">{overlayIntervention.produitUtilise || '—'}</div>
+                    </div>
+                  </div>
+
+                  {/* Description */}
+                  {overlayIntervention.description && (
+                    <div className="bg-slate-50 rounded-xl p-2.5 border border-slate-100">
+                      <div className="text-[9px] text-slate-400 font-semibold mb-1">📝 الوصف</div>
+                      <p className="text-xs text-slate-600 leading-relaxed line-clamp-3">{overlayIntervention.description}</p>
+                    </div>
+                  )}
+
+                  {/* Observations */}
+                  {overlayIntervention.observations && (
+                    <div className="bg-amber-50/80 rounded-xl p-2.5 border border-amber-100">
+                      <div className="text-[9px] text-amber-600 font-semibold mb-1">💬 الملاحظات</div>
+                      <p className="text-xs text-amber-700 leading-relaxed line-clamp-2">{overlayIntervention.observations}</p>
+                    </div>
+                  )}
+
+                  {/* Action Buttons */}
+                  <div className="flex gap-2 pt-1">
+                    <motion.button
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={() => {
+                        if (onNavigateToInterventions) onNavigateToInterventions()
+                      }}
+                      className="flex-1 bg-gradient-to-l from-emerald-600 to-teal-600 text-white py-2.5 rounded-xl text-xs font-bold shadow-lg shadow-emerald-200/50 flex items-center justify-center gap-1.5"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
+                        <path d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
+                        <path fillRule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clipRule="evenodd" />
+                      </svg>
+                      عرض التفاصيل
+                    </motion.button>
+                    <motion.button
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      onClick={() => setOverlayIntervention(null)}
+                      className="w-10 h-10 bg-slate-100 hover:bg-slate-200 rounded-xl flex items-center justify-center transition-colors"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-slate-500" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                      </svg>
+                    </motion.button>
+                  </div>
+                </div>
+
+                {/* Drag indicator */}
+                <div className="px-4 pb-2">
+                  <div className="flex justify-center">
+                    <div className="w-12 h-1 bg-slate-200 rounded-full" />
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         {/* Map click instruction overlay */}
         {settings.mapClickEnabled && (
-        <motion.div 
+        <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 1.5, duration: 0.5 }}

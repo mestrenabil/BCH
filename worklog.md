@@ -533,6 +533,152 @@ Work Log:
 ---
 Task ID: 3
 Agent: main
+Task: Add 6 features to multiple views — Dashboard Timeline, Interventions Bulk Actions, Complaints Print, Dashboard Today Summary, KPI Export, Calendar Print
+
+Work Log:
+
+1. **Feature 1: Dashboard Activity Timeline** — In `dashboard-view-lite.tsx`:
+   - Added `formatRelativeTime()` helper function for Arabic relative timestamps (منذ 5 دقائق, منذ ساعة, etc.)
+   - Added "سجل النشاط الأخير" (Recent Activity Timeline) section below the Quick Actions grid
+   - Timeline-style display with vertical line (`right-[15px]`) and dots (colored circles with type icons)
+   - Each entry shows: type icon in colored circle, quartier name, type badge, status badge, reference, agent name, and relative timestamp
+   - Uses `stats.recent.slice(0, 10)` data
+   - White card with slate gradient header, RTL direction, Framer Motion staggered entrance animations
+   - "عرض الكل" (View All) link navigates to interventions view
+
+2. **Feature 2: Interventions Bulk Actions** — In `interventions-view-lite.tsx`:
+   - Added state: `selectedIds` (Set<string>), `bulkStatut`, `bulkOperating`
+   - Added `toggleSelect()`, `toggleSelectAll()` handlers
+   - Added `handleBulkStatusChange()`: iterates selected IDs, calls PUT for each with new statut, counts success/fail
+   - Added `handleBulkDelete()`: iterates selected IDs, calls DELETE for each, counts success/fail
+   - Added checkbox in top-right corner of each intervention card (absolute positioned, `onClick` stopPropagation)
+   - Selected cards show emerald border + background highlight
+   - Added "تحديد الكل" (Select All) checkbox label in the summary cards row
+   - Added floating action bar (AnimatePresence, spring animation) at bottom center when items selected:
+     - Shows selected count badge
+     - "تغيير الحالة" dropdown with STATUT_LABELS options + "تطبيق" button
+     - "حذف المحدد" red button with trash icon
+     - Close button to cancel selection
+     - Backdrop-blur, shadow-2xl, rounded design
+
+3. **Feature 3: Complaints Print Report** — In `complaints-view.tsx`:
+   - Added `handlePrintComplaint()` callback using `window.open()` with full HTML content
+   - Print layout includes:
+     - Professional header: "المملكة المغربية" badge, "مكتب حفظ الصحة الجماعي — Bouknadel Salé"
+     - Reference bar with complaint reference and date
+     - Title section with status, priority, type badges (using local STATUT_COLORS, PRIORITE_COLORS, TYPE_COLORS)
+     - Info grid: citizen name, phone, address, quartier, commune, type, priority, status, reception date, description, observations, linked intervention
+     - Signature section with three boxes: المواطن(ة), رئيس المصالح, الرئيس
+     - Auto-triggers `window.print()` via `window.onload`
+   - Added 🖨️ print button in the detail panel header (next to close button, at `left-14`)
+
+4. **Feature 4: Dashboard Today's Summary Card** — In `dashboard-view-lite.tsx`:
+   - Added "ملخص اليوم" (Today's Summary) card at the top of the dashboard, between KPI cards and Weather widget
+   - Gradient background (emerald-600 → teal-600 → cyan-600) with decorative circles
+   - Shows 3 metrics in a grid:
+     - 📅 تدخلات مبرمجة (scheduled today)
+     - ✅ تدخلات منجزة (completed today)
+     - 📢 شكايات واردة (complaints received today — shows 0 as dashboard doesn't have complaints data)
+   - Weather icon and temperature from existing `weather` state in the top-right corner
+   - Computes today's date string and filters `stats.recent` for today's interventions
+
+5. **Feature 5: KPI Export/Share Button** — In `kpi-view.tsx`:
+   - Added `toast` import from `sonner`
+   - Added "تصدير" (Export) button in the header section, next to the commune badge
+   - Button copies formatted Arabic text to clipboard containing:
+     - Header with office name
+     - Total interventions, completion rate, average monthly, cancellation rate, coverage rate
+     - Status breakdown, type breakdown, commune breakdown
+     - Budget total if available
+     - Report date
+   - Uses `navigator.clipboard.writeText()` with success/error toast notifications
+   - "تم نسخ المؤشرات" on success, "فشل في نسخ المؤشرات" on error
+   - Same button style as dashboard print button (white, border, emerald hover)
+
+6. **Feature 6: Calendar Print Month View** — In `calendar-view.tsx`:
+   - Added "طباعة" (Print) button in the header area, next to the "اليوم" button
+   - Opens a new window with print-friendly A4 landscape calendar
+   - Calendar grid shows:
+     - Professional header: "المملكة المغربية" badge, "مكتب حفظ الصحة الجماعي — تقويم التدخلات", month/year
+     - 7-column table with ARABIC_DAYS headers
+     - Day numbers and colored intervention dots per day (using getDotsForDay)
+     - Legend at bottom with TYPE_LABELS + TYPE_ICONS + TYPE_COLORS + total count
+   - Builds weeks array from `getDaysInMonth`, `getFirstDayOfMonth`, and `getDotsForDay`
+   - Auto-triggers `window.print()` via `window.onload`
+
+- Lint passes cleanly
+- Dev server running successfully
+---
+Task ID: 2
+Agent: main
+Task: Add Floating Overlay Panel on Map View + Additional Features
+
+Work Log:
+
+### Feature 1: Floating Intervention Overlay Panel on Map
+1. **Added `onInterventionClick` callback to map-component.tsx**:
+   - Added `onInterventionClick?: (intervention: Intervention, lat: number, lng: number) => void` prop to MapComponent
+   - Added `onInterventionClickRef` to keep the callback up-to-date
+   - When an intervention marker is clicked (in addition to the popup), the callback fires with the intervention data and coordinates
+2. **Added floating overlay panel to map-view-lite.tsx**:
+   - State: `overlayIntervention`, `overlayPosition`, `isDragging`, `dragOffsetRef`
+   - When `handleInterventionClick` is called (from MapComponent), sets the overlay data and positions it within the map area
+   - **Draggable**: Uses mouse/touch event handlers with global listeners (mousemove/mouseup/touchmove/touchend on window) for smooth dragging
+   - **Design**: Semi-transparent backdrop-blur panel (`bg-white/95 backdrop-blur-xl`) with:
+     - Gradient header matching intervention type color with decorative circles
+     - Type icon and label, reference number, status badge
+     - Location section: quartier, address, date with optional time (heureDebut/heureFin)
+     - Details grid: agent, superficie, commune (using COMMUNE_LABELS), product
+     - Description section (truncated with line-clamp-3)
+     - Observations section with amber styling
+     - "عرض التفاصيل" (View Details) button → navigates to interventions view
+     - Close button in header and footer
+     - Drag indicator bar at bottom
+   - Uses AnimatePresence for enter/exit animations (spring physics)
+   - All text uses `dir="rtl"`
+
+### Feature 2: Map Fullscreen Toggle
+1. **Added fullscreen state and toggle**:
+   - `isFullscreen` state
+   - Floating button in top-left corner of map area
+   - When fullscreen: sidebar fades out and becomes non-interactive (opacity: 0, pointerEvents: 'none')
+   - Toggle icon switches between expand (⛶) and collapse icons
+   - Uses framer-motion whileHover/whileTap for micro-interactions
+
+### Feature 3: Collapsible Map Stats Summary Overlay
+1. **Added stats bar at top center of map**:
+   - `showMapStats` state (default true)
+   - Shows: total interventions count, per-type breakdown with icons and counts, completion rate (% TERMINEE)
+   - Semi-transparent backdrop-blur design (`bg-white/90 backdrop-blur-md`)
+   - Collapsible: close button hides the bar, small chart icon button re-opens it
+   - Uses AnimatePresence for smooth enter/exit transitions
+   - RTL direction with `dir="rtl"`
+   - Computed `completionRate` from filteredInterventions
+
+### Feature 4: Map Layer Toggle Buttons
+1. **Added `tileLayer` prop to map-component.tsx**:
+   - `tileLayer?: 'street' | 'satellite' | 'dark'` prop
+   - `tileLayersRef` stores references to all three L.TileLayer instances
+   - `useEffect` switches tile layers when the prop changes (removes all, adds selected)
+2. **Added `tileLayer` state and toggle buttons to map-view-lite.tsx**:
+   - `tileLayer` state (default 'street')
+   - Three floating buttons in top-left (below fullscreen): 🗺️ خريطة, 🛰️ ساتلية, 🌙 داكنة
+   - Active button: emerald-600 with white text and emerald shadow
+   - Inactive: white/90 with slate text
+   - Staggered entrance animations (delay: 0.6, 0.7, 0.8)
+3. **Updated MapComponentProps interface** to include `onInterventionClick` and `tileLayer`
+4. **Passed new props** to MapComponent in the JSX
+
+### Also Updated:
+- **page.tsx**: Added `onNavigateToInterventions={() => setCurrentView('interventions')}` prop to MapView, so the overlay's "View Details" button can navigate to the interventions view
+- **COMMUNE_LABELS import**: Added to map-view-lite.tsx for the overlay panel's commune display
+
+- Lint passes cleanly
+- Dev server running successfully
+
+---
+Task ID: 3
+Agent: main
 Task: Add 3 features — French/Arabic Language Toggle, Keyboard Shortcuts, Weather Widget
 
 Work Log:

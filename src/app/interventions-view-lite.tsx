@@ -174,6 +174,11 @@ function InterventionsView({ interventions, total, page, setPage, onEdit, onRefr
   const [photoUploading, setPhotoUploading] = useState(false)
   const [viewerPhoto, setViewerPhoto] = useState<string | null>(null)
 
+  // Bulk action state
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [bulkStatut, setBulkStatut] = useState('')
+  const [bulkOperating, setBulkOperating] = useState(false)
+
   const fetchLinkedDocs = useCallback(async (interventionId: string) => {
     try {
       const res = await fetch(`/api/interventions/${interventionId}/documents`)
@@ -296,6 +301,66 @@ function InterventionsView({ interventions, total, page, setPage, onEdit, onRefr
       onRefresh()
       toast.success('تم حذف التدخل بنجاح')
     } catch (err) { console.error('Delete failed:', err); toast.error('حدث خطأ أثناء الحذف') }
+  }
+
+  // Bulk actions
+  const toggleSelect = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === filteredInterventions.length) {
+      setSelectedIds(new Set())
+    } else {
+      setSelectedIds(new Set(filteredInterventions.map(i => i.id)))
+    }
+  }
+
+  const handleBulkStatusChange = async () => {
+    if (!bulkStatut || selectedIds.size === 0) return
+    setBulkOperating(true)
+    let success = 0
+    let fail = 0
+    for (const id of selectedIds) {
+      try {
+        const intervention = filteredInterventions.find(i => i.id === id)
+        const res = await fetch(`/api/interventions/${id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ statut: bulkStatut, commune: intervention?.commune }),
+        })
+        if (res.ok) success++
+        else fail++
+      } catch { fail++ }
+    }
+    setBulkOperating(false)
+    setSelectedIds(new Set())
+    setBulkStatut('')
+    onRefresh()
+    toast.success(`تم تحديث حالة ${success} تدخل${fail > 0 ? `، فشل ${fail}` : ''}`)
+  }
+
+  const handleBulkDelete = async () => {
+    if (selectedIds.size === 0) return
+    setBulkOperating(true)
+    let success = 0
+    let fail = 0
+    for (const id of selectedIds) {
+      try {
+        const res = await fetch(`/api/interventions/${id}`, { method: 'DELETE' })
+        if (res.ok) success++
+        else fail++
+      } catch { fail++ }
+    }
+    setBulkOperating(false)
+    setSelectedIds(new Set())
+    onRefresh()
+    toast.success(`تم حذف ${success} تدخل${fail > 0 ? `، فشل ${fail}` : ''}`)
   }
 
   // Fetch quartiers when commune filter changes
@@ -478,7 +543,17 @@ function InterventionsView({ interventions, total, page, setPage, onEdit, onRefr
       </motion.div>
 
       {/* Summary cards */}
-      <div className="flex gap-3 overflow-x-auto pb-2">
+      <div className="flex gap-3 overflow-x-auto pb-2 items-center">
+        {/* Select All checkbox */}
+        <label className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white border border-slate-100 text-sm font-medium whitespace-nowrap cursor-pointer hover:bg-emerald-50 transition-colors">
+          <input
+            type="checkbox"
+            checked={selectedIds.size > 0 && selectedIds.size === filteredInterventions.length}
+            onChange={toggleSelectAll}
+            className="w-4 h-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 accent-emerald-600"
+          />
+          تحديد الكل
+        </label>
         {Object.entries(STATUT_LABELS).map(([k, v]) => {
           const count = interventions.filter(i => i.statut === k).length
           return (
@@ -506,8 +581,17 @@ function InterventionsView({ interventions, total, page, setPage, onEdit, onRefr
             filteredInterventions.map((intervention, i) => (
               <motion.div key={intervention.id}
                 initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.03 }}
-                className="bg-white rounded-2xl border border-slate-100 p-4 hover:shadow-lg hover:border-emerald-100 transition-all group cursor-pointer"
+                className={`bg-white rounded-2xl border p-4 hover:shadow-lg transition-all group cursor-pointer relative ${selectedIds.has(intervention.id) ? 'border-emerald-300 bg-emerald-50/30 shadow-md ring-1 ring-emerald-200' : 'border-slate-100 hover:border-emerald-100'}`}
                 onClick={() => handleShowDetail(intervention)}>
+                {/* Selection checkbox */}
+                <div className="absolute top-3 left-3 z-10" onClick={(e) => e.stopPropagation()}>
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.has(intervention.id)}
+                    onChange={() => toggleSelect(intervention.id)}
+                    className="w-4 h-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 accent-emerald-600 cursor-pointer"
+                  />
+                </div>
                 <div className="flex flex-col sm:flex-row items-start justify-between gap-3">
                   <div className="flex items-start gap-3 flex-1 min-w-0">
                     <div className="w-11 h-11 rounded-xl flex items-center justify-center text-xl shrink-0"
@@ -586,6 +670,82 @@ function InterventionsView({ interventions, total, page, setPage, onEdit, onRefr
           )}
         </AnimatePresence>
       </div>
+
+      {/* ===== FLOATING BULK ACTION BAR ===== */}
+      <AnimatePresence>
+        {selectedIds.size > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 50 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 50 }}
+            transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+            className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[70] bg-white/95 backdrop-blur-xl border border-slate-200 rounded-2xl shadow-2xl px-5 py-3.5 flex items-center gap-4"
+            dir="rtl"
+          >
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center">
+                <span className="text-sm font-extrabold text-emerald-700">{selectedIds.size}</span>
+              </div>
+              <span className="text-sm font-bold text-slate-700">عنصر محدد</span>
+            </div>
+            <div className="w-px h-8 bg-slate-200" />
+            <div className="flex items-center gap-2">
+              <select
+                value={bulkStatut}
+                onChange={(e) => setBulkStatut(e.target.value)}
+                className="px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-emerald-500/20"
+              >
+                <option value="">تغيير الحالة</option>
+                {Object.entries(STATUT_LABELS).map(([k, v]) => (
+                  <option key={k} value={k}>{v}</option>
+                ))}
+              </select>
+              <motion.button
+                whileHover={{ scale: 1.03 }}
+                whileTap={{ scale: 0.97 }}
+                onClick={handleBulkStatusChange}
+                disabled={!bulkStatut || bulkOperating}
+                className="px-4 py-2 rounded-xl bg-gradient-to-l from-emerald-600 to-teal-600 text-white text-sm font-bold shadow-lg shadow-emerald-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
+              >
+                {bulkOperating ? (
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clipRule="evenodd" />
+                  </svg>
+                )}
+                تطبيق
+              </motion.button>
+            </div>
+            <div className="w-px h-8 bg-slate-200" />
+            <motion.button
+              whileHover={{ scale: 1.03 }}
+              whileTap={{ scale: 0.97 }}
+              onClick={handleBulkDelete}
+              disabled={bulkOperating}
+              className="px-4 py-2 rounded-xl bg-red-500 text-white text-sm font-bold shadow-lg shadow-red-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
+            >
+              {bulkOperating ? (
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              ) : (
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
+                </svg>
+              )}
+              حذف المحدد
+            </motion.button>
+            <button
+              onClick={() => { setSelectedIds(new Set()); setBulkStatut('') }}
+              className="p-2 rounded-xl hover:bg-slate-100 transition-colors text-slate-400 hover:text-slate-600"
+              title="إلغاء التحديد"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+              </svg>
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {total > 50 && (
         <div className="flex items-center justify-center gap-4 pt-4">

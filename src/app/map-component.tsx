@@ -725,13 +725,15 @@ function buildNewInterventionPopup(lat: number, lng: number, commune: string | n
   `
 }
 
-export default function MapComponent({ interventions, quartiers, selectedCommune, onMapClick, mapClickEnabled, showCommunePopups, onInterventionCreated, centerOn }: { 
+export default function MapComponent({ interventions, quartiers, selectedCommune, onMapClick, mapClickEnabled, showCommunePopups, onInterventionCreated, centerOn, onInterventionClick, tileLayer: externalTileLayer }: { 
   interventions: Intervention[]; quartiers: Quartier[]; selectedCommune: string;
   onMapClick?: (lat: number, lng: number, commune: string | null) => void;
   mapClickEnabled?: boolean;
   showCommunePopups?: boolean;
   onInterventionCreated?: () => void;
   centerOn?: { lat: number; lng: number } | null;
+  onInterventionClick?: (intervention: Intervention, lat: number, lng: number) => void;
+  tileLayer?: 'street' | 'satellite' | 'dark';
 }) {
   const mapRef = useRef<L.Map | null>(null)
   const mapContainerRef = useRef<HTMLDivElement>(null)
@@ -744,7 +746,9 @@ export default function MapComponent({ interventions, quartiers, selectedCommune
   const mapClickEnabledRef = useRef(mapClickEnabled ?? true)
   const showCommunePopupsRef = useRef(showCommunePopups ?? true)
   const onInterventionCreatedRef = useRef(onInterventionCreated)
+  const onInterventionClickRef = useRef(onInterventionClick)
   const searchMarkerRef = useRef<L.Marker | null>(null)
+  const tileLayersRef = useRef<Record<string, L.TileLayer>>({})
 
   // Keep the callback ref up-to-date
   useEffect(() => {
@@ -765,6 +769,25 @@ export default function MapComponent({ interventions, quartiers, selectedCommune
   useEffect(() => {
     onInterventionCreatedRef.current = onInterventionCreated
   }, [onInterventionCreated])
+
+  // Keep the onInterventionClick ref up-to-date
+  useEffect(() => {
+    onInterventionClickRef.current = onInterventionClick
+  }, [onInterventionClick])
+
+  // Switch tile layer when externalTileLayer prop changes
+  useEffect(() => {
+    if (!mapRef.current) return
+    const map = mapRef.current
+    const layers = tileLayersRef.current
+    if (!layers || Object.keys(layers).length === 0) return
+
+    // Remove all tile layers
+    Object.values(layers).forEach(l => { if (map.hasLayer(l)) map.removeLayer(l) })
+    // Add the selected one
+    const selected = layers[externalTileLayer || 'street']
+    if (selected) selected.addTo(map)
+  }, [externalTileLayer])
 
   // Center map on coordinates when centerOn prop changes
   useEffect(() => {
@@ -816,6 +839,7 @@ export default function MapComponent({ interventions, quartiers, selectedCommune
       maxZoom: 19,
     })
 
+    tileLayersRef.current = { street: lightLayer, satellite: satelliteLayer, dark: darkLayer }
     lightLayer.addTo(map)
 
     const communeLayerGroup = L.layerGroup().addTo(map)
@@ -1250,6 +1274,11 @@ export default function MapComponent({ interventions, quartiers, selectedCommune
       })
 
       marker.bindPopup(buildInterventionPopup(intervention), { maxWidth: 340, minWidth: 280 })
+      marker.on('click', () => {
+        if (onInterventionClickRef.current) {
+          onInterventionClickRef.current(intervention, intervention.latitude, intervention.longitude)
+        }
+      })
       markersLayer.addLayer(marker)
     })
   }, [interventions, quartiers, selectedCommune])

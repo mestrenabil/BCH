@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { motion } from 'framer-motion'
+import { toast } from 'sonner'
 import {
   RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
@@ -361,20 +362,58 @@ export default function KpiView() {
           <h2 className="text-2xl font-bold text-slate-800">مؤشرات الأداء الرئيسية</h2>
           <p className="text-slate-400 text-sm mt-1">لوحة متابعة شاملة لمؤشرات التدخل</p>
         </div>
-        {selectedCommune !== 'ALL' && (
-          <motion.span
-            initial={{ opacity: 0, scale: 0.8 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold self-start"
-            style={{
-              backgroundColor: COMMUNE_COLORS[selectedCommune] + '18',
-              color: COMMUNE_COLORS[selectedCommune],
+        <div className="flex items-center gap-2 sm:mr-auto">
+          {selectedCommune !== 'ALL' && (
+            <motion.span
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold self-start"
+              style={{
+                backgroundColor: COMMUNE_COLORS[selectedCommune] + '18',
+                color: COMMUNE_COLORS[selectedCommune],
+              }}
+            >
+              <div className="w-2 h-2 rounded-full" style={{ backgroundColor: COMMUNE_COLORS[selectedCommune] }} />
+              {COMMUNE_LABELS[selectedCommune]}
+            </motion.span>
+          )}
+          <button
+            onClick={() => {
+              const text = `مؤشرات الأداء الرئيسية — مكتب حفظ الصحة الجماعي
+━━━━━━━━━━━━━━━━━━━━━
+📊 إجمالي التدخلات: ${total}
+✅ نسبة الإنجاز: ${completionRate}%
+📈 متوسط التدخلات الشهرية: ${avgMonthly}
+❌ معدل الإلغاء: ${cancellationRate}%
+🏘️ تغطية الأحياء: ${coverageRate}%
+
+📋 توزيع الحالات:
+${Object.entries(STATUT_LABELS).map(([k, v]) => `  • ${v}: ${stats.byStatut[k] || 0}`).join('\n')}
+
+🔬 توزيع الأنواع:
+${Object.entries(TYPE_LABELS).map(([k, v]) => `  • ${v}: ${stats.byType[k] || 0}`).join('\n')}
+
+🏛️ توزيع الجماعات:
+${Object.entries(stats.byCommune || {}).map(([k, cd]) => `  • ${COMMUNE_LABELS[k] || k}: ${cd.total} تدخل`).join('\n')}
+
+${budgetData && budgetData.totalCost > 0 ? `💰 التكلفة الإجمالية: ${budgetData.totalCost.toLocaleString('ar-MA')} د.م` : ''}
+━━━━━━━━━━━━━━━━━━━━━
+تاريخ التقرير: ${new Date().toLocaleDateString('ar-MA')}`
+              navigator.clipboard.writeText(text).then(() => {
+                toast.success('تم نسخ المؤشرات')
+              }).catch(() => {
+                toast.error('فشل في نسخ المؤشرات')
+              })
             }}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white border border-slate-200 text-sm font-medium text-slate-600 hover:bg-emerald-50 hover:text-emerald-600 hover:border-emerald-200 transition-all shadow-sm"
           >
-            <div className="w-2 h-2 rounded-full" style={{ backgroundColor: COMMUNE_COLORS[selectedCommune] }} />
-            {COMMUNE_LABELS[selectedCommune]}
-          </motion.span>
-        )}
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+              <path d="M8 3a1 1 0 011-1h2a1 1 0 110 2H9a1 1 0 01-1-1z" />
+              <path d="M6 3a2 2 0 00-2 2v11a2 2 0 002 2h8a2 2 0 002-2V5a2 2 0 00-2-2 3 3 0 01-3 3H9a3 3 0 01-3-3z" />
+            </svg>
+            تصدير
+          </button>
+        </div>
       </motion.div>
 
       {/* ===== KPI SCORE CARDS ===== */}

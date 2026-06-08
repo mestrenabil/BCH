@@ -466,6 +466,91 @@ export default function CalendarView({ onAdd }: { onAdd?: (date: string) => void
           >
             <span>📍</span> اليوم
           </motion.button>
+          {/* Print Calendar button */}
+          <button
+            onClick={() => {
+              const printWindow = window.open('', '_blank')
+              if (!printWindow) {
+                toast.error('يرجى السماح بالنوافذ المنبثقة للطباعة')
+                return
+              }
+              const daysInMonth = getDaysInMonth(viewYear, viewMonth)
+              const firstDay = getFirstDayOfMonth(viewYear, viewMonth)
+              const weeks: { day: number; inMonth: boolean; dots: string[] }[][] = []
+              let currentWeek: { day: number; inMonth: boolean; dots: string[] }[] = []
+              // Fill first week blanks
+              for (let i = 0; i < firstDay; i++) {
+                currentWeek.push({ day: 0, inMonth: false, dots: [] })
+              }
+              for (let d = 1; d <= daysInMonth; d++) {
+                const dots = getDotsForDay(d)
+                currentWeek.push({ day: d, inMonth: true, dots })
+                if (currentWeek.length === 7) {
+                  weeks.push(currentWeek)
+                  currentWeek = []
+                }
+              }
+              // Fill remaining
+              while (currentWeek.length < 7) currentWeek.push({ day: 0, inMonth: false, dots: [] })
+              weeks.push(currentWeek)
+
+              const html = `<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <title>تقويم ${ARABIC_MONTHS[viewMonth]} ${viewYear}</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Arabic:wght@400;600;700;800&display=swap');
+    @page { size: A4 landscape; margin: 10mm; }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Noto Sans Arabic', 'Segoe UI', Tahoma, sans-serif; direction: rtl; color: #1e293b; font-size: 11px; }
+    .header { text-align: center; padding-bottom: 10px; border-bottom: 2px solid #1f2937; margin-bottom: 12px; }
+    .header h1 { font-size: 18px; font-weight: 900; color: #1f2937; }
+    .header p { font-size: 10px; color: #6b7280; }
+    .calendar { width: 100%; border-collapse: collapse; }
+    .calendar th { padding: 8px 4px; text-align: center; font-size: 11px; font-weight: 700; color: #475569; background: #f1f5f9; border: 1px solid #e2e8f0; }
+    .calendar td { padding: 6px 4px; text-align: center; vertical-align: top; border: 1px solid #e2e8f0; height: 60px; min-width: 80px; position: relative; }
+    .calendar td.empty { background: #f8fafc; }
+    .calendar td .day { font-size: 14px; font-weight: 700; color: #1e293b; }
+    .calendar td .dots { display: flex; justify-content: center; gap: 3px; margin-top: 4px; }
+    .calendar td .dot { width: 10px; height: 10px; border-radius: 50%; }
+    .legend { display: flex; justify-content: center; gap: 20px; margin-top: 12px; padding-top: 10px; border-top: 1px solid #e2e8f0; }
+    .legend-item { display: flex; align-items: center; gap: 6px; font-size: 10px; }
+    .legend-dot { width: 10px; height: 10px; border-radius: 50%; }
+    @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <p style="font-size:9px;font-weight:700;background:#1f2937;color:white;padding:2px 10px;border-radius:4px;display:inline-block;">المملكة المغربية</p>
+    <h1 style="margin-top:4px;">مكتب حفظ الصحة الجماعي — تقويم التدخلات</h1>
+    <p style="font-weight:700;font-size:14px;margin-top:2px;">${ARABIC_MONTHS[viewMonth]} ${viewYear}</p>
+  </div>
+  <table class="calendar">
+    <thead><tr>${ARABIC_DAYS.map(d => `<th>${d}</th>`).join('')}</tr></thead>
+    <tbody>
+      ${weeks.map(week => `<tr>${week.map(cell =>
+        cell.inMonth
+          ? `<td><div class="day">${cell.day}</div>${cell.dots.length > 0 ? `<div class="dots">${cell.dots.map(t => `<div class="dot" style="background:${TYPE_COLORS[t]}"></div>`).join('')}</div>` : ''}</td>`
+          : `<td class="empty"></td>`
+      ).join('')}</tr>`).join('\n')}
+    </tbody>
+  </table>
+  <div class="legend">
+    ${Object.entries(TYPE_LABELS).map(([t, l]) => `<div class="legend-item"><div class="legend-dot" style="background:${TYPE_COLORS[t]}"></div><span>${TYPE_ICONS[t]} ${l}</span></div>`).join('')}
+    <div class="legend-item"><span style="font-weight:700;">الإجمالي: ${interventions.length} تدخل</span></div>
+  </div>
+  <script>window.onload = function() { window.print(); }</script>
+</body>
+</html>`
+              printWindow.document.write(html)
+              printWindow.document.close()
+            }}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white border border-slate-200 text-sm font-medium text-slate-600 hover:bg-emerald-50 hover:text-emerald-600 hover:border-emerald-200 transition-all shadow-sm"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5 4v3H4a2 2 0 00-2 2v3a2 2 0 002 2h1v2a2 2 0 002 2h6a2 2 0 002-2v-2h1a2 2 0 002-2V9a2 2 0 00-2-2h-1V4a2 2 0 00-2-2H7a2 2 0 00-2 2zm8 0H7v3h6V4zm0 8H7v4h6v-4z" clipRule="evenodd" /></svg>
+            طباعة
+          </button>
         </div>
       </div>
 

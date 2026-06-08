@@ -850,7 +850,7 @@ export default function HomePage() {
                   setMapClickCoords({ latitude: lat, longitude: lng, commune })
                   setEditingInterventionId(null)
                   setIsFormOpen(true)
-                }} onRefresh={async () => { await fetchStats(); await fetchInterventions() }} />}
+                }} onRefresh={async () => { await fetchStats(); await fetchInterventions() }} onNavigateToInterventions={() => setCurrentView('interventions')} />}
                 {currentView === 'interventions' && (
                   <InterventionsView interventions={interventions} total={interventionsTotal}
                     page={interventionsPage} setPage={setInterventionsPage}

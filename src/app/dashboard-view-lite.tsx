@@ -16,6 +16,23 @@ import {
   cardVariants,
 } from '@/lib/constants'
 
+// Helper: format relative time in Arabic
+function formatRelativeTime(dateStr: string): string {
+  const now = new Date()
+  const date = new Date(dateStr)
+  const diffMs = now.getTime() - date.getTime()
+  const diffSec = Math.floor(diffMs / 1000)
+  const diffMin = Math.floor(diffSec / 60)
+  const diffHour = Math.floor(diffMin / 60)
+  const diffDay = Math.floor(diffHour / 24)
+
+  if (diffSec < 60) return 'الآن'
+  if (diffMin < 60) return `منذ ${diffMin} دقيقة`
+  if (diffHour < 24) return `منذ ${diffHour} ساعة`
+  if (diffDay < 7) return `منذ ${diffDay} يوم`
+  return date.toLocaleDateString('ar-MA')
+}
+
 // Weather data interface
 interface WeatherData {
   temperature: number
@@ -254,6 +271,45 @@ function DashboardView({ stats, onNavigate, selectedCommune, canSeeAllCommunes, 
           )
         })}
       </div>
+
+      {/* ===== ملخص اليوم (Today's Summary) ===== */}
+      <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}
+        className="bg-gradient-to-l from-emerald-600 via-teal-600 to-cyan-600 rounded-2xl p-5 shadow-lg shadow-emerald-200/40 relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full translate-x-8 -translate-y-8" />
+        <div className="absolute bottom-0 left-0 w-20 h-20 bg-white/5 rounded-full -translate-x-4 translate-y-4" />
+        <div className="relative z-10">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-white font-bold text-base flex items-center gap-2">
+              <span>📊</span> ملخص اليوم
+            </h3>
+            <div className="flex items-center gap-2 text-white/80 text-sm">
+              <span>{weather ? weather.icon : '🌤️'}</span>
+              {weather && <span className="font-bold">{weather.temperature}°C</span>}
+            </div>
+          </div>
+          <div className="grid grid-cols-3 gap-3">
+            {(() => {
+              const today = new Date()
+              const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
+              const todayInterventions = stats.recent.filter(i => i.date && i.date.startsWith(todayStr))
+              const scheduledToday = todayInterventions.filter(i => i.statut === 'PLANIFIEE' || i.statut === 'EN_COURS').length
+              const completedToday = todayInterventions.filter(i => i.statut === 'TERMINEE').length
+              const complaintsToday = 0 // We don't have complaints data in dashboard stats
+              return [
+                { icon: '📅', label: 'تدخلات مبرمجة', value: scheduledToday, color: 'bg-white/20' },
+                { icon: '✅', label: 'تدخلات منجزة', value: completedToday, color: 'bg-white/20' },
+                { icon: '📢', label: 'شكايات واردة', value: complaintsToday, color: 'bg-white/20' },
+              ].map((item, idx) => (
+                <div key={idx} className={`${item.color} rounded-xl p-3 text-center backdrop-blur-sm`}>
+                  <span className="text-lg">{item.icon}</span>
+                  <div className="text-2xl font-extrabold text-white mt-1">{item.value}</div>
+                  <div className="text-[10px] text-white/70 font-medium">{item.label}</div>
+                </div>
+              ))
+            })()}
+          </div>
+        </div>
+      </motion.div>
 
       {/* Weather Widget */}
       <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
@@ -626,6 +682,75 @@ function DashboardView({ stats, onNavigate, selectedCommune, canSeeAllCommunes, 
           ))}
         </motion.div>
       </div>
+
+      {/* ===== سجل النشاط الأخير (Recent Activity Timeline) ===== */}
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }}
+        className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden" dir="rtl">
+        <div className="bg-gradient-to-l from-slate-700 to-slate-800 text-white px-5 py-3.5">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="text-lg">🕐</span>
+              <h3 className="font-bold text-sm">سجل النشاط الأخير</h3>
+            </div>
+            <button onClick={() => onNavigate('interventions')}
+              className="text-[11px] text-slate-300 hover:text-white font-medium hover:underline transition-colors">عرض الكل</button>
+          </div>
+        </div>
+        <div className="p-4">
+          <div className="relative">
+            {/* Timeline line */}
+            <div className="absolute right-[15px] top-2 bottom-2 w-0.5 bg-slate-100" />
+            <div className="space-y-0">
+              {stats.recent.slice(0, 10).map((intervention, i) => {
+                const typeColor = TYPE_COLORS[intervention.type] || '#64748b'
+                const typeIcon = TYPE_ICONS[intervention.type] || '📋'
+                const typeLabel = TYPE_LABELS[intervention.type] || intervention.type
+                const statutLabel = STATUT_LABELS[intervention.statut] || intervention.statut
+                const statutColor = STATUT_COLORS[intervention.statut] || '#64748b'
+                return (
+                  <motion.div key={intervention.id}
+                    initial={{ opacity: 0, x: -15 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: i * 0.04 }}
+                    className="flex items-start gap-3 relative pb-3 last:pb-0"
+                  >
+                    {/* Timeline dot */}
+                    <div className="relative z-10 shrink-0 mt-1">
+                      <div className="w-[32px] h-[32px] rounded-full flex items-center justify-center text-sm border-2 border-white shadow-sm"
+                        style={{ backgroundColor: typeColor + '18' }}>
+                        {typeIcon}
+                      </div>
+                    </div>
+                    {/* Content */}
+                    <div className="flex-1 min-w-0 bg-slate-50/70 rounded-xl px-3 py-2.5 hover:bg-slate-100/80 transition-colors">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-sm font-bold text-slate-700 truncate">{intervention.quartier}</span>
+                        <span className="text-[9px] px-1.5 py-0.5 rounded-full font-bold"
+                          style={{ backgroundColor: typeColor + '15', color: typeColor }}>
+                          {typeLabel}
+                        </span>
+                        <span className="text-[9px] px-1.5 py-0.5 rounded-full font-bold"
+                          style={{ backgroundColor: statutColor + '15', color: statutColor }}>
+                          {statutLabel}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-3 mt-1">
+                        <span className="text-[11px] text-slate-400 font-mono">{intervention.reference}</span>
+                        <span className="text-[10px] text-slate-300">•</span>
+                        <span className="text-[11px] text-slate-400">{intervention.agentNom}</span>
+                      </div>
+                      <span className="text-[10px] text-slate-300 mt-0.5 block">{formatRelativeTime(intervention.createdAt)}</span>
+                    </div>
+                  </motion.div>
+                )
+              })}
+            </div>
+          </div>
+          {stats.recent.length === 0 && (
+            <div className="text-center py-6 text-slate-400 text-sm">لا توجد أنشطة حديثة</div>
+          )}
+        </div>
+      </motion.div>
     </div>
   )
 }
