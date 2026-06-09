@@ -968,3 +968,43 @@ Work Log:
 
 - Lint passes cleanly
 - Dev server running successfully
+
+---
+Task ID: 7
+Agent: main
+Task: Fix floating intervention detail window on the map — resolve popup conflict, fix drag coordinates, enhance content
+
+Work Log:
+1. **Removed Leaflet popup from intervention markers** — In `map-component.tsx`:
+   - Removed `marker.bindPopup(buildInterventionPopup(intervention))` from intervention markers
+   - The floating overlay (from map-view-lite.tsx) now serves as the sole detail view when clicking markers
+   - This prevents the dual popup+overlay conflict where BOTH appeared simultaneously
+
+2. **Added event stopPropagation on marker clicks** — In `map-component.tsx`:
+   - Added `L.DomEvent.stopPropagation(e)` on intervention marker click to prevent the map click handler from firing
+   - Added same for quartier markers
+   - Also closes any open new-intervention popup (`clickMarkerRef`) when an intervention marker is clicked
+   - This prevents the new-intervention form popup from appearing when clicking an existing intervention marker
+
+3. **Fixed dragging coordinate calculation** — In `map-view-lite.tsx`:
+   - The original code mixed viewport coordinates (`clientX/Y`) with container-relative coordinates (`overlayPosition`)
+   - Fixed by converting viewport coordinates to container-relative using `mapEl.getBoundingClientRect()`
+   - Added `e.preventDefault()` in `handleDragStart` to prevent text selection during drag
+   - Removed unused `handleDragMove` callback (was never called - global listeners handle drag)
+   - Added `{ passive: false }` to touchmove listener to prevent scroll interference
+
+4. **Enhanced overlay content with all requested fields** — In `map-view-lite.tsx`:
+   - Added 🔖 المرجع (Reference) field with mono font in details grid
+   - Added 💊 المنتج المستعمل (Product Used) section with emerald styling
+   - Added 🧪 المنتجات المستعملة (Materials/Products Used) section that displays the `materials` array with product name and quantity
+   - Made content area scrollable with `max-h-[60vh] overflow-y-auto`
+   - Updated المساحة (Area) to show "م²" unit
+   - Increased الملاحظات (Observations) line clamp from 2 to 3
+
+Stage Summary:
+- Fixed dual popup+overlay conflict by removing Leaflet popup binding from intervention markers
+- Fixed marker click event propagation to prevent new-intervention form from appearing
+- Fixed drag coordinate calculation for proper container-relative positioning
+- Added all requested fields: المرجع, النوع, الحالة, العون, التاريخ, الحي, العنوان, الوصف, الملاحظات, المساحة, المنتجات المستعملة
+- Floating overlay is now draggable, closeable, and has "عرض التفاصيل" button
+- Verified working via browser testing with agent-browser

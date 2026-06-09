@@ -177,26 +177,22 @@ function MapView({ interventions, quartiers, selectedCommune, canSeeAllCommunes,
     }
   }, [])
 
-  // Draggable overlay handlers
+  // Draggable overlay handlers — coordinates are relative to #map-area-container
   const handleDragStart = useCallback((e: React.MouseEvent | React.TouchEvent) => {
+    e.preventDefault()
     setIsDragging(true)
     const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX
     const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY
+    // Convert viewport position to container-relative position, then compute offset from current overlay position
+    const mapEl = document.getElementById('map-area-container')
+    const rect = mapEl?.getBoundingClientRect()
+    const relX = rect ? clientX - rect.left : clientX
+    const relY = rect ? clientY - rect.top : clientY
     dragOffsetRef.current = {
-      x: clientX - overlayPosition.x,
-      y: clientY - overlayPosition.y,
+      x: relX - overlayPosition.x,
+      y: relY - overlayPosition.y,
     }
   }, [overlayPosition])
-
-  const handleDragMove = useCallback((e: React.MouseEvent | React.TouchEvent) => {
-    if (!isDragging) return
-    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX
-    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY
-    setOverlayPosition({
-      x: clientX - dragOffsetRef.current.x,
-      y: clientY - dragOffsetRef.current.y,
-    })
-  }, [isDragging])
 
   const handleDragEnd = useCallback(() => {
     setIsDragging(false)
@@ -208,15 +204,19 @@ function MapView({ interventions, quartiers, selectedCommune, canSeeAllCommunes,
     const handleMove = (e: MouseEvent | TouchEvent) => {
       const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX
       const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY
+      const mapEl = document.getElementById('map-area-container')
+      const rect = mapEl?.getBoundingClientRect()
+      const relX = rect ? clientX - rect.left : clientX
+      const relY = rect ? clientY - rect.top : clientY
       setOverlayPosition({
-        x: clientX - dragOffsetRef.current.x,
-        y: clientY - dragOffsetRef.current.y,
+        x: relX - dragOffsetRef.current.x,
+        y: relY - dragOffsetRef.current.y,
       })
     }
     const handleUp = () => { setIsDragging(false) }
     window.addEventListener('mousemove', handleMove)
     window.addEventListener('mouseup', handleUp)
-    window.addEventListener('touchmove', handleMove)
+    window.addEventListener('touchmove', handleMove, { passive: false })
     window.addEventListener('touchend', handleUp)
     return () => {
       window.removeEventListener('mousemove', handleMove)
@@ -774,15 +774,15 @@ function MapView({ interventions, quartiers, selectedCommune, canSeeAllCommunes,
                   </div>
                 </div>
 
-                {/* Content */}
-                <div className="p-4 space-y-3">
+                {/* Content — scrollable */}
+                <div className="p-4 space-y-3 max-h-[60vh] overflow-y-auto">
                   {/* Location Info */}
                   <div className="flex items-start gap-2.5 bg-slate-50 rounded-xl p-3 border border-slate-100">
                     <div className="w-7 h-7 rounded-lg flex items-center justify-center text-sm flex-shrink-0" style={{ backgroundColor: (TYPE_COLORS[overlayIntervention.type] || '#059669') + '15' }}>
                       📍
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-bold text-slate-800 truncate">{overlayIntervention.quartier}</p>
+                      <p className="text-sm font-bold text-slate-800 truncate">🏘️ {overlayIntervention.quartier}</p>
                       {overlayIntervention.adresse && (
                         <p className="text-xs text-slate-500 mt-0.5 truncate">🏠 {overlayIntervention.adresse}</p>
                       )}
@@ -798,22 +798,47 @@ function MapView({ interventions, quartiers, selectedCommune, canSeeAllCommunes,
                   {/* Details Grid */}
                   <div className="grid grid-cols-2 gap-2">
                     <div className="bg-slate-50 rounded-xl p-2.5 border border-slate-100">
+                      <div className="text-[9px] text-slate-400 font-semibold mb-1">🔖 المرجع</div>
+                      <div className="text-xs font-bold text-slate-700 truncate font-mono">{overlayIntervention.reference || '—'}</div>
+                    </div>
+                    <div className="bg-slate-50 rounded-xl p-2.5 border border-slate-100">
                       <div className="text-[9px] text-slate-400 font-semibold mb-1">👤 العون</div>
                       <div className="text-xs font-bold text-slate-700 truncate">{overlayIntervention.agentNom || '—'}</div>
                     </div>
                     <div className="bg-slate-50 rounded-xl p-2.5 border border-slate-100">
                       <div className="text-[9px] text-slate-400 font-semibold mb-1">📐 المساحة</div>
-                      <div className="text-xs font-bold text-slate-700">{overlayIntervention.superficie || '—'}</div>
+                      <div className="text-xs font-bold text-slate-700">{overlayIntervention.superficie ? `${overlayIntervention.superficie} م²` : '—'}</div>
                     </div>
                     <div className="bg-slate-50 rounded-xl p-2.5 border border-slate-100">
                       <div className="text-[9px] text-slate-400 font-semibold mb-1">🏛️ الجماعة</div>
                       <div className="text-xs font-bold text-slate-700">{COMMUNE_LABELS[overlayIntervention.commune] || overlayIntervention.commune || '—'}</div>
                     </div>
-                    <div className="bg-slate-50 rounded-xl p-2.5 border border-slate-100">
-                      <div className="text-[9px] text-slate-400 font-semibold mb-1">💊 المنتج</div>
-                      <div className="text-xs font-bold text-slate-700 truncate">{overlayIntervention.produitUtilise || '—'}</div>
-                    </div>
                   </div>
+
+                  {/* Products Used — from produitUtilise field */}
+                  {overlayIntervention.produitUtilise && (
+                    <div className="bg-emerald-50/80 rounded-xl p-2.5 border border-emerald-100">
+                      <div className="text-[9px] text-emerald-600 font-semibold mb-1">💊 المنتج المستعمل</div>
+                      <p className="text-xs text-emerald-700 font-medium">{overlayIntervention.produitUtilise}</p>
+                    </div>
+                  )}
+
+                  {/* Materials / Products Used — from materials array */}
+                  {overlayIntervention.materials && overlayIntervention.materials.length > 0 && (
+                    <div className="bg-blue-50/80 rounded-xl p-2.5 border border-blue-100">
+                      <div className="text-[9px] text-blue-600 font-semibold mb-1.5">🧪 المنتجات المستعملة ({overlayIntervention.materials.length})</div>
+                      <div className="space-y-1.5">
+                        {overlayIntervention.materials.map((mat) => (
+                          <div key={mat.id} className="flex items-center justify-between bg-white/70 rounded-lg px-2.5 py-1.5 border border-blue-50">
+                            <span className="text-xs text-slate-700 font-medium truncate flex-1">{mat.product?.nom || '—'}</span>
+                            <span className="text-[10px] font-bold text-blue-600 flex-shrink-0 mr-2">
+                              {mat.quantity} {mat.product?.unite || ''}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
                   {/* Description */}
                   {overlayIntervention.description && (
@@ -827,7 +852,7 @@ function MapView({ interventions, quartiers, selectedCommune, canSeeAllCommunes,
                   {overlayIntervention.observations && (
                     <div className="bg-amber-50/80 rounded-xl p-2.5 border border-amber-100">
                       <div className="text-[9px] text-amber-600 font-semibold mb-1">💬 الملاحظات</div>
-                      <p className="text-xs text-amber-700 leading-relaxed line-clamp-2">{overlayIntervention.observations}</p>
+                      <p className="text-xs text-amber-700 leading-relaxed line-clamp-3">{overlayIntervention.observations}</p>
                     </div>
                   )}
 

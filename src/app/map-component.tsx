@@ -1261,6 +1261,10 @@ export default function MapComponent({ interventions, quartiers, selectedCommune
 
       const marker = L.marker([q.latitude, q.longitude], { icon: createQuartierIcon() })
       marker.bindPopup(buildQuartierPopup(q), { maxWidth: 280, minWidth: 220 })
+      // Prevent map click from firing when clicking quartier markers
+      marker.on('click', (e: L.LeafletMouseEvent) => {
+        L.DomEvent.stopPropagation(e)
+      })
       markersLayer.addLayer(marker)
     })
 
@@ -1273,8 +1277,15 @@ export default function MapComponent({ interventions, quartiers, selectedCommune
         icon: createInterventionIcon(intervention.type, intervention.statut),
       })
 
-      marker.bindPopup(buildInterventionPopup(intervention), { maxWidth: 340, minWidth: 280 })
-      marker.on('click', () => {
+      // Don't bind Leaflet popup — use the floating overlay from map-view-lite instead
+      marker.on('click', (e: L.LeafletMouseEvent) => {
+        // Prevent the map click handler from firing (which would open the new-intervention form)
+        L.DomEvent.stopPropagation(e)
+        // Close any open new-intervention popup
+        if (clickMarkerRef.current) {
+          mapRef.current?.removeLayer(clickMarkerRef.current)
+          clickMarkerRef.current = null
+        }
         if (onInterventionClickRef.current) {
           onInterventionClickRef.current(intervention, intervention.latitude, intervention.longitude)
         }
