@@ -66,6 +66,9 @@ function MapView({ interventions, quartiers, selectedCommune, canSeeAllCommunes,
   // Fullscreen
   const [isFullscreen, setIsFullscreen] = useState(false)
 
+  // Mobile sidebar visibility
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
+
   // Map stats bar
   const [showMapStats, setShowMapStats] = useState(true)
 
@@ -293,15 +296,19 @@ function MapView({ interventions, quartiers, selectedCommune, canSeeAllCommunes,
       {/* Professional Sidebar */}
       <motion.div
         initial={{ opacity: 0, x: 40 }}
-        animate={{ opacity: isFullscreen ? 0 : 1, x: isFullscreen ? 40 : 0, width: sidebarCollapsed ? 56 : 340 }}
+        animate={{ 
+          opacity: isFullscreen ? 0 : 1, 
+          x: isFullscreen ? 40 : 0, 
+          width: sidebarCollapsed ? 56 : 340 
+        }}
         transition={{ duration: 0.3, ease: 'easeOut' }}
-        className="absolute top-0 right-0 bottom-0 z-20 flex flex-col bg-white/95 backdrop-blur-xl border-l border-slate-200/60 shadow-2xl overflow-hidden"
+        className="absolute top-0 right-0 bottom-0 z-[1000] flex-col bg-white/95 backdrop-blur-xl border-l border-slate-200/60 shadow-2xl overflow-hidden hidden lg:flex"
         style={{ pointerEvents: isFullscreen ? 'none' : 'auto' }}
       >
         {/* Toggle Button */}
         <button
           onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-          className="absolute top-3 left-3 z-30 w-8 h-8 bg-white rounded-lg shadow-md border border-slate-200 flex items-center justify-center hover:bg-slate-50 transition-colors"
+          className="absolute top-3 left-3 z-[1000] w-8 h-8 bg-white rounded-lg shadow-md border border-slate-200 flex items-center justify-center hover:bg-slate-50 transition-colors"
         >
           <motion.svg
             animate={{ rotate: sidebarCollapsed ? 180 : 0 }}
@@ -596,6 +603,81 @@ function MapView({ interventions, quartiers, selectedCommune, canSeeAllCommunes,
         )}
       </motion.div>
 
+      {/* Mobile Sidebar Overlay */}
+      <AnimatePresence>
+        {mobileSidebarOpen && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/40 z-[999] lg:hidden"
+              onClick={() => setMobileSidebarOpen(false)}
+            />
+            <motion.div
+              initial={{ opacity: 0, x: 40 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 40 }}
+              transition={{ duration: 0.3, ease: 'easeOut' }}
+              className="absolute top-0 right-0 bottom-0 z-[1000] flex flex-col bg-white/95 backdrop-blur-xl border-l border-slate-200/60 shadow-2xl overflow-hidden w-[85vw] max-w-[340px] lg:hidden"
+              dir="rtl"
+            >
+              {/* Close button */}
+              <button
+                onClick={() => setMobileSidebarOpen(false)}
+                className="absolute top-3 left-3 z-[1000] w-8 h-8 bg-white rounded-lg shadow-md border border-slate-200 flex items-center justify-center hover:bg-slate-50 transition-colors"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-slate-500" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                </svg>
+              </button>
+              {/* Same sidebar content */}
+              <div className="flex-1 overflow-y-auto">
+                <div className="bg-gradient-to-l from-emerald-800 via-teal-700 to-emerald-900 text-white p-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="w-8 h-8 rounded-lg bg-white/15 flex items-center justify-center text-lg">🗺️</div>
+                    <div>
+                      <h3 className="font-bold text-sm">الخريطة التفاعلية — SIG</h3>
+                      <p className="text-[10px] text-emerald-200/80">نظام المعلومات الجغرافية</p>
+                    </div>
+                  </div>
+                </div>
+                <div className="grid grid-cols-3 gap-2 p-3">
+                  <div className="bg-emerald-50 rounded-xl p-2 text-center border border-emerald-100">
+                    <div className="text-lg font-bold text-emerald-700">{filteredInterventions.length}</div>
+                    <div className="text-[9px] text-emerald-600 font-semibold">التدخلات</div>
+                  </div>
+                  <div className="bg-violet-50 rounded-xl p-2 text-center border border-violet-100">
+                    <div className="text-lg font-bold text-violet-700">{quartiers.length}</div>
+                    <div className="text-[9px] text-violet-600 font-semibold">الأحياء</div>
+                  </div>
+                  <div className="bg-amber-50 rounded-xl p-2 text-center border border-amber-100">
+                    <div className="text-lg font-bold text-amber-700">{COMMUNE_INFO.length}</div>
+                    <div className="text-[9px] text-amber-600 font-semibold">الجماعات</div>
+                  </div>
+                </div>
+                {canSeeAllCommunes && (
+                  <div className="px-3 pb-2">
+                    <div className="bg-slate-50 rounded-xl p-3 border border-slate-100">
+                      <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">🏛️ فلترة الجماعات</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        <button onClick={() => setSelectedCommune('ALL')} className={`px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all ${selectedCommune === 'ALL' ? 'bg-slate-800 text-white shadow-md' : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'}`}>الكل</button>
+                        {COMMUNE_INFO.map((info) => (
+                          <button key={info.key} onClick={() => setSelectedCommune(selectedCommune === info.key ? 'ALL' : info.key as CommuneType)} className={`px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all flex items-center gap-1.5 ${selectedCommune === info.key ? 'text-white shadow-md' : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'}`} style={selectedCommune === info.key ? { backgroundColor: info.color } : {}}>
+                            <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: selectedCommune === info.key ? 'white' : info.color }} />
+                            {info.name.replace('جماعة ', '')}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
       {/* Map Container */}
       <div id="map-area-container" className="flex-1 relative">
         {mapError ? (
@@ -630,6 +712,22 @@ function MapView({ interventions, quartiers, selectedCommune, canSeeAllCommunes,
 
         {/* === FLOATING MAP CONTROLS === */}
 
+        {/* Mobile Sidebar Toggle - top-right, only on small screens */}
+        <motion.button
+          initial={{ opacity: 0, scale: 0.8 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ delay: 0.3 }}
+          whileHover={{ scale: 1.08 }}
+          whileTap={{ scale: 0.92 }}
+          onClick={() => setMobileSidebarOpen(v => !v)}
+          className="absolute top-3 right-3 z-[1000] w-10 h-10 bg-white/90 backdrop-blur-sm rounded-xl shadow-lg border border-slate-200/60 flex items-center justify-center hover:bg-white transition-colors lg:hidden"
+          title="القائمة الجانبية"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 text-slate-600" viewBox="0 0 20 20" fill="currentColor">
+            <path fillRule="evenodd" d="M3 5a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM3 10a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM3 15a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clipRule="evenodd" />
+          </svg>
+        </motion.button>
+
         {/* 1. Fullscreen Toggle Button - top-left */}
         <motion.button
           initial={{ opacity: 0, scale: 0.8 }}
@@ -638,7 +736,7 @@ function MapView({ interventions, quartiers, selectedCommune, canSeeAllCommunes,
           whileHover={{ scale: 1.08 }}
           whileTap={{ scale: 0.92 }}
           onClick={() => setIsFullscreen(!isFullscreen)}
-          className="absolute top-3 left-3 z-30 w-10 h-10 bg-white/90 backdrop-blur-sm rounded-xl shadow-lg border border-slate-200/60 flex items-center justify-center hover:bg-white transition-colors"
+          className="absolute top-3 left-3 z-[1000] w-10 h-10 bg-white/90 backdrop-blur-sm rounded-xl shadow-lg border border-slate-200/60 flex items-center justify-center hover:bg-white transition-colors"
           title={isFullscreen ? 'عرض عادي' : 'ملء الشاشة'}
         >
           {isFullscreen ? (
@@ -653,7 +751,7 @@ function MapView({ interventions, quartiers, selectedCommune, canSeeAllCommunes,
         </motion.button>
 
         {/* 2. Map Layer Toggle - top-left, below fullscreen */}
-        <div className="absolute top-16 left-3 z-30 flex flex-col gap-2">
+        <div className="absolute top-16 left-3 z-[1000] flex flex-col gap-2">
           {(['street', 'satellite', 'dark'] as const).map((layer) => {
             const isActive = tileLayer === layer
             const icons: Record<string, string> = { street: '🗺️', satellite: '🛰️', dark: '🌙' }
@@ -688,7 +786,7 @@ function MapView({ interventions, quartiers, selectedCommune, canSeeAllCommunes,
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
           onClick={() => setShowQuartiers(!showQuartiers)}
-          className={`absolute top-[168px] left-3 z-30 w-10 h-10 rounded-xl shadow-lg border flex items-center justify-center transition-all text-sm ${
+          className={`absolute top-[168px] left-3 z-[1000] w-10 h-10 rounded-xl shadow-lg border flex items-center justify-center transition-all text-sm ${
             showQuartiers
               ? 'bg-teal-600 text-white border-teal-500 shadow-teal-200'
               : 'bg-white/90 backdrop-blur-sm text-slate-600 border-slate-200/60 hover:bg-white'
@@ -706,7 +804,7 @@ function MapView({ interventions, quartiers, selectedCommune, canSeeAllCommunes,
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
           onClick={() => { setMeasureMode(!measureMode); setMeasureResult(null) }}
-          className={`absolute top-[212px] left-3 z-30 w-10 h-10 rounded-xl shadow-lg border flex items-center justify-center transition-all text-sm ${
+          className={`absolute top-[212px] left-3 z-[1000] w-10 h-10 rounded-xl shadow-lg border flex items-center justify-center transition-all text-sm ${
             measureMode
               ? 'bg-red-600 text-white border-red-500 shadow-red-200'
               : 'bg-white/90 backdrop-blur-sm text-slate-600 border-slate-200/60 hover:bg-white'
@@ -724,7 +822,7 @@ function MapView({ interventions, quartiers, selectedCommune, canSeeAllCommunes,
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
           onClick={() => setShowLegend(!showLegend)}
-          className={`absolute top-[256px] left-3 z-30 w-10 h-10 rounded-xl shadow-lg border flex items-center justify-center transition-all text-sm ${
+          className={`absolute top-[256px] left-3 z-[1000] w-10 h-10 rounded-xl shadow-lg border flex items-center justify-center transition-all text-sm ${
             showLegend
               ? 'bg-amber-600 text-white border-amber-500 shadow-amber-200'
               : 'bg-white/90 backdrop-blur-sm text-slate-600 border-slate-200/60 hover:bg-white'
@@ -742,7 +840,7 @@ function MapView({ interventions, quartiers, selectedCommune, canSeeAllCommunes,
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
           onClick={() => window.print()}
-          className="absolute top-[300px] left-3 z-30 w-10 h-10 bg-white/90 backdrop-blur-sm rounded-xl shadow-lg border border-slate-200/60 flex items-center justify-center hover:bg-white transition-all text-sm text-slate-600"
+          className="absolute top-[300px] left-3 z-[1000] w-10 h-10 bg-white/90 backdrop-blur-sm rounded-xl shadow-lg border border-slate-200/60 flex items-center justify-center hover:bg-white transition-all text-sm text-slate-600"
           title="طباعة الخريطة"
         >
           🖨️
@@ -755,7 +853,7 @@ function MapView({ interventions, quartiers, selectedCommune, canSeeAllCommunes,
               initial={{ opacity: 0, x: -20, scale: 0.95 }}
               animate={{ opacity: 1, x: 0, scale: 1 }}
               exit={{ opacity: 0, x: -20, scale: 0.95 }}
-              className="absolute top-[256px] left-14 z-30 bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-slate-200/60 p-4 w-64"
+              className="absolute top-[256px] left-14 z-[1000] bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-slate-200/60 p-4 w-64"
               dir="rtl"
             >
               <div className="flex items-center justify-between mb-3">
@@ -889,7 +987,7 @@ function MapView({ interventions, quartiers, selectedCommune, canSeeAllCommunes,
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
           onClick={() => setShowQuickStatsPopup(!showQuickStatsPopup)}
-          className="absolute bottom-4 left-4 z-30 w-12 h-12 bg-emerald-600 text-white rounded-xl shadow-lg shadow-emerald-200 flex items-center justify-center hover:bg-emerald-500 transition-colors"
+          className="absolute bottom-4 left-4 z-[1000] w-12 h-12 bg-emerald-600 text-white rounded-xl shadow-lg shadow-emerald-200 flex items-center justify-center hover:bg-emerald-500 transition-colors"
           title="إحصائيات سريعة"
         >
           📊
@@ -902,7 +1000,7 @@ function MapView({ interventions, quartiers, selectedCommune, canSeeAllCommunes,
               initial={{ opacity: 0, y: 20, scale: 0.95 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 20, scale: 0.95 }}
-              className="absolute bottom-18 left-4 z-30 bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-slate-200/60 p-4 w-64"
+              className="absolute bottom-18 left-4 z-[1000] bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-slate-200/60 p-4 w-64"
               dir="rtl"
             >
               <div className="flex items-center justify-between mb-3">
@@ -946,7 +1044,7 @@ function MapView({ interventions, quartiers, selectedCommune, canSeeAllCommunes,
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
               transition={{ duration: 0.3 }}
-              className="absolute top-3 left-1/2 -translate-x-1/2 z-30 hidden md:block"
+              className="absolute top-3 left-1/2 -translate-x-1/2 z-[1000] hidden md:block"
             >
               <div className="bg-white/90 backdrop-blur-md rounded-xl shadow-xl border border-slate-200/60 px-3 py-2 flex items-center gap-3" dir="rtl">
                 {/* Total */}
@@ -1002,7 +1100,7 @@ function MapView({ interventions, quartiers, selectedCommune, canSeeAllCommunes,
             whileHover={{ scale: 1.08 }}
             whileTap={{ scale: 0.92 }}
             onClick={() => setShowMapStats(true)}
-            className="absolute top-3 left-1/2 -translate-x-1/2 z-30 w-8 h-8 bg-white/90 backdrop-blur-sm rounded-xl shadow-lg border border-slate-200/60 items-center justify-center hover:bg-white transition-colors hidden md:flex"
+            className="absolute top-3 left-1/2 -translate-x-1/2 z-[1000] w-8 h-8 bg-white/90 backdrop-blur-sm rounded-xl shadow-lg border border-slate-200/60 items-center justify-center hover:bg-white transition-colors hidden md:flex"
             title="إظهار الإحصائيات"
           >
             <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-slate-600" viewBox="0 0 20 20" fill="currentColor">
@@ -1019,7 +1117,7 @@ function MapView({ interventions, quartiers, selectedCommune, canSeeAllCommunes,
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.85 }}
               transition={{ type: 'spring', stiffness: 300, damping: 25 }}
-              className="absolute z-40"
+              className="absolute z-[1001]"
               style={{
                 left: overlayPosition.x,
                 top: overlayPosition.y,

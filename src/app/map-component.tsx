@@ -1606,5 +1606,5 @@ export default function MapComponent({ interventions, quartiers, selectedCommune
     })
   }, [interventions, quartiers, selectedCommune, externalShowQuartiers])
 
-  return <div ref={mapContainerRef} className="w-full h-full" style={{ minHeight: '400px' }} />
+  return <div ref={mapContainerRef} className="w-full h-full" style={{ minHeight: '400px', position: 'relative', zIndex: 1 }} />
 }
