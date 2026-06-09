@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAppStore, type CommuneType } from '@/lib/store'
 import {
-  type Intervention, type Quartier,
+  type Intervention, type Quartier, type InterventionPhoto,
   TYPE_LABELS, TYPE_COLORS, TYPE_ICONS, STATUT_LABELS, STATUT_COLORS,
   COMMUNE_LABELS, COMMUNE_COLORS,
 } from '@/lib/constants'
@@ -62,6 +62,9 @@ function MapView({ interventions, quartiers, selectedCommune, canSeeAllCommunes,
 
   // Tile layer
   const [tileLayer, setTileLayer] = useState<'street' | 'satellite' | 'dark'>('street')
+
+  // Photo viewer
+  const [viewingPhoto, setViewingPhoto] = useState<InterventionPhoto | null>(null)
 
   // Debounce search (300ms)
   useEffect(() => {
@@ -775,7 +778,7 @@ function MapView({ interventions, quartiers, selectedCommune, canSeeAllCommunes,
                 </div>
 
                 {/* Content — scrollable */}
-                <div className="p-4 space-y-3 max-h-[60vh] overflow-y-auto">
+                <div className="p-4 space-y-3 max-h-[65vh] overflow-y-auto">
                   {/* Location Info */}
                   <div className="flex items-start gap-2.5 bg-slate-50 rounded-xl p-3 border border-slate-100">
                     <div className="w-7 h-7 rounded-lg flex items-center justify-center text-sm flex-shrink-0" style={{ backgroundColor: (TYPE_COLORS[overlayIntervention.type] || '#059669') + '15' }}>
@@ -788,9 +791,6 @@ function MapView({ interventions, quartiers, selectedCommune, canSeeAllCommunes,
                       )}
                       <p className="text-xs text-slate-500 mt-0.5">
                         📅 {new Date(overlayIntervention.date).toLocaleDateString('ar-MA')}
-                        {overlayIntervention.heureDebut && (
-                          <span className="mr-2">⏰ {overlayIntervention.heureDebut}{overlayIntervention.heureFin ? ` - ${overlayIntervention.heureFin}` : ''}</span>
-                        )}
                       </p>
                     </div>
                   </div>
@@ -813,7 +813,83 @@ function MapView({ interventions, quartiers, selectedCommune, canSeeAllCommunes,
                       <div className="text-[9px] text-slate-400 font-semibold mb-1">🏛️ الجماعة</div>
                       <div className="text-xs font-bold text-slate-700">{COMMUNE_LABELS[overlayIntervention.commune] || overlayIntervention.commune || '—'}</div>
                     </div>
+                    <div className="bg-slate-50 rounded-xl p-2.5 border border-slate-100">
+                      <div className="text-[9px] text-slate-400 font-semibold mb-1">🔢 عدد الخدمات</div>
+                      <div className="text-xs font-bold text-slate-700">{overlayIntervention.nombrePrestations || '—'}</div>
+                    </div>
+                    <div className="bg-slate-50 rounded-xl p-2.5 border border-slate-100">
+                      <div className="text-[9px] text-slate-400 font-semibold mb-1">📦 الكمية</div>
+                      <div className="text-xs font-bold text-slate-700 truncate">{overlayIntervention.quantite || '—'}</div>
+                    </div>
                   </div>
+
+                  {/* Time Details */}
+                  {(overlayIntervention.heureDebut || overlayIntervention.heureFin) && (
+                    <div className="bg-indigo-50/80 rounded-xl p-2.5 border border-indigo-100">
+                      <div className="text-[9px] text-indigo-600 font-semibold mb-1.5">⏰ أوقات التدخل</div>
+                      <div className="flex items-center gap-3">
+                        {overlayIntervention.heureDebut && (
+                          <div className="flex items-center gap-1.5 bg-white/70 rounded-lg px-2.5 py-1.5 border border-indigo-50">
+                            <span className="text-[10px] text-indigo-500 font-medium">البدء</span>
+                            <span className="text-xs font-bold text-indigo-700">{overlayIntervention.heureDebut}</span>
+                          </div>
+                        )}
+                        {overlayIntervention.heureDebut && overlayIntervention.heureFin && (
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 text-indigo-300 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clipRule="evenodd" />
+                          </svg>
+                        )}
+                        {overlayIntervention.heureFin && (
+                          <div className="flex items-center gap-1.5 bg-white/70 rounded-lg px-2.5 py-1.5 border border-indigo-50">
+                            <span className="text-[10px] text-indigo-500 font-medium">الانتهاء</span>
+                            <span className="text-xs font-bold text-indigo-700">{overlayIntervention.heureFin}</span>
+                          </div>
+                        )}
+                        {overlayIntervention.heureDebut && overlayIntervention.heureFin && (
+                          <span className="text-[10px] text-indigo-500 font-medium mr-auto">
+                            ({(() => {
+                              const [h1, m1] = overlayIntervention.heureDebut!.split(':').map(Number)
+                              const [h2, m2] = overlayIntervention.heureFin!.split(':').map(Number)
+                              const diff = (h2 * 60 + m2) - (h1 * 60 + m1)
+                              if (diff > 0) {
+                                const hours = Math.floor(diff / 60)
+                                const mins = diff % 60
+                                return hours > 0 ? `${hours}س ${mins > 0 ? mins + 'د' : ''}` : `${mins}د`
+                              }
+                              return ''
+                            })()})
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Costs Section */}
+                  {(overlayIntervention.coutMainOeuvre || overlayIntervention.coutMateriaux || overlayIntervention.coutTotal) && (
+                    <div className="bg-rose-50/80 rounded-xl p-2.5 border border-rose-100">
+                      <div className="text-[9px] text-rose-600 font-semibold mb-1.5">💰 التكاليف</div>
+                      <div className="space-y-1.5">
+                        {overlayIntervention.coutMainOeuvre != null && overlayIntervention.coutMainOeuvre > 0 && (
+                          <div className="flex items-center justify-between bg-white/70 rounded-lg px-2.5 py-1.5 border border-rose-50">
+                            <span className="text-xs text-slate-600 font-medium">👷 اليد العاملة</span>
+                            <span className="text-xs font-bold text-rose-700">{overlayIntervention.coutMainOeuvre.toLocaleString('ar-MA')} د.م</span>
+                          </div>
+                        )}
+                        {overlayIntervention.coutMateriaux != null && overlayIntervention.coutMateriaux > 0 && (
+                          <div className="flex items-center justify-between bg-white/70 rounded-lg px-2.5 py-1.5 border border-rose-50">
+                            <span className="text-xs text-slate-600 font-medium">🧪 المواد</span>
+                            <span className="text-xs font-bold text-rose-700">{overlayIntervention.coutMateriaux.toLocaleString('ar-MA')} د.م</span>
+                          </div>
+                        )}
+                        {overlayIntervention.coutTotal != null && overlayIntervention.coutTotal > 0 && (
+                          <div className="flex items-center justify-between bg-rose-100/70 rounded-lg px-2.5 py-2 border border-rose-200">
+                            <span className="text-xs text-rose-800 font-bold">📊 الإجمالي</span>
+                            <span className="text-sm font-bold text-rose-800">{overlayIntervention.coutTotal.toLocaleString('ar-MA')} د.م</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
 
                   {/* Products Used — from produitUtilise field */}
                   {overlayIntervention.produitUtilise && (
@@ -856,6 +932,61 @@ function MapView({ interventions, quartiers, selectedCommune, canSeeAllCommunes,
                     </div>
                   )}
 
+                  {/* Linked Documents */}
+                  {overlayIntervention.documents && overlayIntervention.documents.length > 0 && (
+                    <div className="bg-purple-50/80 rounded-xl p-2.5 border border-purple-100">
+                      <div className="text-[9px] text-purple-600 font-semibold mb-1.5">📄 الوثائق المرتبطة ({overlayIntervention.documents.length})</div>
+                      <div className="space-y-1.5">
+                        {overlayIntervention.documents.map((doc) => (
+                          <div key={doc.id} className="flex items-center gap-2 bg-white/70 rounded-lg px-2.5 py-1.5 border border-purple-50">
+                            <div className="w-5 h-5 rounded-md flex items-center justify-center text-[10px] flex-shrink-0" style={{ backgroundColor: '#7c3aed15' }}>
+                              {doc.document?.typeFichier === 'pdf' ? '📕' : doc.document?.typeFichier?.startsWith('image') ? '🖼️' : '📄'}
+                            </div>
+                            <span className="text-xs text-slate-700 font-medium truncate flex-1">{doc.document?.titre || doc.document?.nomFichier || '—'}</span>
+                            {doc.document?.tailleFichier ? (
+                              <span className="text-[9px] text-purple-500 flex-shrink-0">
+                                {(doc.document.tailleFichier / 1024).toFixed(0)} ك.ب
+                              </span>
+                            ) : null}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Photos */}
+                  {overlayIntervention.photos && overlayIntervention.photos.length > 0 && (
+                    <div className="bg-cyan-50/80 rounded-xl p-2.5 border border-cyan-100">
+                      <div className="text-[9px] text-cyan-600 font-semibold mb-1.5">📸 الصور ({overlayIntervention.photos.length})</div>
+                      <div className="grid grid-cols-3 gap-1.5">
+                        {overlayIntervention.photos.slice(0, 6).map((photo) => (
+                          <button
+                            key={photo.id}
+                            onClick={() => setViewingPhoto(photo)}
+                            className="relative aspect-square rounded-lg overflow-hidden border border-cyan-100 hover:ring-2 hover:ring-cyan-300 transition-all group"
+                          >
+                            <img
+                              src={photo.url}
+                              alt={photo.caption || 'صورة التدخل'}
+                              className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                            />
+                            {photo.type === 'BEFORE' && (
+                              <span className="absolute top-0.5 right-0.5 bg-amber-500 text-white text-[7px] font-bold px-1 py-0.5 rounded-md">قبل</span>
+                            )}
+                            {photo.type === 'AFTER' && (
+                              <span className="absolute top-0.5 right-0.5 bg-emerald-500 text-white text-[7px] font-bold px-1 py-0.5 rounded-md">بعد</span>
+                            )}
+                          </button>
+                        ))}
+                        {overlayIntervention.photos.length > 6 && (
+                          <div className="aspect-square rounded-lg bg-cyan-100/60 flex items-center justify-center border border-cyan-100">
+                            <span className="text-xs font-bold text-cyan-600">+{overlayIntervention.photos.length - 6}</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
                   {/* Action Buttons */}
                   <div className="flex gap-2 pt-1">
                     <motion.button
@@ -892,6 +1023,56 @@ function MapView({ interventions, quartiers, selectedCommune, canSeeAllCommunes,
                   </div>
                 </div>
               </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* 5. Photo Viewer Modal */}
+        <AnimatePresence>
+          {viewingPhoto && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4"
+              onClick={() => setViewingPhoto(null)}
+            >
+              <motion.div
+                initial={{ scale: 0.8, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.8, opacity: 0 }}
+                transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+                className="relative max-w-lg max-h-[80vh]"
+                onClick={(e) => e.stopPropagation()}
+                dir="rtl"
+              >
+                <img
+                  src={viewingPhoto.url}
+                  alt={viewingPhoto.caption || 'صورة التدخل'}
+                  className="max-w-full max-h-[75vh] object-contain rounded-2xl shadow-2xl"
+                />
+                <div className="absolute top-3 right-3 flex items-center gap-2">
+                  {viewingPhoto.type === 'BEFORE' && (
+                    <span className="bg-amber-500 text-white text-xs font-bold px-2.5 py-1 rounded-lg shadow-lg">قبل التدخل</span>
+                  )}
+                  {viewingPhoto.type === 'AFTER' && (
+                    <span className="bg-emerald-500 text-white text-xs font-bold px-2.5 py-1 rounded-lg shadow-lg">بعد التدخل</span>
+                  )}
+                  <button
+                    onClick={() => setViewingPhoto(null)}
+                    className="w-8 h-8 bg-black/50 hover:bg-black/70 text-white rounded-xl flex items-center justify-center transition-colors backdrop-blur-sm"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                    </svg>
+                  </button>
+                </div>
+                {viewingPhoto.caption && (
+                  <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-4 rounded-b-2xl">
+                    <p className="text-white text-sm font-medium">{viewingPhoto.caption}</p>
+                  </div>
+                )}
+              </motion.div>
             </motion.div>
           )}
         </AnimatePresence>

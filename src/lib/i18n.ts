@@ -111,7 +111,7 @@ export const translations = {
     windSpeed: 'سرعة الرياح',
 
     // Footer
-    footerText: '© 2025 عمالة سلا — قسم حفظ الصحة والبيئة',
+    footerText: '© 2026 عمالة سلا — قسم حفظ الصحة والبيئة',
     footerSystem: 'نظام تدبير عمليات 3D ⚡ مكتب مكافحة الجرذان • مكافحة الحشرات • التطهير',
   },
   fr: {
@@ -226,7 +226,7 @@ export const translations = {
     windSpeed: 'Vent',
 
     // Footer
-    footerText: '© 2025 Préfecture de Salé — Service Hygiène et Environnement',
+    footerText: '© 2026 Préfecture de Salé — Service Hygiène et Environnement',
     footerSystem: 'Système de gestion 3D ⚡ Bureau Dératisation • Désinsectisation • Désinfection',
   }
 } as const

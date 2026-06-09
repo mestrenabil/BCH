@@ -72,6 +72,16 @@ export async function GET(request: NextRequest) {
                 }
               }
             }
+          },
+          photos: {
+            select: {
+              id: true,
+              interventionId: true,
+              url: true,
+              caption: true,
+              type: true,
+              createdAt: true,
+            }
           }
         }
       }),

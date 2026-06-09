@@ -13,6 +13,10 @@ export interface InterventionMaterial {
   product: { id: string; nom: string; unite: string; quantiteStock: number }
 }
 
+export interface InterventionPhoto {
+  id: string; interventionId: string; url: string; caption: string | null; type: string; createdAt: string
+}
+
 export interface InterventionDocument {
   id: string
   interventionId: string
@@ -40,6 +44,7 @@ export interface Intervention {
   coutMainOeuvre?: number | null; coutMateriaux?: number | null; coutTotal?: number | null
   materials?: InterventionMaterial[]
   documents?: InterventionDocument[]
+  photos?: InterventionPhoto[]
 }
 
 export interface CommuneBreakdown {

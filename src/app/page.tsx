@@ -294,7 +294,7 @@ function LoginPage({ onLogin }: { onLogin: (user: AuthUser) => void }) {
 
         {/* Footer */}
         <p className="text-center text-emerald-200/30 text-xs mt-6">
-          © 2025 عمالة سلا — نظام تدبير عمليات 3D
+          © 2026 عمالة سلا — نظام تدبير عمليات 3D
         </p>
       </motion.div>
     </div>
