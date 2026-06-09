@@ -31,6 +31,8 @@ const CalendarView = dynamic(() => import('./calendar-view'), { ssr: false })
 const KpiView = dynamic(() => import('./kpi-view'), { ssr: false })
 const AgentsView = dynamic(() => import('./agents-view'), { ssr: false })
 const ComplaintsView = dynamic(() => import('./complaints-view'), { ssr: false })
+const ActivityLogView = dynamic(() => import('./activity-log-view'), { ssr: false })
+const TimelineView = dynamic(() => import('./timeline-view'), { ssr: false })
 
 // ===== LOGIN PAGE =====
 function LoginPage({ onLogin }: { onLogin: (user: AuthUser) => void }) {
@@ -493,6 +495,8 @@ export default function HomePage() {
     { id: 'alerts', labelKey: 'alerts', icon: '⚡', descKey: 'descAlerts', sectionKey: 'sectionTracking' },
     { id: 'export', labelKey: 'export', icon: '📤', descKey: 'descExport', sectionKey: 'sectionReports' },
     { id: 'notifications', labelKey: 'notifications', icon: '🔔', descKey: 'descNotifications', sectionKey: 'sectionReports' },
+    { id: 'activityLog', labelKey: 'activityLog', icon: '📝', descKey: 'descActivityLog', sectionKey: 'sectionReports' },
+    { id: 'timeline', labelKey: 'timeline', icon: '📊', descKey: 'descTimeline', sectionKey: 'sectionReports' },
     { id: 'users', labelKey: 'users', icon: '👥', descKey: 'descUsers', sectionKey: 'sectionAdmin' },
     { id: 'settings', labelKey: 'settings', icon: '⚙️', descKey: 'descSettings', sectionKey: 'sectionAdmin' },
   ]
@@ -869,6 +873,8 @@ export default function HomePage() {
                 {currentView === 'complaints' && <ComplaintsView />}
                 {currentView === 'users' && <UsersView />}
                 {currentView === 'settings' && <SettingsView />}
+                {currentView === 'activityLog' && <ActivityLogView commune={selectedCommune} />}
+                {currentView === 'timeline' && <TimelineView interventions={interventions} commune={selectedCommune} />}
               </motion.div>
             )}
           </AnimatePresence>

@@ -36,6 +36,7 @@ model Intervention {
   documents          InterventionDocument[]
   photos             InterventionPhoto[]
   complaints         Complaint[]
+  comments           InterventionComment[]
 }
 
 model Quartier {
@@ -193,6 +194,31 @@ model Complaint {
   dateReception  DateTime @default(now())
   dateTraitement DateTime?
   observations   String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model ActivityLog {
+  id          String   @id @default(cuid())
+  userId      String?  // who performed the action
+  userName    String   @default("") // name of user
+  action      String   // CREATE, UPDATE, DELETE, LOGIN, LOGOUT, EXPORT, IMPORT, STATUS_CHANGE
+  entityType  String   // INTERVENTION, PRODUCT, AGENT, USER, DOCUMENT, COMPLAINT, SETTINGS
+  entityId    String?  // ID of affected entity
+  details     String   @default("") // JSON string with change details
+  commune     String   @default("") // which commune
+  ipAddress   String?
+  createdAt   DateTime @default(now())
+}
+
+model InterventionComment {
+  id             String   @id @default(cuid())
+  interventionId String
+  intervention   Intervention @relation(fields: [interventionId], references: [id], onDelete: Cascade)
+  authorName     String   // name of commenter
+  authorRole     String   @default("") // role
+  content        String   // comment text
+  type           String   @default("COMMENT") // COMMENT, NOTE, STATUS_CHANGE
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 }

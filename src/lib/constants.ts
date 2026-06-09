@@ -99,6 +99,56 @@ export const MONTH_NAMES_AR = [
 
 export const CHART_COLORS = ['#10b981', '#f59e0b', '#ef4444', '#3b82f6', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16']
 
+// ===== ACTIVITY LOG CONSTANTS =====
+export const ACTIVITY_ACTION_LABELS: Record<string, string> = {
+  CREATE: 'إنشاء',
+  UPDATE: 'تحديث',
+  DELETE: 'حذف',
+  LOGIN: 'دخول',
+  LOGOUT: 'خروج',
+  EXPORT: 'تصدير',
+  IMPORT: 'استيراد',
+  STATUS_CHANGE: 'تغيير الحالة',
+}
+export const ACTIVITY_ACTION_COLORS: Record<string, string> = {
+  CREATE: '#10b981',
+  UPDATE: '#3b82f6',
+  DELETE: '#ef4444',
+  LOGIN: '#8b5cf6',
+  LOGOUT: '#6b7280',
+  EXPORT: '#f59e0b',
+  IMPORT: '#06b6d4',
+  STATUS_CHANGE: '#ec4899',
+}
+export const ACTIVITY_ACTION_ICONS: Record<string, string> = {
+  CREATE: '➕',
+  UPDATE: '✏️',
+  DELETE: '🗑️',
+  LOGIN: '🔐',
+  LOGOUT: '🚪',
+  EXPORT: '📤',
+  IMPORT: '📥',
+  STATUS_CHANGE: '🔄',
+}
+export const ENTITY_TYPE_LABELS: Record<string, string> = {
+  INTERVENTION: 'تدخل',
+  PRODUCT: 'منتج',
+  AGENT: 'عون',
+  USER: 'مستخدم',
+  DOCUMENT: 'مستند',
+  COMPLAINT: 'شكاية',
+  SETTINGS: 'إعدادات',
+}
+export const ENTITY_TYPE_ICONS: Record<string, string> = {
+  INTERVENTION: '📋',
+  PRODUCT: '📦',
+  AGENT: '👤',
+  USER: '👥',
+  DOCUMENT: '📄',
+  COMPLAINT: '📢',
+  SETTINGS: '⚙️',
+}
+
 // ===== INTERVENTION TEMPLATES =====
 export const INTERVENTION_TEMPLATES = [
   {
@@ -158,3 +208,28 @@ export const cardVariants = {
   animate: { opacity: 1, scale: 1, transition: { duration: 0.3 } },
   hover: { scale: 1.02, transition: { duration: 0.2 } },
 }
+
+// Quality score thresholds
+export const QUALITY_SCORE_THRESHOLDS = {
+  excellent: 90,
+  good: 70,
+  average: 50,
+  poor: 0,
+}
+
+export const QUALITY_SCORE_LABELS: Record<string, { ar: string; fr: string; color: string; icon: string }> = {
+  excellent: { ar: 'ممتاز', fr: 'Excellent', color: '#10b981', icon: '🌟' },
+  good: { ar: 'جيد', fr: 'Bon', color: '#3b82f6', icon: '👍' },
+  average: { ar: 'متوسط', fr: 'Moyen', color: '#f59e0b', icon: '😐' },
+  poor: { ar: 'ضعيف', fr: 'Faible', color: '#ef4444', icon: '⚠️' },
+}
+
+// Recurrence patterns
+export const RECURRENCE_PATTERNS = [
+  { key: 'NONE', ar: 'بدون تكرار', fr: 'Sans répétition', icon: '➖' },
+  { key: 'DAILY', ar: 'يومي', fr: 'Quotidien', icon: '📅' },
+  { key: 'WEEKLY', ar: 'أسبوعي', fr: 'Hebdomadaire', icon: '📆' },
+  { key: 'BIWEEKLY', ar: 'نصف شهري', fr: 'Bimensuel', icon: '🗓️' },
+  { key: 'MONTHLY', ar: 'شهري', fr: 'Mensuel', icon: '📋' },
+  { key: 'QUARTERLY', ar: 'ربعي', fr: 'Trimestriel', icon: '📊' },
+]

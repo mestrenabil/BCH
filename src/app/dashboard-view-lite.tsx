@@ -16,6 +16,17 @@ import {
   cardVariants,
 } from '@/lib/constants'
 
+// Helper: get Hijri date
+function getHijriDate(date: Date): string {
+  try {
+    return new Intl.DateTimeFormat('ar-SA-u-ca-islamic', {
+      day: 'numeric', month: 'long', year: 'numeric'
+    }).format(date)
+  } catch {
+    return ''
+  }
+}
+
 // Helper: format relative time in Arabic
 function formatRelativeTime(dateStr: string): string {
   const now = new Date()
@@ -66,6 +77,32 @@ function DashboardView({ stats, onNavigate, selectedCommune, canSeeAllCommunes, 
   const [weather, setWeather] = useState<WeatherData | null>(null)
   const [weatherLoading, setWeatherLoading] = useState(true)
   const { language } = useAppStore()
+  // Live clock state
+  const [currentTime, setCurrentTime] = useState(new Date())
+  // Agents for leaderboard
+  const [agents, setAgents] = useState<{ id: string; nom: string; prenom: string; commune: string; fonction: string; actif: boolean }[]>([])
+
+  // Live clock
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(new Date()), 1000)
+    return () => clearInterval(timer)
+  }, [])
+
+  // Fetch agents for leaderboard
+  useEffect(() => {
+    const fetchAgents = async () => {
+      try {
+        const params = new URLSearchParams()
+        if (selectedCommune !== 'ALL') params.set('commune', selectedCommune)
+        const res = await fetch(`/api/agents?${params.toString()}`)
+        if (res.ok) {
+          const data = await res.json()
+          setAgents(data.agents || data || [])
+        }
+      } catch { /* ignore */ }
+    }
+    fetchAgents()
+  }, [selectedCommune])
 
   // Fetch weather data
   useEffect(() => {
@@ -242,6 +279,31 @@ function DashboardView({ stats, onNavigate, selectedCommune, canSeeAllCommunes, 
             <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5 4v3H4a2 2 0 00-2 2v3a2 2 0 002 2h1v2a2 2 0 002 2h6a2 2 0 002-2v-2h1a2 2 0 002-2V9a2 2 0 00-2-2h-1V4a2 2 0 00-2-2H7a2 2 0 00-2 2zm8 0H7v3h6V4zm0 8H7v4h6v-4z" clipRule="evenodd" /></svg>
             طباعة التقرير
           </button>
+        </div>
+      </motion.div>
+
+      {/* Live Clock & Hijri Date */}
+      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}
+        className="bg-gradient-to-l from-slate-800 via-slate-700 to-slate-800 rounded-2xl p-4 shadow-lg relative overflow-hidden">
+        <div className="absolute top-0 left-0 w-24 h-24 bg-white/5 rounded-full -translate-x-8 -translate-y-8" />
+        <div className="relative z-10 flex items-center justify-between flex-wrap gap-3">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 rounded-xl bg-white/10 flex items-center justify-center">
+              <span className="text-2xl">🕐</span>
+            </div>
+            <div>
+              <div className="text-2xl font-bold text-white font-mono tracking-wider">
+                {currentTime.toLocaleTimeString('ar-MA', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+              </div>
+              <div className="text-[11px] text-slate-300">
+                {currentTime.toLocaleDateString('ar-MA', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+              </div>
+            </div>
+          </div>
+          <div className="text-left">
+            <div className="text-[10px] text-emerald-300/70 font-semibold uppercase tracking-wider">التاريخ الهجري</div>
+            <div className="text-sm text-emerald-200 font-bold">{getHijriDate(currentTime)}</div>
+          </div>
         </div>
       </motion.div>
 
@@ -682,6 +744,106 @@ function DashboardView({ stats, onNavigate, selectedCommune, canSeeAllCommunes, 
           ))}
         </motion.div>
       </div>
+
+      {/* Agent Performance Leaderboard */}
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.55 }}
+        className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+        <div className="bg-gradient-to-l from-amber-500 to-orange-500 text-white px-5 py-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="text-lg">🏆</span>
+              <h3 className="font-bold text-sm">لوحة المتصدرين — الأعوان</h3>
+            </div>
+            <span className="text-[10px] text-white/70 font-medium">{agents.filter(a => a.actif).length} عون نشط</span>
+          </div>
+        </div>
+        <div className="p-4 max-h-72 overflow-y-auto">
+          {agents.filter(a => a.actif).slice(0, 10).map((agent, i) => {
+            const agentInterventions = stats.recent.filter(inv => inv.agentNom === `${agent.prenom} ${agent.nom}`.trim() || inv.agentNom === agent.nom)
+            const completedCount = agentInterventions.filter(inv => inv.statut === 'TERMINEE').length
+            const rank = i + 1
+            const medal = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : ''
+            return (
+              <div key={agent.id} className="flex items-center gap-3 py-2 border-b border-slate-50 last:border-0">
+                <div className="w-7 h-7 rounded-full bg-gradient-to-br from-amber-100 to-amber-200 flex items-center justify-center text-xs font-bold text-amber-700 flex-shrink-0">
+                  {medal || rank}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-semibold text-slate-700 truncate">{agent.nom} {agent.prenom}</div>
+                  <div className="text-[10px] text-slate-400">{agent.fonction} • {agent.commune || '—'}</div>
+                </div>
+                <div className="text-right flex-shrink-0">
+                  <div className="text-sm font-bold text-emerald-600">{completedCount}</div>
+                  <div className="text-[9px] text-slate-400">منجز</div>
+                </div>
+              </div>
+            )
+          })}
+          {agents.filter(a => a.actif).length === 0 && (
+            <div className="text-center py-6 text-slate-400 text-sm">لا توجد بيانات أعوان</div>
+          )}
+        </div>
+      </motion.div>
+
+      {/* Quality Score */}
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.6 }}
+        className="bg-white rounded-2xl border border-slate-100 p-6 shadow-sm">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h3 className="font-bold text-slate-800">🌟 نقاط الجودة</h3>
+            <p className="text-xs text-slate-400">تقييم شامل لجودة التدخلات</p>
+          </div>
+        </div>
+        {(() => {
+          const completionPct = stats.total > 0 ? ((stats.byStatut.TERMINEE || 0) / stats.total) * 100 : 0
+          const cancelPct = stats.total > 0 ? ((stats.byStatut.ANNULEE || 0) / stats.total) * 100 : 0
+          const inProgressPct = stats.total > 0 ? ((stats.byStatut.EN_COURS || 0) / stats.total) * 100 : 0
+          const qualityScore = Math.min(100, Math.max(0, Math.round(completionPct - cancelPct * 2 + inProgressPct * 0.5)))
+          const qualityLevel = qualityScore >= 90 ? { label: 'ممتاز', color: '#10b981', icon: '🌟' } 
+            : qualityScore >= 70 ? { label: 'جيد', color: '#3b82f6', icon: '👍' }
+            : qualityScore >= 50 ? { label: 'متوسط', color: '#f59e0b', icon: '😐' }
+            : { label: 'ضعيف', color: '#ef4444', icon: '⚠️' }
+          return (
+            <div className="flex items-center gap-6">
+              <div className="relative w-28 h-28">
+                <svg className="w-full h-full -rotate-90" viewBox="0 0 100 100">
+                  <circle cx="50" cy="50" r="42" fill="none" stroke="#f1f5f9" strokeWidth="8" />
+                  <motion.circle cx="50" cy="50" r="42" fill="none" stroke={qualityLevel.color} strokeWidth="8"
+                    strokeLinecap="round" initial={{ strokeDasharray: '0 264' }}
+                    animate={{ strokeDasharray: `${qualityScore * 2.64} ${264 - qualityScore * 2.64}` }}
+                    transition={{ duration: 1.5, ease: 'easeOut' }} />
+                </svg>
+                <div className="absolute inset-0 flex flex-col items-center justify-center">
+                  <span className="text-3xl font-bold" style={{ color: qualityLevel.color }}>{qualityScore}</span>
+                  <span className="text-[10px] text-slate-400">من 100</span>
+                </div>
+              </div>
+              <div className="flex-1 space-y-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-lg">{qualityLevel.icon}</span>
+                  <span className="font-bold text-lg" style={{ color: qualityLevel.color }}>{qualityLevel.label}</span>
+                </div>
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-slate-500">نسبة الإنجاز</span>
+                    <span className="font-bold text-emerald-600">{Math.round(completionPct)}%</span>
+                  </div>
+                  <div className="w-full bg-slate-100 rounded-full h-1.5">
+                    <motion.div className="h-full rounded-full bg-emerald-500" initial={{ width: 0 }} animate={{ width: `${completionPct}%` }} transition={{ duration: 1 }} />
+                  </div>
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-slate-500">نسبة الإلغاء</span>
+                    <span className="font-bold text-red-500">{Math.round(cancelPct)}%</span>
+                  </div>
+                  <div className="w-full bg-slate-100 rounded-full h-1.5">
+                    <motion.div className="h-full rounded-full bg-red-400" initial={{ width: 0 }} animate={{ width: `${cancelPct}%` }} transition={{ duration: 1 }} />
+                  </div>
+                </div>
+              </div>
+            </div>
+          )
+        })()}
+      </motion.div>
 
       {/* ===== سجل النشاط الأخير (Recent Activity Timeline) ===== */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }}

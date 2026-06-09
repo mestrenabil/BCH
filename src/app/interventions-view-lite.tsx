@@ -3,7 +3,7 @@
 import React, { useState, useCallback, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { toast } from 'sonner'
-import { type CommuneType } from '@/lib/store'
+import { useAppStore, type CommuneType } from '@/lib/store'
 import {
   type Intervention, type InterventionDocument,
   TYPE_LABELS, TYPE_COLORS, TYPE_ICONS, STATUT_LABELS, STATUT_COLORS,
@@ -178,6 +178,22 @@ function InterventionsView({ interventions, total, page, setPage, onEdit, onRefr
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [bulkStatut, setBulkStatut] = useState('')
   const [bulkOperating, setBulkOperating] = useState(false)
+
+  // Favorites
+  const { favorites, toggleFavorite, isFavorite } = useAppStore()
+  const [showFavoritesOnly, setShowFavoritesOnly] = useState(false)
+
+  // Advanced filter
+  const [showAdvancedFilter, setShowAdvancedFilter] = useState(false)
+  const [filterDateFrom, setFilterDateFrom] = useState('')
+  const [filterDateTo, setFilterDateTo] = useState('')
+  const [filterCostMin, setFilterCostMin] = useState('')
+  const [filterCostMax, setFilterCostMax] = useState('')
+  const [filterAgent, setFilterAgent] = useState('')
+
+  // Comparison
+  const [comparisonIds, setComparisonIds] = useState<string[]>([])
+  const [showComparison, setShowComparison] = useState(false)
 
   const fetchLinkedDocs = useCallback(async (interventionId: string) => {
     try {
@@ -379,11 +395,22 @@ function InterventionsView({ interventions, total, page, setPage, onEdit, onRefr
     fetchQuartiers()
   }, [localCommuneFilter])
 
-  const filteredInterventions = interventions.filter(i => 
-    (filterStatut === 'ALL' || i.statut === filterStatut) && 
-    (localCommuneFilter === 'ALL' || i.commune === localCommuneFilter) &&
-    (quartierFilter === 'ALL' || i.quartier === quartierFilter)
-  )
+  const filteredInterventions = (() => {
+    let result = interventions.filter(i => 
+      (filterStatut === 'ALL' || i.statut === filterStatut) && 
+      (localCommuneFilter === 'ALL' || i.commune === localCommuneFilter) &&
+      (quartierFilter === 'ALL' || i.quartier === quartierFilter)
+    )
+    // Favorites filter
+    if (showFavoritesOnly) result = result.filter(i => favorites.includes(i.id))
+    // Advanced filters
+    if (filterDateFrom) result = result.filter(i => i.date >= filterDateFrom)
+    if (filterDateTo) result = result.filter(i => i.date <= filterDateTo)
+    if (filterCostMin) result = result.filter(i => (i.coutTotal || 0) >= Number(filterCostMin))
+    if (filterCostMax) result = result.filter(i => (i.coutTotal || 0) <= Number(filterCostMax))
+    if (filterAgent) result = result.filter(i => (i.agentNom || '').toLowerCase().includes(filterAgent.toLowerCase()))
+    return result
+  })()
 
   // Print handler for single intervention
   const handlePrintIntervention = useCallback((intervention: Intervention) => {
@@ -539,8 +566,88 @@ function InterventionsView({ interventions, total, page, setPage, onEdit, onRefr
               <option key={q.id} value={q.nom}>{q.nom}</option>
             ))}
           </select>
+          <button
+            onClick={() => setShowFavoritesOnly(!showFavoritesOnly)}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+              showFavoritesOnly ? 'bg-yellow-100 text-yellow-700 border border-yellow-300' : 'bg-slate-50 text-slate-500 border border-slate-200'
+            }`}
+          >
+            ⭐ المفضلة {favorites.length > 0 && `(${favorites.length})`}
+          </button>
+          <button
+            onClick={() => setShowAdvancedFilter(!showAdvancedFilter)}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+              showAdvancedFilter ? 'bg-emerald-100 text-emerald-700 border border-emerald-300' : 'bg-slate-50 text-slate-500 border border-slate-200'
+            }`}
+          >
+            🔍 فلتر متقدم
+          </button>
         </div>
       </motion.div>
+
+      {/* Advanced Filter Panel */}
+      <AnimatePresence>
+        {showAdvancedFilter && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            className="overflow-hidden"
+          >
+            <div className="bg-slate-50 rounded-xl p-4 border border-slate-200 mb-4" dir="rtl">
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                <div>
+                  <label className="text-[10px] font-bold text-slate-500 mb-1 block">من تاريخ</label>
+                  <input type="date" value={filterDateFrom} onChange={e => setFilterDateFrom(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white" />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-slate-500 mb-1 block">إلى تاريخ</label>
+                  <input type="date" value={filterDateTo} onChange={e => setFilterDateTo(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white" />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-slate-500 mb-1 block">الحد الأدنى للتكلفة</label>
+                  <input type="number" value={filterCostMin} onChange={e => setFilterCostMin(e.target.value)}
+                    placeholder="0" className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white" />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-slate-500 mb-1 block">الحد الأقصى للتكلفة</label>
+                  <input type="number" value={filterCostMax} onChange={e => setFilterCostMax(e.target.value)}
+                    placeholder="∞" className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white" />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-slate-500 mb-1 block">اسم العون</label>
+                  <input type="text" value={filterAgent} onChange={e => setFilterAgent(e.target.value)}
+                    placeholder="ابحث عن عون..." className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white" dir="rtl" />
+                </div>
+              </div>
+              <div className="flex items-center gap-2 mt-3">
+                <button onClick={() => { setFilterDateFrom(''); setFilterDateTo(''); setFilterCostMin(''); setFilterCostMax(''); setFilterAgent('') }}
+                  className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-600 hover:bg-slate-50 transition-colors">
+                  🔄 إعادة تعيين
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Print Styles & Header */}
+      <style jsx>{`
+        @media print {
+          .no-print { display: none !important; }
+          .print-only { display: block !important; }
+          body { background: white !important; }
+        }
+        .print-only { display: none; }
+      `}</style>
+      <div className="print-only mb-6" dir="rtl">
+        <div className="text-center border-b-2 border-slate-800 pb-4 mb-4">
+          <h1 className="text-2xl font-bold">عمالة سلا — قسم حفظ الصحة والبيئة</h1>
+          <p className="text-sm text-slate-600">تقرير التدخلات — {new Date().toLocaleDateString('ar-MA')}</p>
+        </div>
+      </div>
 
       {/* Summary cards */}
       <div className="flex gap-3 overflow-x-auto pb-2 items-center">
@@ -594,6 +701,14 @@ function InterventionsView({ interventions, total, page, setPage, onEdit, onRefr
                 </div>
                 <div className="flex flex-col sm:flex-row items-start justify-between gap-3">
                   <div className="flex items-start gap-3 flex-1 min-w-0">
+                    {/* Favorite button */}
+                    <button
+                      onClick={(e) => { e.stopPropagation(); toggleFavorite(intervention.id) }}
+                      className="flex-shrink-0 p-1 hover:bg-yellow-50 rounded-lg transition-colors mt-1"
+                      title={isFavorite(intervention.id) ? 'إزالة من المفضلة' : 'إضافة إلى المفضلة'}
+                    >
+                      <span className="text-sm">{isFavorite(intervention.id) ? '⭐' : '☆'}</span>
+                    </button>
                     <div className="w-11 h-11 rounded-xl flex items-center justify-center text-xl shrink-0"
                       style={{ backgroundColor: TYPE_COLORS[intervention.type] + '12' }}>
                       {TYPE_ICONS[intervention.type]}
@@ -734,6 +849,15 @@ function InterventionsView({ interventions, total, page, setPage, onEdit, onRefr
               )}
               حذف المحدد
             </motion.button>
+            {/* Comparison button */}
+            <button onClick={() => { if (selectedIds.size === 2) { setComparisonIds(Array.from(selectedIds)); setShowComparison(true) } }}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
+                selectedIds.size === 2 ? 'bg-violet-600 text-white hover:bg-violet-500' : 'bg-slate-600 text-slate-300 cursor-not-allowed'
+              }`}
+              disabled={selectedIds.size !== 2}
+            >
+              ⚖️ مقارنة
+            </button>
             <button
               onClick={() => { setSelectedIds(new Set()); setBulkStatut('') }}
               className="p-2 rounded-xl hover:bg-slate-100 transition-colors text-slate-400 hover:text-slate-600"
@@ -743,6 +867,71 @@ function InterventionsView({ interventions, total, page, setPage, onEdit, onRefr
                 <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
               </svg>
             </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Comparison Modal */}
+      <AnimatePresence>
+        {showComparison && comparisonIds.length === 2 && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4"
+            onClick={() => setShowComparison(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[80vh] overflow-y-auto"
+              onClick={e => e.stopPropagation()}
+              dir="rtl"
+            >
+              <div className="bg-gradient-to-l from-violet-600 to-purple-600 text-white p-4 rounded-t-2xl">
+                <div className="flex items-center justify-between">
+                  <h3 className="font-bold text-lg">⚖️ مقارنة التدخلات</h3>
+                  <button onClick={() => setShowComparison(false)} className="p-1 hover:bg-white/20 rounded-lg">✕</button>
+                </div>
+              </div>
+              <div className="p-4">
+                <div className="grid grid-cols-2 gap-4">
+                  {comparisonIds.map(id => {
+                    const inv = filteredInterventions.find(i => i.id === id)
+                    if (!inv) return null
+                    return (
+                      <div key={id} className="border border-slate-200 rounded-xl p-4">
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-2 mb-3">
+                            <span className="text-lg">{TYPE_ICONS[inv.type]}</span>
+                            <span className="font-bold text-sm" style={{ color: TYPE_COLORS[inv.type] }}>{TYPE_LABELS[inv.type]}</span>
+                          </div>
+                          {[
+                            ['المرجع', inv.reference],
+                            ['الحي', inv.quartier],
+                            ['العنوان', inv.adresse],
+                            ['التاريخ', new Date(inv.date).toLocaleDateString('ar-MA')],
+                            ['الحالة', STATUT_LABELS[inv.statut]],
+                            ['العون', inv.agentNom],
+                            ['المنتج', inv.produitUtilise],
+                            ['الكمية', inv.quantite],
+                            ['المساحة', inv.superficie],
+                            ['عدد الخدمات', String(inv.nombrePrestations)],
+                            ['التكلفة', inv.coutTotal ? `${inv.coutTotal} د.م` : '—'],
+                          ].map(([label, value]) => (
+                            <div key={String(label)} className="flex justify-between text-xs border-b border-slate-50 pb-1">
+                              <span className="text-slate-500">{String(label)}</span>
+                              <span className="font-semibold text-slate-700">{value || '—'}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>

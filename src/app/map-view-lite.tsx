@@ -71,6 +71,37 @@ function MapView({ interventions, quartiers, selectedCommune, canSeeAllCommunes,
   // Photo viewer
   const [viewingPhoto, setViewingPhoto] = useState<InterventionPhoto | null>(null)
 
+  // Heatmap toggle
+  const [showHeatmap, setShowHeatmap] = useState(false)
+
+  // Drawing tools toggle
+  const [showDrawingTools, setShowDrawingTools] = useState(false)
+
+  // Quick stats popup
+  const [showQuickStatsPopup, setShowQuickStatsPopup] = useState(false)
+
+  // Overlay comments
+  const [overlayComments, setOverlayComments] = useState<any[]>([])
+  const [newComment, setNewComment] = useState('')
+  const [commentsLoading, setCommentsLoading] = useState(false)
+
+  // Fetch comments when overlay intervention changes
+  useEffect(() => {
+    if (!overlayIntervention) return
+    const fetchComments = async () => {
+      setCommentsLoading(true)
+      try {
+        const res = await fetch(`/api/interventions/${overlayIntervention.id}/comments`)
+        if (res.ok) {
+          const data = await res.json()
+          setOverlayComments(data.comments || [])
+        }
+      } catch { /* ignore */ }
+      setCommentsLoading(false)
+    }
+    fetchComments()
+  }, [overlayIntervention])
+
   // Debounce search (300ms)
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -631,6 +662,126 @@ function MapView({ interventions, quartiers, selectedCommune, canSeeAllCommunes,
           })}
         </div>
 
+        {/* Heatmap Toggle */}
+        <motion.button
+          initial={{ opacity: 0, x: -20 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ delay: 0.9 }}
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+          onClick={() => setShowHeatmap(!showHeatmap)}
+          className={`absolute top-[168px] left-3 z-30 w-10 h-10 rounded-xl shadow-lg border flex items-center justify-center transition-all text-sm ${
+            showHeatmap
+              ? 'bg-orange-600 text-white border-orange-500 shadow-orange-200'
+              : 'bg-white/90 backdrop-blur-sm text-slate-600 border-slate-200/60 hover:bg-white'
+          }`}
+          title="خريطة حرارية"
+        >
+          🔥
+        </motion.button>
+
+        {/* Drawing Tools Toggle */}
+        <motion.button
+          initial={{ opacity: 0, x: -20 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ delay: 1.0 }}
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+          onClick={() => setShowDrawingTools(!showDrawingTools)}
+          className={`absolute top-[212px] left-3 z-30 w-10 h-10 rounded-xl shadow-lg border flex items-center justify-center transition-all text-sm ${
+            showDrawingTools
+              ? 'bg-violet-600 text-white border-violet-500 shadow-violet-200'
+              : 'bg-white/90 backdrop-blur-sm text-slate-600 border-slate-200/60 hover:bg-white'
+          }`}
+          title="أدوات الرسم"
+        >
+          ✏️
+        </motion.button>
+
+        {/* Drawing Tools Panel */}
+        <AnimatePresence>
+          {showDrawingTools && (
+            <motion.div
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              className="absolute top-[260px] left-3 z-30 bg-white/95 backdrop-blur-sm rounded-xl shadow-lg border border-slate-200/60 p-3 space-y-2"
+              dir="rtl"
+            >
+              <p className="text-[10px] font-bold text-slate-500 mb-1">أدوات الرسم</p>
+              <button className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-violet-50 text-xs text-slate-600 transition-colors">
+                🔵 دائرة
+              </button>
+              <button className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-violet-50 text-xs text-slate-600 transition-colors">
+                ⬜ مستطيل
+              </button>
+              <button className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-violet-50 text-xs text-slate-600 transition-colors">
+                📍 علامة
+              </button>
+              <button className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-red-50 text-xs text-red-500 transition-colors">
+                🗑️ مسح الكل
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Quick Stats Floating Button */}
+        <motion.button
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.8 }}
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+          onClick={() => setShowQuickStatsPopup(!showQuickStatsPopup)}
+          className="absolute bottom-4 left-4 z-30 w-12 h-12 bg-emerald-600 text-white rounded-xl shadow-lg shadow-emerald-200 flex items-center justify-center hover:bg-emerald-500 transition-colors"
+          title="إحصائيات سريعة"
+        >
+          📊
+        </motion.button>
+
+        {/* Quick Stats Popup */}
+        <AnimatePresence>
+          {showQuickStatsPopup && (
+            <motion.div
+              initial={{ opacity: 0, y: 20, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 20, scale: 0.95 }}
+              className="absolute bottom-18 left-4 z-30 bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-slate-200/60 p-4 w-64"
+              dir="rtl"
+            >
+              <div className="flex items-center justify-between mb-3">
+                <h4 className="font-bold text-sm text-slate-800">📊 إحصائيات سريعة</h4>
+                <button onClick={() => setShowQuickStatsPopup(false)} className="p-1 hover:bg-slate-100 rounded-lg text-slate-400">✕</button>
+              </div>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-slate-500">إجمالي التدخلات</span>
+                  <span className="text-sm font-bold text-emerald-600">{filteredInterventions.length}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-slate-500">نسبة الإنجاز</span>
+                  <span className="text-sm font-bold text-emerald-600">{completionRate}%</span>
+                </div>
+                {typeCounts.map(t => (
+                  <div key={t.key} className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-xs">{t.icon}</span>
+                      <span className="text-xs text-slate-500">{t.label}</span>
+                    </div>
+                    <span className="text-xs font-bold" style={{ color: t.color }}>{t.count}</span>
+                  </div>
+                ))}
+                <div className="border-t border-slate-100 pt-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-slate-500">الأحياء</span>
+                    <span className="text-xs font-bold text-slate-700">{quartiers.length}</span>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         {/* 3. Collapsible Map Stats Summary Overlay - top center */}
         <AnimatePresence>
           {showMapStats && (
@@ -1024,6 +1175,57 @@ function MapView({ interventions, quartiers, selectedCommune, canSeeAllCommunes,
                             ) : null}
                           </div>
                         ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Comments Section */}
+                  {isSectionVisible('documents') && (
+                    <div className="px-4 pb-3">
+                      <div className="flex items-center gap-1.5 mb-2">
+                        <span className="text-xs">💬</span>
+                        <span className="text-xs font-bold text-slate-700">التعليقات</span>
+                        <span className="text-[10px] text-slate-400">({overlayComments.length})</span>
+                      </div>
+                      <div className="space-y-2 max-h-32 overflow-y-auto">
+                        {overlayComments.map(c => (
+                          <div key={c.id} className="bg-slate-50 rounded-lg p-2">
+                            <div className="flex items-center gap-1.5 mb-1">
+                              <span className="text-[10px] font-bold text-slate-600">{c.authorName}</span>
+                              <span className="text-[9px] text-slate-400">{new Date(c.createdAt).toLocaleDateString('ar-MA')}</span>
+                            </div>
+                            <p className="text-[11px] text-slate-700">{c.content}</p>
+                          </div>
+                        ))}
+                        {overlayComments.length === 0 && !commentsLoading && (
+                          <p className="text-[10px] text-slate-400 text-center py-2">لا توجد تعليقات بعد</p>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2 mt-2">
+                        <input
+                          type="text"
+                          value={newComment}
+                          onChange={e => setNewComment(e.target.value)}
+                          placeholder="أضف تعليقاً..."
+                          className="flex-1 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs outline-none focus:border-emerald-400"
+                          dir="rtl"
+                          onKeyDown={async (e) => {
+                            if (e.key === 'Enter' && newComment.trim() && overlayIntervention) {
+                              try {
+                                const res = await fetch(`/api/interventions/${overlayIntervention.id}/comments`, {
+                                  method: 'POST',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({ authorName: 'مستخدم', content: newComment.trim(), type: 'COMMENT' }),
+                                })
+                                if (res.ok) {
+                                  const data = await res.json()
+                                  setOverlayComments(prev => [data, ...prev])
+                                  setNewComment('')
+                                }
+                              } catch { /* ignore */ }
+                            }
+                          }}
+                        />
                       </div>
                     </div>
                   )}

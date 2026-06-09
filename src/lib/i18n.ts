@@ -113,6 +113,103 @@ export const translations = {
     // Footer
     footerText: '© 2026 عمالة سلا — قسم حفظ الصحة والبيئة',
     footerSystem: 'نظام تدبير عمليات 3D ⚡ مكتب مكافحة الجرذان • مكافحة الحشرات • التطهير',
+
+    // New views
+    activityLog: 'سجل النشاط',
+    timeline: 'الجدول الزمني',
+    descActivityLog: 'تتبع العمليات والتعديلات',
+    descTimeline: 'عرض زمني للتدخلات',
+
+    // New features
+    favorites: 'المفضلة',
+    bulkActions: 'إجراءات جماعية',
+    comparison: 'مقارنة',
+    advancedFilter: 'فلتر متقدم',
+    qualityScore: 'نقاط الجودة',
+    leaderboard: 'لوحة المتصدرين',
+    backup: 'نسخ احتياطي',
+    restore: 'استعادة',
+    heatmap: 'خريطة حرارية',
+    quickStats: 'إحصائيات سريعة',
+    notificationSound: 'صوت الإشعارات',
+    comments: 'تعليقات',
+    drawing: 'أدوات الرسم',
+    printTemplate: 'قالب الطباعة',
+    importData: 'استيراد البيانات',
+    recurrence: 'التكرار',
+    pwaInstall: 'تثبيت التطبيق',
+    qrCode: 'رمز QR',
+    hijriDate: 'التاريخ الهجري',
+    liveClock: 'الساعة الحية',
+
+    // Section headers for new features
+    sectionNewFeatures: '🆕 ميزات جديدة',
+
+    // Bulk action labels
+    selectAll: 'تحديد الكل',
+    deselectAll: 'إلغاء التحديد',
+    deleteSelected: 'حذف المحدد',
+    changeStatus: 'تغيير الحالة',
+    exportSelected: 'تصدير المحدد',
+    selected: 'محدد',
+
+    // Comments
+    addComment: 'إضافة تعليق',
+    commentPlaceholder: 'اكتب تعليقك هنا...',
+    noComments: 'لا توجد تعليقات بعد',
+
+    // Quality
+    excellent: 'ممتاز',
+    good: 'جيد',
+    average: 'متوسط',
+    poor: 'ضعيف',
+
+    // Backup
+    backupCreated: 'تم إنشاء النسخة الاحتياطية',
+    backupRestored: 'تمت الاستعادة',
+    createBackup: 'إنشاء نسخة احتياطية',
+    restoreBackup: 'استعادة من نسخة',
+
+    // Comparison
+    compareInterventions: 'مقارنة التدخلات',
+    selectTwo: 'حدد تدخلين للمقارنة',
+
+    // Timeline
+    interventionTimeline: 'الجدول الزمني للتدخلات',
+    noTimelineData: 'لا توجد بيانات للعرض',
+
+    // Filter
+    dateRange: 'نطاق التاريخ',
+    costRange: 'نطاق التكلفة',
+    applyFilter: 'تطبيق الفلتر',
+    resetFilter: 'إعادة تعيين',
+
+    // QR
+    generateQR: 'إنشاء رمز QR',
+    scanQR: 'مسح رمز QR',
+
+    // Recurrence
+    recurring: 'متكرر',
+    daily: 'يومي',
+    weekly: 'أسبوعي',
+    monthly: 'شهري',
+    customRecurrence: 'مخصص',
+
+    // Import
+    importCSV: 'استيراد من CSV',
+    dragDropFile: 'اسحب الملف هنا أو انقر للتحديد',
+    importing: 'جاري الاستيراد...',
+    importSuccess: 'تم الاستيراد بنجاح',
+    importError: 'حدث خطأ أثناء الاستيراد',
+
+    // Drawing
+    drawZone: 'رسم منطقة',
+    clearDrawing: 'مسح الرسم',
+    saveZone: 'حفظ المنطقة',
+
+    // Print
+    printReport: 'طباعة التقرير',
+    officialHeader: 'رسمي',
   },
   fr: {
     // Navigation / Section labels
@@ -228,6 +325,103 @@ export const translations = {
     // Footer
     footerText: '© 2026 Préfecture de Salé — Service Hygiène et Environnement',
     footerSystem: 'Système de gestion 3D ⚡ Bureau Dératisation • Désinsectisation • Désinfection',
+
+    // New views
+    activityLog: "Journal d'activité",
+    timeline: 'Chronologie',
+    descActivityLog: 'Suivi des opérations et modifications',
+    descTimeline: 'Vue chronologique des interventions',
+
+    // New features
+    favorites: 'Favoris',
+    bulkActions: 'Actions groupées',
+    comparison: 'Comparaison',
+    advancedFilter: 'Filtre avancé',
+    qualityScore: 'Score de qualité',
+    leaderboard: 'Classement',
+    backup: 'Sauvegarde',
+    restore: 'Restaurer',
+    heatmap: 'Carte de chaleur',
+    quickStats: 'Statistiques rapides',
+    notificationSound: 'Son de notification',
+    comments: 'Commentaires',
+    drawing: 'Outils de dessin',
+    printTemplate: "Modèle d'impression",
+    importData: 'Importation de données',
+    recurrence: 'Récurrence',
+    pwaInstall: "Installer l'application",
+    qrCode: 'Code QR',
+    hijriDate: 'Date Hijri',
+    liveClock: 'Horloge en direct',
+
+    // Section headers for new features
+    sectionNewFeatures: '🆕 Nouvelles fonctionnalités',
+
+    // Bulk action labels
+    selectAll: 'Tout sélectionner',
+    deselectAll: 'Tout désélectionner',
+    deleteSelected: 'Supprimer la sélection',
+    changeStatus: 'Changer le statut',
+    exportSelected: 'Exporter la sélection',
+    selected: 'sélectionné(s)',
+
+    // Comments
+    addComment: 'Ajouter un commentaire',
+    commentPlaceholder: 'Écrivez votre commentaire...',
+    noComments: 'Aucun commentaire',
+
+    // Quality
+    excellent: 'Excellent',
+    good: 'Bon',
+    average: 'Moyen',
+    poor: 'Faible',
+
+    // Backup
+    backupCreated: 'Sauvegarde créée',
+    backupRestored: 'Restauration effectuée',
+    createBackup: 'Créer une sauvegarde',
+    restoreBackup: 'Restaurer depuis une sauvegarde',
+
+    // Comparison
+    compareInterventions: 'Comparer les interventions',
+    selectTwo: 'Sélectionnez deux interventions à comparer',
+
+    // Timeline
+    interventionTimeline: 'Chronologie des interventions',
+    noTimelineData: 'Aucune donnée à afficher',
+
+    // Filter
+    dateRange: 'Plage de dates',
+    costRange: 'Plage de coûts',
+    applyFilter: 'Appliquer le filtre',
+    resetFilter: 'Réinitialiser',
+
+    // QR
+    generateQR: 'Générer un code QR',
+    scanQR: 'Scanner un code QR',
+
+    // Recurrence
+    recurring: 'Récurrent',
+    daily: 'Quotidien',
+    weekly: 'Hebdomadaire',
+    monthly: 'Mensuel',
+    customRecurrence: 'Personnalisé',
+
+    // Import
+    importCSV: 'Importer depuis CSV',
+    dragDropFile: 'Glissez le fichier ici ou cliquez pour sélectionner',
+    importing: 'Importation en cours...',
+    importSuccess: 'Importation réussie',
+    importError: "Erreur lors de l'importation",
+
+    // Drawing
+    drawZone: 'Dessiner une zone',
+    clearDrawing: 'Effacer le dessin',
+    saveZone: 'Enregistrer la zone',
+
+    // Print
+    printReport: "Imprimer le rapport",
+    officialHeader: 'Officiel',
   }
 } as const
 

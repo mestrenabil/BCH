@@ -14,6 +14,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="ar" dir="rtl" suppressHydrationWarning>
+      <head>
+        <link rel="manifest" href="/manifest.json" />
+        <meta name="theme-color" content="#059669" />
+      </head>
       <body className="antialiased bg-background text-foreground">
         {children}
         <Toaster />

@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { type Language } from './i18n'
 
-export type ViewType = 'dashboard' | 'map' | 'interventions' | 'inventory' | 'reports' | 'documents' | 'users' | 'settings' | 'agents' | 'calendar' | 'kpi' | 'alerts' | 'export' | 'notifications' | 'complaints'
+export type ViewType = 'dashboard' | 'map' | 'interventions' | 'inventory' | 'reports' | 'documents' | 'users' | 'settings' | 'agents' | 'calendar' | 'kpi' | 'alerts' | 'export' | 'notifications' | 'complaints' | 'activityLog' | 'timeline'
 export type InterventionType = 'DERATISATION' | 'DESINSECTISATION' | 'DESINFECTION'
 export type StatutType = 'PLANIFIEE' | 'EN_COURS' | 'TERMINEE' | 'ANNULEE'
 export type CommuneType = 'سلا' | 'سيدي أبي القنادل' | 'عامر'
@@ -67,6 +67,19 @@ export interface AppSettings {
   showWatermark: boolean
   watermarkText: string
   documentFooter: string
+  // Favorites
+  favoriteInterventions: string[] // array of intervention IDs
+  // Quick stats widget
+  showQuickStats: boolean
+  // Notification sounds
+  notificationSoundsEnabled: boolean
+  // Recurrence
+  recurrenceEnabled: boolean
+  // PWA
+  pwaInstallDismissed: boolean
+  // Map
+  mapShowHeatmap: boolean
+  mapShowDrawing: boolean
 }
 
 export interface MapClickCoords {
@@ -120,6 +133,21 @@ interface AppState {
   // Language
   language: Language
   setLanguage: (lang: Language) => void
+  // Favorites
+  favorites: string[]
+  toggleFavorite: (id: string) => void
+  isFavorite: (id: string) => boolean
+  // Bulk selection
+  selectedInterventions: string[]
+  setSelectedInterventions: (ids: string[]) => void
+  toggleInterventionSelection: (id: string) => void
+  clearSelection: () => void
+  // Comparison
+  comparisonIds: string[]
+  setComparisonIds: (ids: string[]) => void
+  // Quick stats
+  showQuickStatsWidget: boolean
+  setShowQuickStatsWidget: (show: boolean) => void
 }
 
 export const CURRENT_YEAR = new Date().getFullYear().toString()
@@ -168,6 +196,13 @@ export const DEFAULT_SETTINGS: AppSettings = {
   showWatermark: false,
   watermarkText: 'BCH',
   documentFooter: '',
+  favoriteInterventions: [],
+  showQuickStats: true,
+  notificationSoundsEnabled: true,
+  recurrenceEnabled: true,
+  pwaInstallDismissed: false,
+  mapShowHeatmap: false,
+  mapShowDrawing: false,
 }
 
 export const useAppStore = create<AppState>((set, get) => {
@@ -288,6 +323,30 @@ export const useAppStore = create<AppState>((set, get) => {
     set({ language: lang })
     try { localStorage.setItem('app-language', lang) } catch { /* ignore */ }
   },
+  // Favorites — persisted in localStorage
+  favorites: typeof window !== 'undefined' ? JSON.parse(localStorage.getItem('favorite-interventions') || '[]') : [],
+  toggleFavorite: (id) => set((state) => {
+    const current = state.favorites
+    const updated = current.includes(id) ? current.filter(f => f !== id) : [...current, id]
+    try { localStorage.setItem('favorite-interventions', JSON.stringify(updated)) } catch { /* ignore */ }
+    return { favorites: updated }
+  }),
+  isFavorite: (id) => get().favorites.includes(id),
+  // Bulk selection
+  selectedInterventions: [],
+  setSelectedInterventions: (ids) => set({ selectedInterventions: ids }),
+  toggleInterventionSelection: (id) => set((state) => {
+    const current = state.selectedInterventions
+    const updated = current.includes(id) ? current.filter(f => f !== id) : [...current, id]
+    return { selectedInterventions: updated }
+  }),
+  clearSelection: () => set({ selectedInterventions: [] }),
+  // Comparison
+  comparisonIds: [],
+  setComparisonIds: (ids) => set({ comparisonIds: ids }),
+  // Quick stats
+  showQuickStatsWidget: true,
+  setShowQuickStatsWidget: (show) => set({ showQuickStatsWidget: show }),
 }})
 
 // Hydrate persisted values from localStorage on client
@@ -299,5 +358,9 @@ if (typeof window !== 'undefined') {
   try {
     const lang = localStorage.getItem('app-language')
     if (lang === 'fr' || lang === 'ar') useAppStore.setState({ language: lang as Language })
+  } catch { /* ignore */ }
+  try {
+    const favs = localStorage.getItem('favorite-interventions')
+    if (favs) useAppStore.setState({ favorites: JSON.parse(favs) })
   } catch { /* ignore */ }
 }
