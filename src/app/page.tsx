@@ -483,7 +483,7 @@ export default function HomePage() {
     { id: 'dashboard', labelKey: 'dashboard', icon: '📊', descKey: 'descDashboard', sectionKey: 'sectionMain' },
     { id: 'map', labelKey: 'map', icon: '🗺️', descKey: 'descMap', sectionKey: 'sectionMain' },
     { id: 'interventions', labelKey: 'interventions', icon: '📋', descKey: 'descInterventions', sectionKey: 'sectionMain' },
-    { id: 'agents', labelKey: 'agents', icon: '👷', descKey: 'descAgents', sectionKey: 'sectionMain' },
+    { id: 'agents', labelKey: 'agents', icon: '👥', descKey: 'descAgents', sectionKey: 'sectionMain' },
     { id: 'inventory', labelKey: 'inventory', icon: '📦', descKey: 'descInventory', sectionKey: 'sectionMain' },
     { id: 'documents', labelKey: 'documents', icon: '📁', descKey: 'descDocuments', sectionKey: 'sectionMain' },
     { id: 'calendar', labelKey: 'calendar', icon: '📅', descKey: 'descCalendar', sectionKey: 'sectionMain' },

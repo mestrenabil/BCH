@@ -981,6 +981,82 @@ function InterventionsView({ interventions, total, page, setPage, onEdit, onRefr
                   )}
                 </div>
 
+                {/* Intervention History/Timeline */}
+                <div className="bg-slate-50 rounded-xl p-3 border border-slate-100">
+                  <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-2.5">📜 تاريخ التدخل</div>
+                  <div className="space-y-0">
+                    {/* Creation */}
+                    <div className="flex items-start gap-3">
+                      <div className="flex flex-col items-center">
+                        <div className="w-6 h-6 rounded-full bg-emerald-500 flex items-center justify-center text-white text-[10px]">✓</div>
+                        <div className="w-px h-full bg-slate-200 mt-1" />
+                      </div>
+                      <div className="flex-1 pb-3">
+                        <p className="text-xs font-bold text-slate-700">إنشاء التدخل</p>
+                        <p className="text-[10px] text-slate-400">{new Date(detailIntervention.createdAt).toLocaleDateString('ar-MA')} — {new Date(detailIntervention.createdAt).toLocaleTimeString('ar-MA', { hour: '2-digit', minute: '2-digit' })}</p>
+                      </div>
+                    </div>
+                    {/* Planned */}
+                    <div className="flex items-start gap-3">
+                      <div className="flex flex-col items-center">
+                        <div className="w-6 h-6 rounded-full flex items-center justify-center text-white text-[10px]" style={{ backgroundColor: STATUT_COLORS['PLANIFIEE'] }}>📋</div>
+                        <div className="w-px h-full bg-slate-200 mt-1" />
+                      </div>
+                      <div className="flex-1 pb-3">
+                        <p className="text-xs font-bold text-slate-700">تدخل مبرمج</p>
+                        <p className="text-[10px] text-slate-400">📅 {new Date(detailIntervention.date).toLocaleDateString('ar-MA')}</p>
+                      </div>
+                    </div>
+                    {/* In Progress (show if status >= EN_COURS) */}
+                    {(detailIntervention.statut === 'EN_COURS' || detailIntervention.statut === 'TERMINEE') && (
+                      <div className="flex items-start gap-3">
+                        <div className="flex flex-col items-center">
+                          <div className="w-6 h-6 rounded-full flex items-center justify-center text-white text-[10px]" style={{ backgroundColor: STATUT_COLORS['EN_COURS'] }}>⏳</div>
+                          <div className="w-px h-full bg-slate-200 mt-1" />
+                        </div>
+                        <div className="flex-1 pb-3">
+                          <p className="text-xs font-bold text-slate-700">بدء التنفيذ</p>
+                          <p className="text-[10px] text-slate-400">👤 {detailIntervention.agentNom}</p>
+                        </div>
+                      </div>
+                    )}
+                    {/* Completed */}
+                    {detailIntervention.statut === 'TERMINEE' && (
+                      <div className="flex items-start gap-3">
+                        <div className="flex flex-col items-center">
+                          <div className="w-6 h-6 rounded-full flex items-center justify-center text-white text-[10px]" style={{ backgroundColor: STATUT_COLORS['TERMINEE'] }}>✅</div>
+                        </div>
+                        <div className="flex-1">
+                          <p className="text-xs font-bold text-slate-700">تم الإنجاز</p>
+                          <p className="text-[10px] text-slate-400">🎉 تدخل منجز بنجاح</p>
+                        </div>
+                      </div>
+                    )}
+                    {/* Cancelled */}
+                    {detailIntervention.statut === 'ANNULEE' && (
+                      <div className="flex items-start gap-3">
+                        <div className="flex flex-col items-center">
+                          <div className="w-6 h-6 rounded-full flex items-center justify-center text-white text-[10px]" style={{ backgroundColor: STATUT_COLORS['ANNULEE'] }}>✕</div>
+                        </div>
+                        <div className="flex-1">
+                          <p className="text-xs font-bold text-slate-700">تم الإلغاء</p>
+                          <p className="text-[10px] text-slate-400">تدخل ملغى</p>
+                        </div>
+                      </div>
+                    )}
+                    {/* Last Update */}
+                    {detailIntervention.updatedAt !== detailIntervention.createdAt && (
+                      <div className="flex items-start gap-3 mt-2 pt-2 border-t border-slate-200">
+                        <div className="w-6 h-6 rounded-full bg-slate-300 flex items-center justify-center text-white text-[10px]">🔄</div>
+                        <div className="flex-1">
+                          <p className="text-xs font-bold text-slate-500">آخر تحديث</p>
+                          <p className="text-[10px] text-slate-400">{new Date(detailIntervention.updatedAt).toLocaleDateString('ar-MA')} — {new Date(detailIntervention.updatedAt).toLocaleTimeString('ar-MA', { hour: '2-digit', minute: '2-digit' })}</p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
                 {/* Action Buttons */}
                 <div className="flex gap-2 pt-2 border-t border-slate-100">
                   <button onClick={() => { setDetailIntervention(null); onEdit(detailIntervention.id) }}

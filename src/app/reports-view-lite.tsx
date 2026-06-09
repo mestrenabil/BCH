@@ -245,6 +245,109 @@ function ReportsView({ stats, selectedCommune, canSeeAllCommunes, selectedYear }
           </table>
         </div>
       </motion.div>
+
+      {/* ===== Automatic Statistics Summary ===== */}
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }}
+        className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+        <div className="p-6 pb-3">
+          <h3 className="font-bold text-slate-800 flex items-center gap-2">
+            <span>🤖</span> إحصائيات تلقائية
+          </h3>
+          <p className="text-xs text-slate-400">تحليلات محسوبة تلقائياً من بيانات التدخلات</p>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 p-6 pt-2">
+          {/* Total */}
+          <div className="bg-slate-50 rounded-xl p-3 border border-slate-100">
+            <p className="text-[10px] text-slate-400 font-medium">إجمالي التدخلات</p>
+            <p className="text-xl font-extrabold text-slate-800 mt-1">{stats.total}</p>
+          </div>
+          {/* Completion Rate */}
+          <div className="bg-emerald-50 rounded-xl p-3 border border-emerald-100">
+            <p className="text-[10px] text-emerald-600 font-medium">نسبة الإنجاز</p>
+            <p className="text-xl font-extrabold text-emerald-700 mt-1">
+              {stats.total > 0 ? Math.round(((stats.byStatut['TERMINEE'] || 0) / stats.total) * 100) : 0}%
+            </p>
+          </div>
+          {/* In Progress */}
+          <div className="bg-amber-50 rounded-xl p-3 border border-amber-100">
+            <p className="text-[10px] text-amber-600 font-medium">تدخلات جارية</p>
+            <p className="text-xl font-extrabold text-amber-700 mt-1">{stats.byStatut['EN_COURS'] || 0}</p>
+          </div>
+          {/* Cancelled */}
+          <div className="bg-slate-50 rounded-xl p-3 border border-slate-100">
+            <p className="text-[10px] text-slate-400 font-medium">تدخلات ملغاة</p>
+            <p className="text-xl font-extrabold text-slate-500 mt-1">{stats.byStatut['ANNULEE'] || 0}</p>
+          </div>
+          {/* Monthly Average */}
+          <div className="bg-teal-50 rounded-xl p-3 border border-teal-100">
+            <p className="text-[10px] text-teal-600 font-medium">متوسط شهري</p>
+            <p className="text-xl font-extrabold text-teal-700 mt-1">
+              {Object.keys(stats.monthly).length > 0 ? Math.round(stats.total / Object.keys(stats.monthly).length) : 0}
+            </p>
+          </div>
+          {/* Most Active Type */}
+          <div className="bg-red-50 rounded-xl p-3 border border-red-100">
+            <p className="text-[10px] text-red-600 font-medium">النوع الأكثر نشاطاً</p>
+            <p className="text-sm font-extrabold text-red-700 mt-1">
+              {Object.entries(stats.byType).sort(([,a],[,b]) => b-a)[0] ? TYPE_LABELS[Object.entries(stats.byType).sort(([,a],[,b]) => b-a)[0][0]] : '—'}
+            </p>
+          </div>
+          {/* Total Cost */}
+          <div className="bg-amber-50 rounded-xl p-3 border border-amber-100">
+            <p className="text-[10px] text-amber-600 font-medium">التكلفة الإجمالية</p>
+            <p className="text-sm font-extrabold text-amber-700 mt-1">
+              {Object.values(monthlyCosts).reduce((s, v) => s + v, 0) > 0 ? `${Object.values(monthlyCosts).reduce((s, v) => s + v, 0).toLocaleString('ar-MA')} د.م` : '—'}
+            </p>
+          </div>
+          {/* Active Quartiers */}
+          <div className="bg-violet-50 rounded-xl p-3 border border-violet-100">
+            <p className="text-[10px] text-violet-600 font-medium">أحياء نشطة</p>
+            <p className="text-xl font-extrabold text-violet-700 mt-1">{stats.byQuartier.length}</p>
+          </div>
+        </div>
+      </motion.div>
+
+      {/* Commune Comparison */}
+      {canSeeAllCommunes && stats.byCommune && Object.keys(stats.byCommune).length > 1 && (
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}
+          className="bg-white rounded-2xl border border-slate-100 p-6 shadow-sm">
+          <h3 className="font-bold text-slate-800 mb-1">مقارنة حسب الجماعة الترابية</h3>
+          <p className="text-xs text-slate-400 mb-4">توزيع التدخلات والأنواع عبر الجماعات</p>
+          <div className="space-y-4">
+            {Object.entries(stats.byCommune).map(([commune, data]) => {
+              const total = data.total
+              const color = COMMUNE_COLORS[commune] || '#64748b'
+              return (
+                <div key={commune} className="bg-slate-50 rounded-xl p-4 border border-slate-100">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <div className="w-3 h-3 rounded-full" style={{ backgroundColor: color }} />
+                      <span className="text-sm font-bold text-slate-700">{COMMUNE_LABELS[commune] || commune}</span>
+                    </div>
+                    <span className="text-sm font-extrabold" style={{ color }}>{total} تدخل</span>
+                  </div>
+                  <div className="flex gap-1 h-4 rounded-lg overflow-hidden">
+                    {data.DERATISATION > 0 && (
+                      <div className="h-full transition-all duration-500" style={{ width: `${(data.DERATISATION / total) * 100}%`, backgroundColor: TYPE_COLORS.DERATISATION, minWidth: '4px' }} title={`قوارض: ${data.DERATISATION}`} />
+                    )}
+                    {data.DESINSECTISATION > 0 && (
+                      <div className="h-full transition-all duration-500" style={{ width: `${(data.DESINSECTISATION / total) * 100}%`, backgroundColor: TYPE_COLORS.DESINSECTISATION, minWidth: '4px' }} title={`حشرات: ${data.DESINSECTISATION}`} />
+                    )}
+                    {data.DESINFECTION > 0 && (
+                      <div className="h-full transition-all duration-500" style={{ width: `${(data.DESINFECTION / total) * 100}%`, backgroundColor: TYPE_COLORS.DESINFECTION, minWidth: '4px' }} title={`تطهير: ${data.DESINFECTION}`} />
+                    )}
+                  </div>
+                  <div className="flex items-center gap-3 mt-2">
+                    <span className="text-[10px] font-bold text-red-600">🐀 {data.DERATISATION}</span>
+                    <span className="text-[10px] font-bold text-amber-600">🦟 {data.DESINSECTISATION}</span>
+                    <span className="text-[10px] font-bold text-emerald-600">🧴 {data.DESINFECTION}</span>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </motion.div>
+      )}
     </div>
   )
 }

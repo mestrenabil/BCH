@@ -44,6 +44,9 @@ export default function AgentsView() {
   const canSeeAllCommunes = user?.role === 'admin' || user?.commune === 'ALL'
   const effectiveCommune = canSeeAllCommunes ? selectedCommune : (user?.commune || '')
 
+  // Tab state
+  const [activeTab, setActiveTab] = useState<'agents' | 'teams'>('agents')
+
   // Data state
   const [agents, setAgents] = useState<Agent[]>([])
   const [agentInterventionCounts, setAgentInterventionCounts] = useState<Record<string, number>>({})
@@ -59,6 +62,9 @@ export default function AgentsView() {
   const [editingAgent, setEditingAgent] = useState<Agent | null>(null)
   const [deletingAgent, setDeletingAgent] = useState<Agent | null>(null)
   const [isSaving, setIsSaving] = useState(false)
+
+  // Team detail state
+  const [selectedTeamCommune, setSelectedTeamCommune] = useState<string | null>(null)
 
   // Form state
   const emptyForm = {
@@ -248,6 +254,25 @@ export default function AgentsView() {
     }
   }
 
+  // ===== TEAM COMPUTATIONS =====
+  const teamStats = useMemo(() => {
+    const teams: { commune: string; label: string; color: string; agents: Agent[]; totalInterventions: number; activeCount: number }[] = []
+    for (const key of COMMUNE_KEYS) {
+      const teamAgents = agents.filter(a => a.commune === key)
+      if (teamAgents.length === 0 && !canSeeAllCommunes) continue
+      const totalInvs = teamAgents.reduce((sum, a) => sum + (agentInterventionCounts[a.id] || 0), 0)
+      teams.push({
+        commune: key,
+        label: COMMUNE_LABELS[key],
+        color: COMMUNE_COLORS[key],
+        agents: teamAgents,
+        totalInterventions: totalInvs,
+        activeCount: teamAgents.filter(a => a.actif).length,
+      })
+    }
+    return teams
+  }, [agents, agentInterventionCounts, canSeeAllCommunes])
+
   // ===== RENDER =====
   return (
     <div className="p-4 lg:p-6 space-y-6" dir="rtl">
@@ -255,23 +280,49 @@ export default function AgentsView() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h2 className="text-2xl font-extrabold text-slate-800 flex items-center gap-2">
-            <span>👮</span> إدارة الأعوان
+            <span>{activeTab === 'teams' ? '👥' : '👮'}</span> {activeTab === 'teams' ? 'إدارة الفرق' : 'إدارة الأعوان'}
           </h2>
           <p className="text-sm text-slate-500 mt-1">
-            تدبير وإدارة أعوان مكتب حفظ الصحة — {stats.total} عون
+            {activeTab === 'teams'
+              ? `تدبير فرق العمل حسب الجماعة — ${teamStats.length} فرقة`
+              : `تدبير وإدارة أعوان مكتب حفظ الصحة — ${stats.total} عون`
+            }
           </p>
         </div>
-        <motion.button
-          onClick={handleAdd}
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.98 }}
-          className="bg-gradient-to-l from-emerald-600 to-teal-600 text-white px-5 py-2.5 rounded-xl font-medium shadow-lg shadow-emerald-200 flex items-center gap-2"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-            <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
-          </svg>
-          إضافة عون جديد
-        </motion.button>
+        <div className="flex items-center gap-3">
+          {/* Tabs */}
+          <div className="bg-slate-100 rounded-xl p-1 flex items-center gap-1">
+            <button
+              onClick={() => setActiveTab('agents')}
+              className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${
+                activeTab === 'agents' ? 'bg-white text-emerald-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              👮 الأعوان
+            </button>
+            <button
+              onClick={() => setActiveTab('teams')}
+              className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${
+                activeTab === 'teams' ? 'bg-white text-emerald-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              👥 الفرق
+            </button>
+          </div>
+          {activeTab === 'agents' && (
+            <motion.button
+              onClick={handleAdd}
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              className="bg-gradient-to-l from-emerald-600 to-teal-600 text-white px-5 py-2.5 rounded-xl font-medium shadow-lg shadow-emerald-200 flex items-center gap-2"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
+              </svg>
+              إضافة عون
+            </motion.button>
+          )}
+        </div>
       </div>
 
       {/* Statistics Cards */}
@@ -343,6 +394,195 @@ export default function AgentsView() {
         </motion.div>
       </div>
 
+      {/* ===== TEAMS VIEW ===== */}
+      {activeTab === 'teams' && (
+        <>
+          {/* Team Stats Overview */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="bg-white rounded-2xl shadow-sm border border-slate-100 p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-[11px] text-slate-400 font-medium">عدد الفرق</p>
+                  <p className="text-2xl font-extrabold text-slate-800 mt-1">{teamStats.length}</p>
+                </div>
+                <div className="w-11 h-11 bg-violet-50 rounded-xl flex items-center justify-center text-xl">👥</div>
+              </div>
+            </motion.div>
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }} className="bg-white rounded-2xl shadow-sm border border-slate-100 p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-[11px] text-slate-400 font-medium">إجمالي التدخلات</p>
+                  <p className="text-2xl font-extrabold text-emerald-600 mt-1">{teamStats.reduce((s, t) => s + t.totalInterventions, 0)}</p>
+                </div>
+                <div className="w-11 h-11 bg-emerald-50 rounded-xl flex items-center justify-center text-xl">📋</div>
+              </div>
+            </motion.div>
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="bg-white rounded-2xl shadow-sm border border-slate-100 p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-[11px] text-slate-400 font-medium">أعوان نشطون</p>
+                  <p className="text-2xl font-extrabold text-teal-600 mt-1">{teamStats.reduce((s, t) => s + t.activeCount, 0)}</p>
+                </div>
+                <div className="w-11 h-11 bg-teal-50 rounded-xl flex items-center justify-center text-xl">✅</div>
+              </div>
+            </motion.div>
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }} className="bg-white rounded-2xl shadow-sm border border-slate-100 p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-[11px] text-slate-400 font-medium">متوسط التدخلات/فرقة</p>
+                  <p className="text-2xl font-extrabold text-amber-600 mt-1">{teamStats.length > 0 ? Math.round(teamStats.reduce((s, t) => s + t.totalInterventions, 0) / teamStats.length) : 0}</p>
+                </div>
+                <div className="w-11 h-11 bg-amber-50 rounded-xl flex items-center justify-center text-xl">📊</div>
+              </div>
+            </motion.div>
+          </div>
+
+          {/* Team Cards */}
+          {isLoading ? (
+            <div className="flex items-center justify-center h-48">
+              <div className="w-10 h-10 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
+              {teamStats.map((team, i) => (
+                <motion.div
+                  key={team.commune}
+                  initial={{ opacity: 0, y: 15 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: i * 0.08 }}
+                  className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden hover:shadow-md transition-all"
+                >
+                  {/* Team Header */}
+                  <div className="p-4 text-white relative" style={{ background: `linear-gradient(135deg, ${team.color}, ${team.color}cc)` }}>
+                    <div className="absolute -top-4 -left-4 w-16 h-16 rounded-full bg-white/8" />
+                    <div className="flex items-center justify-between relative z-10">
+                      <div className="flex items-center gap-3">
+                        <div className="w-11 h-11 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center text-xl">🏛️</div>
+                        <div>
+                          <h4 className="font-bold text-sm">{team.label}</h4>
+                          <p className="text-[10px] text-white/70 mt-0.5">فرقة العمل</p>
+                        </div>
+                      </div>
+                      <div className="bg-white/20 backdrop-blur-sm px-3 py-1.5 rounded-xl text-center">
+                        <div className="text-lg font-extrabold">{team.agents.length}</div>
+                        <div className="text-[8px] text-white/70 font-medium">عون</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Team Stats */}
+                  <div className="p-4 space-y-3">
+                    <div className="grid grid-cols-3 gap-2">
+                      <div className="bg-emerald-50 rounded-xl p-2.5 text-center border border-emerald-100">
+                        <div className="text-sm font-extrabold text-emerald-700">{team.activeCount}</div>
+                        <div className="text-[9px] text-emerald-600 font-semibold">نشط</div>
+                      </div>
+                      <div className="bg-slate-50 rounded-xl p-2.5 text-center border border-slate-100">
+                        <div className="text-sm font-extrabold text-slate-700">{team.agents.length - team.activeCount}</div>
+                        <div className="text-[9px] text-slate-500 font-semibold">غير نشط</div>
+                      </div>
+                      <div className="bg-teal-50 rounded-xl p-2.5 text-center border border-teal-100">
+                        <div className="text-sm font-extrabold text-teal-700">{team.totalInterventions}</div>
+                        <div className="text-[9px] text-teal-600 font-semibold">تدخل</div>
+                      </div>
+                    </div>
+
+                    {/* Function breakdown */}
+                    <div className="space-y-1.5">
+                      {FONCTION_OPTIONS.map(f => {
+                        const count = team.agents.filter(a => a.fonction === f.value).length
+                        if (count === 0) return null
+                        return (
+                          <div key={f.value} className="flex items-center gap-2 bg-slate-50 rounded-lg px-3 py-2">
+                            <span className="text-sm">{f.icon}</span>
+                            <span className="text-xs text-slate-600 flex-1">{f.label}</span>
+                            <span className="text-xs font-bold" style={{ color: f.color }}>{count}</span>
+                          </div>
+                        )
+                      })}
+                    </div>
+
+                    {/* Performance bar */}
+                    {team.totalInterventions > 0 && (
+                      <div>
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-[10px] text-slate-400 font-medium">أداء الفرقة</span>
+                          <span className="text-[10px] font-bold" style={{ color: team.color }}>{team.totalInterventions} تدخل</span>
+                        </div>
+                        <div className="w-full bg-slate-100 rounded-full h-2">
+                          <div
+                            className="h-full rounded-full transition-all duration-700"
+                            style={{
+                              width: `${Math.min((team.totalInterventions / Math.max(...teamStats.map(t => t.totalInterventions), 1)) * 100, 100)}%`,
+                              backgroundColor: team.color,
+                            }}
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Team Members Preview */}
+                    <div>
+                      <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-2">أعضاء الفرقة</p>
+                      <div className="space-y-1.5 max-h-32 overflow-y-auto">
+                        {team.agents.slice(0, 5).map(agent => (
+                          <div key={agent.id} className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-slate-50 transition-colors">
+                            <div className="w-6 h-6 rounded-md flex items-center justify-center text-[10px] font-bold text-white" style={{ backgroundColor: team.color }}>
+                              {agent.nom.charAt(0)}
+                            </div>
+                            <span className="text-xs text-slate-700 font-medium flex-1 truncate">{agent.nom} {agent.prenom}</span>
+                            <span className="text-[9px] px-1.5 py-0.5 rounded-md font-bold" style={{ backgroundColor: (FONCTION_OPTIONS.find(f => f.value === agent.fonction)?.color || '#64748b') + '15', color: FONCTION_OPTIONS.find(f => f.value === agent.fonction)?.color || '#64748b' }}>
+                              {agent.fonction}
+                            </span>
+                            <div className={`w-2 h-2 rounded-full ${agent.actif ? 'bg-emerald-400' : 'bg-slate-300'}`} />
+                          </div>
+                        ))}
+                        {team.agents.length > 5 && (
+                          <p className="text-[10px] text-slate-400 text-center">+{team.agents.length - 5} أعوان آخرين</p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+          )}
+
+          {/* Team Comparison Chart */}
+          {teamStats.length > 1 && (
+            <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-4">
+              <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">📊 مقارنة أداء الفرق</h3>
+              <div className="space-y-3">
+                {teamStats.map(team => (
+                  <div key={team.commune} className="flex items-center gap-3">
+                    <span className="text-xs font-bold text-slate-600 min-w-[100px] truncate">{team.label}</span>
+                    <div className="flex-1 bg-slate-100 rounded-full h-6 relative overflow-hidden">
+                      <div
+                        className="h-full rounded-full transition-all duration-700 flex items-center justify-end px-2"
+                        style={{
+                          width: `${Math.max((team.totalInterventions / Math.max(...teamStats.map(t => t.totalInterventions), 1)) * 100, 8)}%`,
+                          backgroundColor: team.color,
+                        }}
+                      >
+                        <span className="text-[10px] font-bold text-white">{team.totalInterventions}</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1 min-w-[60px]">
+                      <span className="text-[10px] text-emerald-600 font-bold">{team.activeCount}✅</span>
+                      <span className="text-[10px] text-slate-400">|</span>
+                      <span className="text-[10px] text-slate-500 font-bold">{team.agents.length}👥</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </>
+      )}
+
+      {/* ===== AGENTS VIEW ===== */}
+      {activeTab === 'agents' && (
+        <>
       {/* Commune breakdown bar */}
       {canSeeAllCommunes && stats.total > 0 && (
         <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-4">
@@ -523,6 +763,8 @@ export default function AgentsView() {
               عرض {filteredAgents.length} من أصل {agents.length} عون
             </span>
           </div>
+        </>
+      )}
         </>
       )}
 
