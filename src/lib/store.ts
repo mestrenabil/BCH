@@ -17,7 +17,7 @@ export interface AuthUser {
 export type OverlaySectionKey =
   | 'location' | 'details' | 'timeDetails' | 'costs' | 'product'
   | 'materials' | 'description' | 'observations' | 'documents' | 'photos'
-  | 'coordinates' | 'systemInfo' | 'quickActions' | 'progressIndicator'
+  | 'coordinates' | 'systemInfo' | 'quickActions' | 'progressIndicator' | 'comments'
 
 export const OVERLAY_SECTION_LABELS: Record<OverlaySectionKey, { ar: string; icon: string; defaultVisible: boolean }> = {
   location: { ar: 'الموقع', icon: '📍', defaultVisible: true },
@@ -34,6 +34,7 @@ export const OVERLAY_SECTION_LABELS: Record<OverlaySectionKey, { ar: string; ico
   systemInfo: { ar: 'معلومات النظام', icon: '⚙️', defaultVisible: false },
   quickActions: { ar: 'إجراءات سريعة', icon: '⚡', defaultVisible: false },
   progressIndicator: { ar: 'مؤشر التقدم', icon: '📊', defaultVisible: false },
+  comments: { ar: 'التعليقات', icon: '💬', defaultVisible: true },
 }
 
 export interface AppSettings {

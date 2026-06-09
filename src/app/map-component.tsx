@@ -22,7 +22,12 @@ interface Intervention {
   latitude: number; longitude: number; statut: string; description: string
   agentNom: string; produitUtilise: string; quantite: string; superficie: string
   nombrePrestations: number; observations: string; reference: string
+  commune: string
   materials?: InterventionMaterialItem[]
+  heureDebut?: string; heureFin?: string
+  coutMainOeuvre?: number; coutMateriaux?: number; coutTotal?: number
+  photos?: any[]; documents?: any[]
+  createdAt?: string; updatedAt?: string
 }
 
 interface Quartier { id: string; nom: string; latitude: number; longitude: number }
@@ -725,7 +730,7 @@ function buildNewInterventionPopup(lat: number, lng: number, commune: string | n
   `
 }
 
-export default function MapComponent({ interventions, quartiers, selectedCommune, onMapClick, mapClickEnabled, showCommunePopups, onInterventionCreated, centerOn, onInterventionClick, tileLayer: externalTileLayer }: { 
+export default function MapComponent({ interventions, quartiers, selectedCommune, onMapClick, mapClickEnabled, showCommunePopups, onInterventionCreated, centerOn, onInterventionClick, tileLayer: externalTileLayer, onMouseMove, measureMode, onMeasureResult, showQuartiers: externalShowQuartiers }: { 
   interventions: Intervention[]; quartiers: Quartier[]; selectedCommune: string;
   onMapClick?: (lat: number, lng: number, commune: string | null) => void;
   mapClickEnabled?: boolean;
@@ -734,6 +739,10 @@ export default function MapComponent({ interventions, quartiers, selectedCommune
   centerOn?: { lat: number; lng: number } | null;
   onInterventionClick?: (intervention: Intervention, lat: number, lng: number) => void;
   tileLayer?: 'street' | 'satellite' | 'dark';
+  onMouseMove?: (coords: { lat: number; lng: number; zoom: number }) => void;
+  measureMode?: boolean;
+  onMeasureResult?: (distance: number, points: { lat: number; lng: number }[]) => void;
+  showQuartiers?: boolean;
 }) {
   const mapRef = useRef<L.Map | null>(null)
   const mapContainerRef = useRef<HTMLDivElement>(null)
@@ -749,6 +758,15 @@ export default function MapComponent({ interventions, quartiers, selectedCommune
   const onInterventionClickRef = useRef(onInterventionClick)
   const searchMarkerRef = useRef<L.Marker | null>(null)
   const tileLayersRef = useRef<Record<string, L.TileLayer>>({})
+  // SIG feature refs
+  const onMouseMoveRef = useRef(onMouseMove)
+  const measureModeRef = useRef(measureMode ?? false)
+  const onMeasureResultRef = useRef(onMeasureResult)
+  const measurePointsRef = useRef<{ lat: number; lng: number }[]>([])
+  const measurePolylineRef = useRef<L.Polyline | null>(null)
+  const measureMarkersRef = useRef<L.Marker[]>([])
+  const measureLabelsRef = useRef<L.Marker[]>([])
+  const compassControlRef = useRef<L.Control | null>(null)
 
   // Keep the callback ref up-to-date
   useEffect(() => {
@@ -774,6 +792,239 @@ export default function MapComponent({ interventions, quartiers, selectedCommune
   useEffect(() => {
     onInterventionClickRef.current = onInterventionClick
   }, [onInterventionClick])
+
+  // Keep the onMouseMove ref up-to-date
+  useEffect(() => {
+    onMouseMoveRef.current = onMouseMove
+  }, [onMouseMove])
+
+  // Keep the measureMode ref up-to-date
+  useEffect(() => {
+    measureModeRef.current = measureMode ?? false
+  }, [measureMode])
+
+  // Keep the onMeasureResult ref up-to-date
+  useEffect(() => {
+    onMeasureResultRef.current = onMeasureResult
+  }, [onMeasureResult])
+
+  // ===== SIG: onMouseMove coordinate tracking =====
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map) return
+
+    const handleMouseMove = (e: L.LeafletMouseEvent) => {
+      if (onMouseMoveRef.current) {
+        onMouseMoveRef.current({
+          lat: e.latlng.lat,
+          lng: e.latlng.lng,
+          zoom: map.getZoom(),
+        })
+      }
+    }
+
+    map.on('mousemove', handleMouseMove)
+    return () => {
+      map.off('mousemove', handleMouseMove)
+    }
+  }, [mapRef.current])
+
+  // ===== SIG: Measure mode =====
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map) return
+
+    const isMeasure = measureMode ?? false
+
+    // Helper: clean up all measure layers
+    const cleanupMeasure = () => {
+      measureMarkersRef.current.forEach(m => { if (map.hasLayer(m)) map.removeLayer(m) })
+      measureMarkersRef.current = []
+      measureLabelsRef.current.forEach(m => { if (map.hasLayer(m)) map.removeLayer(m) })
+      measureLabelsRef.current = []
+      if (measurePolylineRef.current && map.hasLayer(measurePolylineRef.current)) {
+        map.removeLayer(measurePolylineRef.current)
+      }
+      measurePolylineRef.current = null
+      measurePointsRef.current = []
+    }
+
+    if (!isMeasure) {
+      cleanupMeasure()
+      // Reset cursor
+      const container = map.getContainer()
+      container.style.cursor = ''
+      return
+    }
+
+    // Set cursor to crosshair in measure mode
+    const container = map.getContainer()
+    container.style.cursor = 'crosshair'
+
+    // Calculate total distance of all measure points
+    const calcTotalDistance = (points: { lat: number; lng: number }[]): number => {
+      let total = 0
+      for (let i = 1; i < points.length; i++) {
+        const from = L.latLng(points[i - 1].lat, points[i - 1].lng)
+        const to = L.latLng(points[i].lat, points[i].lng)
+        total += from.distanceTo(to)
+      }
+      return total
+    }
+
+    // Update the polyline and distance labels
+    const updateMeasureDisplay = () => {
+      const points = measurePointsRef.current
+
+      // Update polyline
+      if (measurePolylineRef.current && map.hasLayer(measurePolylineRef.current)) {
+        map.removeLayer(measurePolylineRef.current)
+      }
+      if (points.length >= 2) {
+        const latlngs = points.map(p => L.latLng(p.lat, p.lng))
+        measurePolylineRef.current = L.polyline(latlngs, {
+          color: '#ef4444',
+          weight: 3,
+          dashArray: '8, 6',
+          opacity: 0.9,
+        }).addTo(map)
+      }
+
+      // Remove old labels
+      measureLabelsRef.current.forEach(m => { if (map.hasLayer(m)) map.removeLayer(m) })
+      measureLabelsRef.current = []
+
+      // Add distance labels between consecutive points
+      for (let i = 1; i < points.length; i++) {
+        const from = L.latLng(points[i - 1].lat, points[i - 1].lng)
+        const to = L.latLng(points[i].lat, points[i].lng)
+        const dist = from.distanceTo(to)
+        const midLat = (points[i - 1].lat + points[i].lat) / 2
+        const midLng = (points[i - 1].lng + points[i].lng) / 2
+
+        const distText = dist >= 1000
+          ? `${(dist / 1000).toFixed(2)} كم`
+          : `${dist.toFixed(1)} م`
+
+        const label = L.marker([midLat, midLng], {
+          icon: L.divIcon({
+            html: `<div style="
+              background: #ef4444;
+              color: white;
+              padding: 2px 8px;
+              border-radius: 12px;
+              font-size: 11px;
+              font-weight: 700;
+              white-space: nowrap;
+              font-family: system-ui, sans-serif;
+              box-shadow: 0 2px 8px rgba(239,68,68,0.4);
+              border: 1.5px solid white;
+              direction: rtl;
+            ">📏 ${distText}</div>`,
+            className: '',
+            iconAnchor: [30, 10],
+          }),
+          interactive: false,
+        }).addTo(map)
+        measureLabelsRef.current.push(label)
+      }
+
+      // Total distance label at last point
+      if (points.length >= 2) {
+        const totalDist = calcTotalDistance(points)
+        const totalText = totalDist >= 1000
+          ? `${(totalDist / 1000).toFixed(3)} كم`
+          : `${totalDist.toFixed(1)} م`
+
+        const lastP = points[points.length - 1]
+        const totalLabel = L.marker([lastP.lat, lastP.lng], {
+          icon: L.divIcon({
+            html: `<div style="
+              background: #1e293b;
+              color: white;
+              padding: 4px 12px;
+              border-radius: 14px;
+              font-size: 12px;
+              font-weight: 800;
+              white-space: nowrap;
+              font-family: system-ui, sans-serif;
+              box-shadow: 0 4px 12px rgba(30,41,59,0.5);
+              border: 2px solid white;
+              direction: rtl;
+            ">المجموع: ${totalText}</div>`,
+            className: '',
+            iconAnchor: [45, -10],
+          }),
+          interactive: false,
+        }).addTo(map)
+        measureLabelsRef.current.push(totalLabel)
+      }
+    }
+
+    // Click handler for measure mode
+    const handleMeasureClick = (e: L.LeafletMouseEvent) => {
+      if (!measureModeRef.current) return
+
+      const { lat, lng } = e.latlng
+      measurePointsRef.current.push({ lat, lng })
+
+      // Add point marker
+      const idx = measurePointsRef.current.length
+      const marker = L.marker([lat, lng], {
+        icon: L.divIcon({
+          html: `<div style="
+            background: #ef4444;
+            width: 14px; height: 14px;
+            border-radius: 50%;
+            border: 2.5px solid white;
+            box-shadow: 0 2px 8px rgba(239,68,68,0.5);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 8px; color: white; font-weight: 800;
+          ">${idx}</div>`,
+          className: '',
+          iconSize: [14, 14],
+          iconAnchor: [7, 7],
+        }),
+        interactive: false,
+      }).addTo(map)
+      measureMarkersRef.current.push(marker)
+
+      updateMeasureDisplay()
+    }
+
+    // Double-click handler to finish measurement
+    const handleMeasureDblClick = (e: L.LeafletMouseEvent) => {
+      if (!measureModeRef.current) return
+      L.DomEvent.stopPropagation(e)
+      L.DomEvent.preventDefault(e)
+
+      const points = [...measurePointsRef.current]
+      const totalDist = calcTotalDistance(points)
+
+      if (onMeasureResultRef.current && points.length >= 2) {
+        onMeasureResultRef.current(totalDist, points)
+      }
+
+      // Reset cursor
+      container.style.cursor = ''
+    }
+
+    map.on('click', handleMeasureClick)
+    map.on('dblclick', handleMeasureDblClick)
+
+    // Disable double-click zoom in measure mode
+    if (isMeasure) {
+      map.doubleClickZoom.disable()
+    }
+
+    return () => {
+      map.off('click', handleMeasureClick)
+      map.off('dblclick', handleMeasureDblClick)
+      cleanupMeasure()
+      container.style.cursor = ''
+      map.doubleClickZoom.enable()
+    }
+  }, [measureMode])
 
   // Switch tile layer when externalTileLayer prop changes
   useEffect(() => {
@@ -924,6 +1175,8 @@ export default function MapComponent({ interventions, quartiers, selectedCommune
     map.on('click', (e: L.LeafletMouseEvent) => {
       // Check if map click is enabled via ref
       if (!mapClickEnabledRef.current) return
+      // Skip intervention popup when in measure mode (measure mode has its own click handler)
+      if (measureModeRef.current) return
 
       const { lat, lng } = e.latlng
       
@@ -1167,6 +1420,63 @@ export default function MapComponent({ interventions, quartiers, selectedCommune
 
     mapRef.current = map
 
+    // ===== SIG: Compass / North Arrow indicator =====
+    const CompassControl = L.Control.extend({
+      onAdd: () => {
+        const div = L.DomUtil.create('div', 'leaflet-compass-control')
+        div.innerHTML = `
+          <div style="
+            width: 50px; height: 50px;
+            background: rgba(255,255,255,0.95);
+            border-radius: 50%;
+            border: 2px solid #e2e8f0;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.15);
+            display: flex; align-items: center; justify-content: center;
+            position: relative;
+            cursor: default;
+            backdrop-filter: blur(4px);
+          ">
+            <div style="
+              position: absolute; top: 4px; left: 50%; transform: translateX(-50%);
+              width: 0; height: 0;
+              border-left: 5px solid transparent;
+              border-right: 5px solid transparent;
+              border-bottom: 12px solid #ef4444;
+            "></div>
+            <span style="
+              font-size: 10px; font-weight: 900; color: #ef4444;
+              margin-top: 8px; font-family: system-ui, sans-serif;
+            ">N</span>
+            <div style="
+              position: absolute; bottom: 4px; left: 50%; transform: translateX(-50%);
+              width: 0; height: 0;
+              border-left: 4px solid transparent;
+              border-right: 4px solid transparent;
+              border-top: 9px solid #94a3b8;
+            "></div>
+            <div style="
+              position: absolute; left: 4px; top: 50%; transform: translateY(-50%);
+              width: 0; height: 0;
+              border-top: 4px solid transparent;
+              border-bottom: 4px solid transparent;
+              border-right: 7px solid #94a3b8;
+            "></div>
+            <div style="
+              position: absolute; right: 4px; top: 50%; transform: translateY(-50%);
+              width: 0; height: 0;
+              border-top: 4px solid transparent;
+              border-bottom: 4px solid transparent;
+              border-left: 7px solid #94a3b8;
+            "></div>
+          </div>
+        `
+        return div
+      },
+    })
+    const compassCtrl = new CompassControl({ position: 'topright' })
+    compassCtrl.addTo(map)
+    compassControlRef.current = compassCtrl
+
     // Fit bounds
     const allBounds = L.geoJSON(COMMUNES_GEOJSON as GeoJSON.GeoJsonObject).getBounds()
     map.fitBounds(allBounds, { padding: [30, 30] })
@@ -1254,8 +1564,9 @@ export default function MapComponent({ interventions, quartiers, selectedCommune
     const markersLayer = markersLayerRef.current
     markersLayer.clearLayers()
 
-    // Quartier markers
-    quartiers.forEach((q) => {
+    // Quartier markers (controlled by showQuartiers toggle)
+    if (externalShowQuartiers !== false) {
+      quartiers.forEach((q) => {
       const pointCommune = getCommuneForPoint(q.latitude, q.longitude)
       if (selectedCommune !== 'ALL' && pointCommune !== selectedCommune) return
 
@@ -1267,6 +1578,7 @@ export default function MapComponent({ interventions, quartiers, selectedCommune
       })
       markersLayer.addLayer(marker)
     })
+    } // end showQuartiers
 
     // Intervention markers with enhanced popups
     interventions.forEach((intervention) => {
@@ -1292,7 +1604,7 @@ export default function MapComponent({ interventions, quartiers, selectedCommune
       })
       markersLayer.addLayer(marker)
     })
-  }, [interventions, quartiers, selectedCommune])
+  }, [interventions, quartiers, selectedCommune, externalShowQuartiers])
 
   return <div ref={mapContainerRef} className="w-full h-full" style={{ minHeight: '400px' }} />
 }

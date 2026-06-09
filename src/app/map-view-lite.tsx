@@ -26,6 +26,10 @@ interface MapComponentProps {
   centerOn?: { lat: number; lng: number } | null
   onInterventionClick?: (intervention: Intervention, lat: number, lng: number) => void
   tileLayer?: 'street' | 'satellite' | 'dark'
+  onMouseMove?: (coords: { lat: number; lng: number; zoom: number }) => void
+  measureMode?: boolean
+  onMeasureResult?: (distance: number, points: { lat: number; lng: number }[]) => void
+  showQuartiers?: boolean
 }
 
 function MapView({ interventions, quartiers, selectedCommune, canSeeAllCommunes, onMapClick, onRefresh, onNavigateToInterventions }: { interventions: Intervention[]; quartiers: Quartier[]; selectedCommune: CommuneType | 'ALL'; canSeeAllCommunes: boolean; onMapClick: (lat: number, lng: number, commune: string | null) => void; onRefresh?: () => void; onNavigateToInterventions?: () => void }) {
@@ -71,14 +75,28 @@ function MapView({ interventions, quartiers, selectedCommune, canSeeAllCommunes,
   // Photo viewer
   const [viewingPhoto, setViewingPhoto] = useState<InterventionPhoto | null>(null)
 
-  // Heatmap toggle
-  const [showHeatmap, setShowHeatmap] = useState(false)
+  // Heatmap toggle (legacy, replaced by showQuartiers)
+  // const [showHeatmap, setShowHeatmap] = useState(false)
 
-  // Drawing tools toggle
-  const [showDrawingTools, setShowDrawingTools] = useState(false)
+  // Drawing tools toggle (legacy, replaced by measureMode)
+  // const [showDrawingTools, setShowDrawingTools] = useState(false)
 
   // Quick stats popup
   const [showQuickStatsPopup, setShowQuickStatsPopup] = useState(false)
+
+  // === SIG FEATURE STATE ===
+  // Coordinate display bar
+  const [mouseCoords, setMouseCoords] = useState<{ lat: number; lng: number; zoom: number } | null>(null)
+
+  // SIG Legend panel
+  const [showLegend, setShowLegend] = useState(false)
+
+  // Measure distance tool
+  const [measureMode, setMeasureMode] = useState(false)
+  const [measureResult, setMeasureResult] = useState<{ distance: number; points: number } | null>(null)
+
+  // Quartier markers toggle (replaces heatmap)
+  const [showQuartiers, setShowQuartiers] = useState(true)
 
   // Overlay comments
   const [overlayComments, setOverlayComments] = useState<any[]>([])
@@ -601,7 +619,7 @@ function MapView({ interventions, quartiers, selectedCommune, canSeeAllCommunes,
               </motion.button>
             </div>
           </div>
-        ) : mapLoaded && MapComponent ? <MapComponent interventions={filteredInterventions} quartiers={quartiers} selectedCommune={selectedCommune} onMapClick={onMapClick} mapClickEnabled={settings.mapClickEnabled} showCommunePopups={settings.showCommunePopups} onInterventionCreated={onRefresh} centerOn={centerOnCoords} onInterventionClick={handleInterventionClick} tileLayer={tileLayer} /> : (
+        ) : mapLoaded && MapComponent ? <MapComponent interventions={filteredInterventions} quartiers={quartiers} selectedCommune={selectedCommune} onMapClick={onMapClick} mapClickEnabled={settings.mapClickEnabled} showCommunePopups={settings.showCommunePopups} onInterventionCreated={onRefresh} centerOn={centerOnCoords} onInterventionClick={handleInterventionClick} tileLayer={tileLayer} onMouseMove={(coords) => setMouseCoords(coords)} measureMode={measureMode} onMeasureResult={(distance, points) => { setMeasureResult({ distance, points: points.length }); setMeasureMode(false) }} showQuartiers={showQuartiers} /> : (
           <div className="h-full flex items-center justify-center bg-slate-50">
             <div className="text-center space-y-4">
               <div className="w-14 h-14 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mx-auto" />
@@ -662,65 +680,203 @@ function MapView({ interventions, quartiers, selectedCommune, canSeeAllCommunes,
           })}
         </div>
 
-        {/* Heatmap Toggle */}
+        {/* Quartier Markers Toggle (replaces heatmap) */}
         <motion.button
           initial={{ opacity: 0, x: -20 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ delay: 0.9 }}
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
-          onClick={() => setShowHeatmap(!showHeatmap)}
+          onClick={() => setShowQuartiers(!showQuartiers)}
           className={`absolute top-[168px] left-3 z-30 w-10 h-10 rounded-xl shadow-lg border flex items-center justify-center transition-all text-sm ${
-            showHeatmap
-              ? 'bg-orange-600 text-white border-orange-500 shadow-orange-200'
+            showQuartiers
+              ? 'bg-teal-600 text-white border-teal-500 shadow-teal-200'
               : 'bg-white/90 backdrop-blur-sm text-slate-600 border-slate-200/60 hover:bg-white'
           }`}
-          title="خريطة حرارية"
+          title="إظهار الأحياء"
         >
-          🔥
+          📍
         </motion.button>
 
-        {/* Drawing Tools Toggle */}
+        {/* Measure Distance Toggle (replaces drawing tools) */}
         <motion.button
           initial={{ opacity: 0, x: -20 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ delay: 1.0 }}
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
-          onClick={() => setShowDrawingTools(!showDrawingTools)}
+          onClick={() => { setMeasureMode(!measureMode); setMeasureResult(null) }}
           className={`absolute top-[212px] left-3 z-30 w-10 h-10 rounded-xl shadow-lg border flex items-center justify-center transition-all text-sm ${
-            showDrawingTools
-              ? 'bg-violet-600 text-white border-violet-500 shadow-violet-200'
+            measureMode
+              ? 'bg-red-600 text-white border-red-500 shadow-red-200'
               : 'bg-white/90 backdrop-blur-sm text-slate-600 border-slate-200/60 hover:bg-white'
           }`}
-          title="أدوات الرسم"
+          title="قياس المسافة"
         >
-          ✏️
+          📏
         </motion.button>
 
-        {/* Drawing Tools Panel */}
+        {/* SIG Legend Toggle Button */}
+        <motion.button
+          initial={{ opacity: 0, x: -20 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ delay: 1.1 }}
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+          onClick={() => setShowLegend(!showLegend)}
+          className={`absolute top-[256px] left-3 z-30 w-10 h-10 rounded-xl shadow-lg border flex items-center justify-center transition-all text-sm ${
+            showLegend
+              ? 'bg-amber-600 text-white border-amber-500 shadow-amber-200'
+              : 'bg-white/90 backdrop-blur-sm text-slate-600 border-slate-200/60 hover:bg-white'
+          }`}
+          title="دليل الرموز"
+        >
+          📖
+        </motion.button>
+
+        {/* Export Map Button */}
+        <motion.button
+          initial={{ opacity: 0, x: -20 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ delay: 1.2 }}
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+          onClick={() => window.print()}
+          className="absolute top-[300px] left-3 z-30 w-10 h-10 bg-white/90 backdrop-blur-sm rounded-xl shadow-lg border border-slate-200/60 flex items-center justify-center hover:bg-white transition-all text-sm text-slate-600"
+          title="طباعة الخريطة"
+        >
+          🖨️
+        </motion.button>
+
+        {/* SIG Legend Panel */}
         <AnimatePresence>
-          {showDrawingTools && (
+          {showLegend && (
             <motion.div
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -20 }}
-              className="absolute top-[260px] left-3 z-30 bg-white/95 backdrop-blur-sm rounded-xl shadow-lg border border-slate-200/60 p-3 space-y-2"
+              initial={{ opacity: 0, x: -20, scale: 0.95 }}
+              animate={{ opacity: 1, x: 0, scale: 1 }}
+              exit={{ opacity: 0, x: -20, scale: 0.95 }}
+              className="absolute top-[256px] left-14 z-30 bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-slate-200/60 p-4 w-64"
               dir="rtl"
             >
-              <p className="text-[10px] font-bold text-slate-500 mb-1">أدوات الرسم</p>
-              <button className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-violet-50 text-xs text-slate-600 transition-colors">
-                🔵 دائرة
-              </button>
-              <button className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-violet-50 text-xs text-slate-600 transition-colors">
-                ⬜ مستطيل
-              </button>
-              <button className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-violet-50 text-xs text-slate-600 transition-colors">
-                📍 علامة
-              </button>
-              <button className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-red-50 text-xs text-red-500 transition-colors">
-                🗑️ مسح الكل
-              </button>
+              <div className="flex items-center justify-between mb-3">
+                <h4 className="font-bold text-sm text-slate-800">📖 دليل الرموز</h4>
+                <button onClick={() => setShowLegend(false)} className="p-1 hover:bg-slate-100 rounded-lg text-slate-400">✕</button>
+              </div>
+
+              {/* Intervention Types */}
+              <div className="mb-3">
+                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">أنواع التدخلات</p>
+                <div className="space-y-1.5">
+                  <div className="flex items-center gap-2">
+                    <div className="w-5 h-5 rounded-md bg-red-100 flex items-center justify-center text-[10px]">🐀</div>
+                    <span className="text-xs text-slate-600">مكافحة القوارض</span>
+                    <div className="w-3 h-3 rounded-full bg-red-500 mr-auto" />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-5 h-5 rounded-md bg-amber-100 flex items-center justify-center text-[10px]">🦟</div>
+                    <span className="text-xs text-slate-600">مكافحة الحشرات</span>
+                    <div className="w-3 h-3 rounded-full bg-amber-500 mr-auto" />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-5 h-5 rounded-md bg-green-100 flex items-center justify-center text-[10px]">🧴</div>
+                    <span className="text-xs text-slate-600">التطهير</span>
+                    <div className="w-3 h-3 rounded-full bg-green-500 mr-auto" />
+                  </div>
+                </div>
+              </div>
+
+              {/* Status Colors */}
+              <div className="mb-3">
+                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">حالات التدخلات</p>
+                <div className="space-y-1.5">
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full bg-blue-500" />
+                    <span className="text-xs text-slate-600">مبرمجة</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full bg-amber-500" />
+                    <span className="text-xs text-slate-600">جارية</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full bg-green-500" />
+                    <span className="text-xs text-slate-600">منجزة</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full bg-gray-400" />
+                    <span className="text-xs text-slate-600">ملغاة</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Map Elements */}
+              <div>
+                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">عناصر الخريطة</p>
+                <div className="space-y-1.5">
+                  <div className="flex items-center gap-2">
+                    <div className="w-5 h-0.5 border-t-2 border-dashed border-emerald-500" />
+                    <span className="text-xs text-slate-600">حدود الجماعات</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full bg-teal-500 border-2 border-white shadow-sm" />
+                    <span className="text-xs text-slate-600">علامات الأحياء</span>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Measure Mode Indicator */}
+        <AnimatePresence>
+          {measureMode && (
+            <motion.div
+              initial={{ opacity: 0, y: -20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              className="absolute top-14 left-1/2 -translate-x-1/2 z-30"
+            >
+              <div className="bg-red-600/95 backdrop-blur-sm text-white rounded-xl px-4 py-2 shadow-lg flex items-center gap-2">
+                <span className="text-sm">📏</span>
+                <span className="text-[11px] font-bold">وضع القياس — انقر لإضافة نقاط، انقر مرتين للإنهاء</span>
+                <button
+                  onClick={() => { setMeasureMode(false); setMeasureResult(null) }}
+                  className="mr-2 w-5 h-5 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center text-[10px] transition-colors"
+                >
+                  ✕
+                </button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Measure Result Popup */}
+        <AnimatePresence>
+          {measureResult && (
+            <motion.div
+              initial={{ opacity: 0, y: -20, scale: 0.9 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -20, scale: 0.9 }}
+              className="absolute top-14 left-1/2 -translate-x-1/2 z-30"
+              dir="rtl"
+            >
+              <div className="bg-white/95 backdrop-blur-xl rounded-xl shadow-xl border border-slate-200/60 px-4 py-3 flex items-center gap-3">
+                <div className="w-8 h-8 rounded-lg bg-red-100 flex items-center justify-center text-lg">📏</div>
+                <div>
+                  <p className="text-xs font-bold text-slate-800">نتيجة القياس</p>
+                  <p className="text-sm font-bold text-red-600">
+                    {measureResult.distance >= 1000
+                      ? `${(measureResult.distance / 1000).toFixed(2)} كم`
+                      : `${measureResult.distance.toFixed(1)} م`}
+                  </p>
+                  <p className="text-[9px] text-slate-400">{measureResult.points} نقاط</p>
+                </div>
+                <button
+                  onClick={() => setMeasureResult(null)}
+                  className="w-6 h-6 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-400 transition-colors"
+                >
+                  ✕
+                </button>
+              </div>
             </motion.div>
           )}
         </AnimatePresence>
@@ -782,7 +938,7 @@ function MapView({ interventions, quartiers, selectedCommune, canSeeAllCommunes,
           )}
         </AnimatePresence>
 
-        {/* 3. Collapsible Map Stats Summary Overlay - top center */}
+        {/* 3. Collapsible Map Stats Summary Overlay - top center (desktop only, compact) */}
         <AnimatePresence>
           {showMapStats && (
             <motion.div
@@ -790,53 +946,46 @@ function MapView({ interventions, quartiers, selectedCommune, canSeeAllCommunes,
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
               transition={{ duration: 0.3 }}
-              className="absolute top-3 left-1/2 -translate-x-1/2 z-30"
+              className="absolute top-3 left-1/2 -translate-x-1/2 z-30 hidden md:block"
             >
-              <div className="bg-white/90 backdrop-blur-md rounded-2xl shadow-xl border border-slate-200/60 px-4 py-2.5 flex items-center gap-4" dir="rtl">
+              <div className="bg-white/90 backdrop-blur-md rounded-xl shadow-xl border border-slate-200/60 px-3 py-2 flex items-center gap-3" dir="rtl">
                 {/* Total */}
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-white text-sm shadow-md">📋</div>
+                <div className="flex items-center gap-1.5">
+                  <div className="w-6 h-6 rounded-md bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-white text-[10px] shadow-sm">📋</div>
                   <div>
-                    <div className="text-sm font-bold text-slate-800">{filteredInterventions.length}</div>
-                    <div className="text-[9px] text-slate-500 font-medium">إجمالي التدخلات</div>
+                    <div className="text-xs font-bold text-slate-800 leading-tight">{filteredInterventions.length}</div>
+                    <div className="text-[8px] text-slate-500">تدخلات</div>
                   </div>
                 </div>
 
-                {/* Divider */}
-                <div className="w-px h-8 bg-slate-200" />
+                <div className="w-px h-6 bg-slate-200" />
 
-                {/* By Type */}
-                <div className="flex items-center gap-2">
+                {/* By Type - compact */}
+                <div className="flex items-center gap-1.5">
                   {typeCounts.map((t) => (
-                    <div key={t.key} className="flex items-center gap-1">
-                      <div className="w-6 h-6 rounded-md flex items-center justify-center text-[10px]" style={{ backgroundColor: t.color + '18' }}>
-                        {t.icon}
-                      </div>
-                      <span className="text-xs font-bold" style={{ color: t.color }}>{t.count}</span>
+                    <div key={t.key} className="flex items-center gap-0.5">
+                      <span className="text-[10px]">{t.icon}</span>
+                      <span className="text-[10px] font-bold" style={{ color: t.color }}>{t.count}</span>
                     </div>
                   ))}
                 </div>
 
-                {/* Divider */}
-                <div className="w-px h-8 bg-slate-200" />
+                <div className="w-px h-6 bg-slate-200" />
 
                 {/* Completion Rate */}
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-teal-500 to-emerald-600 flex items-center justify-center shadow-md">
-                    <span className="text-[9px] font-bold text-white">{completionRate}%</span>
+                <div className="flex items-center gap-1.5">
+                  <div className="w-6 h-6 rounded-md bg-gradient-to-br from-teal-500 to-emerald-600 flex items-center justify-center shadow-sm">
+                    <span className="text-[8px] font-bold text-white">{completionRate}%</span>
                   </div>
-                  <div>
-                    <div className="text-xs font-bold text-emerald-700">{completionRate}%</div>
-                    <div className="text-[9px] text-slate-500">نسبة الإنجاز</div>
-                  </div>
+                  <span className="text-[10px] font-bold text-emerald-700">{completionRate}%</span>
                 </div>
 
                 {/* Close button */}
                 <button
                   onClick={() => setShowMapStats(false)}
-                  className="w-6 h-6 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center transition-colors mr-1"
+                  className="w-5 h-5 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center transition-colors"
                 >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 text-slate-400" viewBox="0 0 20 20" fill="currentColor">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 text-slate-400" viewBox="0 0 20 20" fill="currentColor">
                     <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
                   </svg>
                 </button>
@@ -853,7 +1002,7 @@ function MapView({ interventions, quartiers, selectedCommune, canSeeAllCommunes,
             whileHover={{ scale: 1.08 }}
             whileTap={{ scale: 0.92 }}
             onClick={() => setShowMapStats(true)}
-            className="absolute top-3 left-1/2 -translate-x-1/2 z-30 w-9 h-9 bg-white/90 backdrop-blur-sm rounded-xl shadow-lg border border-slate-200/60 flex items-center justify-center hover:bg-white transition-colors"
+            className="absolute top-3 left-1/2 -translate-x-1/2 z-30 w-8 h-8 bg-white/90 backdrop-blur-sm rounded-xl shadow-lg border border-slate-200/60 items-center justify-center hover:bg-white transition-colors hidden md:flex"
             title="إظهار الإحصائيات"
           >
             <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-slate-600" viewBox="0 0 20 20" fill="currentColor">
@@ -1180,7 +1329,7 @@ function MapView({ interventions, quartiers, selectedCommune, canSeeAllCommunes,
                   )}
 
                   {/* Comments Section */}
-                  {isSectionVisible('documents') && (
+                  {isSectionVisible('comments') && (
                     <div className="px-4 pb-3">
                       <div className="flex items-center gap-1.5 mb-2">
                         <span className="text-xs">💬</span>
@@ -1422,23 +1571,43 @@ function MapView({ interventions, quartiers, selectedCommune, canSeeAllCommunes,
           )}
         </AnimatePresence>
 
-        {/* Map click instruction overlay */}
+        {/* Map click instruction overlay — bottom center */}
         {settings.mapClickEnabled && (
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 1.5, duration: 0.5 }}
-          className="absolute bottom-4 left-4 z-10"
+          className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10"
         >
-          <div className="bg-white/95 backdrop-blur-sm rounded-xl px-4 py-2.5 shadow-lg border border-emerald-100 flex items-center gap-2.5">
-            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-white text-sm shadow-md">📍</div>
-            <div>
-              <p className="text-[11px] font-bold text-emerald-700">انقر على الخريطة لإضافة تدخل</p>
-              <p className="text-[9px] text-slate-400">اضغط على أي موقع لملء استمارة التدخل</p>
-            </div>
+          <div className="bg-white/90 backdrop-blur-sm rounded-lg px-3 py-1.5 shadow-md border border-emerald-100/60 flex items-center gap-1.5">
+            <span className="text-[10px]">📍</span>
+            <p className="text-[10px] font-medium text-emerald-700">انقر على الخريطة لإضافة تدخل</p>
           </div>
         </motion.div>
         )}
+
+        {/* Coordinate Display Bar — bottom right */}
+        <div className="absolute bottom-3 right-3 z-20">
+          <div className="bg-white/85 backdrop-blur-sm rounded-lg px-3 py-1.5 shadow-md border border-slate-200/60 flex items-center gap-2 text-[10px] font-mono" dir="ltr">
+            {mouseCoords ? (
+              <>
+                <span className="text-slate-600">📍 {mouseCoords.lat.toFixed(6)}, {mouseCoords.lng.toFixed(6)}</span>
+                <span className="text-slate-300">|</span>
+                <span className="text-slate-600">🔍 {mouseCoords.zoom}</span>
+                <span className="text-slate-300">|</span>
+                <span className="text-slate-500">🌐 WGS 84</span>
+              </>
+            ) : (
+              <>
+                <span className="text-slate-400">📍 —, —</span>
+                <span className="text-slate-300">|</span>
+                <span className="text-slate-400">🔍 —</span>
+                <span className="text-slate-300">|</span>
+                <span className="text-slate-400">🌐 WGS 84</span>
+              </>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   )
