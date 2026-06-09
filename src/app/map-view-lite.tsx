@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { useAppStore, type CommuneType } from '@/lib/store'
+import { useAppStore, type CommuneType, type OverlaySectionKey, OVERLAY_SECTION_LABELS } from '@/lib/store'
 import {
   type Intervention, type Quartier, type InterventionPhoto,
   TYPE_LABELS, TYPE_COLORS, TYPE_ICONS, STATUT_LABELS, STATUT_COLORS,
@@ -34,6 +34,11 @@ function MapView({ interventions, quartiers, selectedCommune, canSeeAllCommunes,
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [hoveredCommune, setHoveredCommune] = useState<string | null>(null)
   const { setSelectedCommune, settings } = useAppStore()
+
+  // Helper to check overlay section visibility
+  const isSectionVisible = useCallback((key: OverlaySectionKey): boolean => {
+    return settings.overlaySectionVisibility?.[key] ?? OVERLAY_SECTION_LABELS[key]?.defaultVisible ?? true
+  }, [settings.overlaySectionVisibility])
 
   const [mapError, setMapError] = useState(false)
   const [mapLoadAttempt, setMapLoadAttempt] = useState(0)
@@ -779,52 +784,121 @@ function MapView({ interventions, quartiers, selectedCommune, canSeeAllCommunes,
 
                 {/* Content — scrollable */}
                 <div className="p-4 space-y-3 max-h-[65vh] overflow-y-auto">
+                  {/* Progress Indicator — NEW section */}
+                  {isSectionVisible('progressIndicator') && (
+                    <div className="bg-gradient-to-l from-teal-50 to-emerald-50 rounded-xl p-2.5 border border-teal-100">
+                      <div className="text-[9px] text-teal-600 font-semibold mb-1.5">📊 مؤشر التقدم</div>
+                      <div className="flex items-center gap-3">
+                        <div className="flex-1">
+                          <div className="w-full bg-slate-200/60 rounded-full h-2.5 overflow-hidden">
+                            <motion.div
+                              initial={{ width: 0 }}
+                              animate={{ width: `${overlayIntervention.statut === 'TERMINEE' ? 100 : overlayIntervention.statut === 'EN_COURS' ? 60 : overlayIntervention.statut === 'PLANIFIEE' ? 25 : 0}%` }}
+                              transition={{ duration: 0.8, ease: 'easeOut' }}
+                              className="h-full rounded-full"
+                              style={{
+                                background: overlayIntervention.statut === 'TERMINEE'
+                                  ? 'linear-gradient(90deg, #10b981, #059669)'
+                                  : overlayIntervention.statut === 'EN_COURS'
+                                  ? 'linear-gradient(90deg, #f59e0b, #d97706)'
+                                  : overlayIntervention.statut === 'PLANIFIEE'
+                                  ? 'linear-gradient(90deg, #3b82f6, #2563eb)'
+                                  : '#94a3b8',
+                              }}
+                            />
+                          </div>
+                        </div>
+                        <span className="text-[10px] font-bold" style={{
+                          color: STATUT_COLORS[overlayIntervention.statut] || '#6b7280'
+                        }}>
+                          {overlayIntervention.statut === 'TERMINEE' ? '100%' : overlayIntervention.statut === 'EN_COURS' ? '60%' : overlayIntervention.statut === 'PLANIFIEE' ? '25%' : '0%'}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between mt-1.5">
+                        <span className="text-[9px] text-slate-400">مبرمجة</span>
+                        <span className="text-[9px] text-slate-400">جارية</span>
+                        <span className="text-[9px] text-slate-400">منجزة</span>
+                      </div>
+                    </div>
+                  )}
+
                   {/* Location Info */}
-                  <div className="flex items-start gap-2.5 bg-slate-50 rounded-xl p-3 border border-slate-100">
-                    <div className="w-7 h-7 rounded-lg flex items-center justify-center text-sm flex-shrink-0" style={{ backgroundColor: (TYPE_COLORS[overlayIntervention.type] || '#059669') + '15' }}>
-                      📍
+                  {isSectionVisible('location') && (
+                    <div className="flex items-start gap-2.5 bg-slate-50 rounded-xl p-3 border border-slate-100">
+                      <div className="w-7 h-7 rounded-lg flex items-center justify-center text-sm flex-shrink-0" style={{ backgroundColor: (TYPE_COLORS[overlayIntervention.type] || '#059669') + '15' }}>
+                        📍
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-bold text-slate-800 truncate">🏘️ {overlayIntervention.quartier}</p>
+                        {overlayIntervention.adresse && (
+                          <p className="text-xs text-slate-500 mt-0.5 truncate">🏠 {overlayIntervention.adresse}</p>
+                        )}
+                        <p className="text-xs text-slate-500 mt-0.5">
+                          📅 {new Date(overlayIntervention.date).toLocaleDateString('ar-MA')}
+                        </p>
+                      </div>
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-bold text-slate-800 truncate">🏘️ {overlayIntervention.quartier}</p>
-                      {overlayIntervention.adresse && (
-                        <p className="text-xs text-slate-500 mt-0.5 truncate">🏠 {overlayIntervention.adresse}</p>
-                      )}
-                      <p className="text-xs text-slate-500 mt-0.5">
-                        📅 {new Date(overlayIntervention.date).toLocaleDateString('ar-MA')}
-                      </p>
-                    </div>
-                  </div>
+                  )}
 
                   {/* Details Grid */}
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="bg-slate-50 rounded-xl p-2.5 border border-slate-100">
-                      <div className="text-[9px] text-slate-400 font-semibold mb-1">🔖 المرجع</div>
-                      <div className="text-xs font-bold text-slate-700 truncate font-mono">{overlayIntervention.reference || '—'}</div>
+                  {isSectionVisible('details') && (
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="bg-slate-50 rounded-xl p-2.5 border border-slate-100">
+                        <div className="text-[9px] text-slate-400 font-semibold mb-1">🔖 المرجع</div>
+                        <div className="text-xs font-bold text-slate-700 truncate font-mono">{overlayIntervention.reference || '—'}</div>
+                      </div>
+                      <div className="bg-slate-50 rounded-xl p-2.5 border border-slate-100">
+                        <div className="text-[9px] text-slate-400 font-semibold mb-1">👤 العون</div>
+                        <div className="text-xs font-bold text-slate-700 truncate">{overlayIntervention.agentNom || '—'}</div>
+                      </div>
+                      <div className="bg-slate-50 rounded-xl p-2.5 border border-slate-100">
+                        <div className="text-[9px] text-slate-400 font-semibold mb-1">📐 المساحة</div>
+                        <div className="text-xs font-bold text-slate-700">{overlayIntervention.superficie ? `${overlayIntervention.superficie} م²` : '—'}</div>
+                      </div>
+                      <div className="bg-slate-50 rounded-xl p-2.5 border border-slate-100">
+                        <div className="text-[9px] text-slate-400 font-semibold mb-1">🏛️ الجماعة</div>
+                        <div className="text-xs font-bold text-slate-700">{COMMUNE_LABELS[overlayIntervention.commune] || overlayIntervention.commune || '—'}</div>
+                      </div>
+                      <div className="bg-slate-50 rounded-xl p-2.5 border border-slate-100">
+                        <div className="text-[9px] text-slate-400 font-semibold mb-1">🔢 عدد الخدمات</div>
+                        <div className="text-xs font-bold text-slate-700">{overlayIntervention.nombrePrestations || '—'}</div>
+                      </div>
+                      <div className="bg-slate-50 rounded-xl p-2.5 border border-slate-100">
+                        <div className="text-[9px] text-slate-400 font-semibold mb-1">📦 الكمية</div>
+                        <div className="text-xs font-bold text-slate-700 truncate">{overlayIntervention.quantite || '—'}</div>
+                      </div>
                     </div>
-                    <div className="bg-slate-50 rounded-xl p-2.5 border border-slate-100">
-                      <div className="text-[9px] text-slate-400 font-semibold mb-1">👤 العون</div>
-                      <div className="text-xs font-bold text-slate-700 truncate">{overlayIntervention.agentNom || '—'}</div>
+                  )}
+
+                  {/* GPS Coordinates — NEW section */}
+                  {isSectionVisible('coordinates') && (
+                    <div className="bg-emerald-50/80 rounded-xl p-2.5 border border-emerald-100">
+                      <div className="text-[9px] text-emerald-600 font-semibold mb-1.5">🌍 الإحداثيات الجغرافية</div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="bg-white/70 rounded-lg px-2.5 py-1.5 border border-emerald-50">
+                          <span className="text-[10px] text-emerald-500 font-medium">خط العرض</span>
+                          <p className="text-xs font-bold text-emerald-700 font-mono" dir="ltr">{overlayIntervention.latitude?.toFixed(6) || '—'}</p>
+                        </div>
+                        <div className="bg-white/70 rounded-lg px-2.5 py-1.5 border border-emerald-50">
+                          <span className="text-[10px] text-emerald-500 font-medium">خط الطول</span>
+                          <p className="text-xs font-bold text-emerald-700 font-mono" dir="ltr">{overlayIntervention.longitude?.toFixed(6) || '—'}</p>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => {
+                          const url = `https://www.google.com/maps?q=${overlayIntervention.latitude},${overlayIntervention.longitude}`
+                          window.open(url, '_blank')
+                        }}
+                        className="mt-1.5 w-full flex items-center justify-center gap-1.5 bg-white/60 hover:bg-white/90 rounded-lg px-2 py-1.5 border border-emerald-100 transition-colors"
+                      >
+                        <span className="text-[10px]">🗺️</span>
+                        <span className="text-[10px] font-bold text-emerald-600">فتح في خرائط جوجل</span>
+                      </button>
                     </div>
-                    <div className="bg-slate-50 rounded-xl p-2.5 border border-slate-100">
-                      <div className="text-[9px] text-slate-400 font-semibold mb-1">📐 المساحة</div>
-                      <div className="text-xs font-bold text-slate-700">{overlayIntervention.superficie ? `${overlayIntervention.superficie} م²` : '—'}</div>
-                    </div>
-                    <div className="bg-slate-50 rounded-xl p-2.5 border border-slate-100">
-                      <div className="text-[9px] text-slate-400 font-semibold mb-1">🏛️ الجماعة</div>
-                      <div className="text-xs font-bold text-slate-700">{COMMUNE_LABELS[overlayIntervention.commune] || overlayIntervention.commune || '—'}</div>
-                    </div>
-                    <div className="bg-slate-50 rounded-xl p-2.5 border border-slate-100">
-                      <div className="text-[9px] text-slate-400 font-semibold mb-1">🔢 عدد الخدمات</div>
-                      <div className="text-xs font-bold text-slate-700">{overlayIntervention.nombrePrestations || '—'}</div>
-                    </div>
-                    <div className="bg-slate-50 rounded-xl p-2.5 border border-slate-100">
-                      <div className="text-[9px] text-slate-400 font-semibold mb-1">📦 الكمية</div>
-                      <div className="text-xs font-bold text-slate-700 truncate">{overlayIntervention.quantite || '—'}</div>
-                    </div>
-                  </div>
+                  )}
 
                   {/* Time Details */}
-                  {(overlayIntervention.heureDebut || overlayIntervention.heureFin) && (
+                  {isSectionVisible('timeDetails') && (overlayIntervention.heureDebut || overlayIntervention.heureFin) && (
                     <div className="bg-indigo-50/80 rounded-xl p-2.5 border border-indigo-100">
                       <div className="text-[9px] text-indigo-600 font-semibold mb-1.5">⏰ أوقات التدخل</div>
                       <div className="flex items-center gap-3">
@@ -865,7 +939,7 @@ function MapView({ interventions, quartiers, selectedCommune, canSeeAllCommunes,
                   )}
 
                   {/* Costs Section */}
-                  {(overlayIntervention.coutMainOeuvre || overlayIntervention.coutMateriaux || overlayIntervention.coutTotal) && (
+                  {isSectionVisible('costs') && (overlayIntervention.coutMainOeuvre || overlayIntervention.coutMateriaux || overlayIntervention.coutTotal) && (
                     <div className="bg-rose-50/80 rounded-xl p-2.5 border border-rose-100">
                       <div className="text-[9px] text-rose-600 font-semibold mb-1.5">💰 التكاليف</div>
                       <div className="space-y-1.5">
@@ -892,7 +966,7 @@ function MapView({ interventions, quartiers, selectedCommune, canSeeAllCommunes,
                   )}
 
                   {/* Products Used — from produitUtilise field */}
-                  {overlayIntervention.produitUtilise && (
+                  {isSectionVisible('product') && overlayIntervention.produitUtilise && (
                     <div className="bg-emerald-50/80 rounded-xl p-2.5 border border-emerald-100">
                       <div className="text-[9px] text-emerald-600 font-semibold mb-1">💊 المنتج المستعمل</div>
                       <p className="text-xs text-emerald-700 font-medium">{overlayIntervention.produitUtilise}</p>
@@ -900,7 +974,7 @@ function MapView({ interventions, quartiers, selectedCommune, canSeeAllCommunes,
                   )}
 
                   {/* Materials / Products Used — from materials array */}
-                  {overlayIntervention.materials && overlayIntervention.materials.length > 0 && (
+                  {isSectionVisible('materials') && overlayIntervention.materials && overlayIntervention.materials.length > 0 && (
                     <div className="bg-blue-50/80 rounded-xl p-2.5 border border-blue-100">
                       <div className="text-[9px] text-blue-600 font-semibold mb-1.5">🧪 المنتجات المستعملة ({overlayIntervention.materials.length})</div>
                       <div className="space-y-1.5">
@@ -917,7 +991,7 @@ function MapView({ interventions, quartiers, selectedCommune, canSeeAllCommunes,
                   )}
 
                   {/* Description */}
-                  {overlayIntervention.description && (
+                  {isSectionVisible('description') && overlayIntervention.description && (
                     <div className="bg-slate-50 rounded-xl p-2.5 border border-slate-100">
                       <div className="text-[9px] text-slate-400 font-semibold mb-1">📝 الوصف</div>
                       <p className="text-xs text-slate-600 leading-relaxed line-clamp-3">{overlayIntervention.description}</p>
@@ -925,7 +999,7 @@ function MapView({ interventions, quartiers, selectedCommune, canSeeAllCommunes,
                   )}
 
                   {/* Observations */}
-                  {overlayIntervention.observations && (
+                  {isSectionVisible('observations') && overlayIntervention.observations && (
                     <div className="bg-amber-50/80 rounded-xl p-2.5 border border-amber-100">
                       <div className="text-[9px] text-amber-600 font-semibold mb-1">💬 الملاحظات</div>
                       <p className="text-xs text-amber-700 leading-relaxed line-clamp-3">{overlayIntervention.observations}</p>
@@ -933,7 +1007,7 @@ function MapView({ interventions, quartiers, selectedCommune, canSeeAllCommunes,
                   )}
 
                   {/* Linked Documents */}
-                  {overlayIntervention.documents && overlayIntervention.documents.length > 0 && (
+                  {isSectionVisible('documents') && overlayIntervention.documents && overlayIntervention.documents.length > 0 && (
                     <div className="bg-purple-50/80 rounded-xl p-2.5 border border-purple-100">
                       <div className="text-[9px] text-purple-600 font-semibold mb-1.5">📄 الوثائق المرتبطة ({overlayIntervention.documents.length})</div>
                       <div className="space-y-1.5">
@@ -955,7 +1029,7 @@ function MapView({ interventions, quartiers, selectedCommune, canSeeAllCommunes,
                   )}
 
                   {/* Photos */}
-                  {overlayIntervention.photos && overlayIntervention.photos.length > 0 && (
+                  {isSectionVisible('photos') && overlayIntervention.photos && overlayIntervention.photos.length > 0 && (
                     <div className="bg-cyan-50/80 rounded-xl p-2.5 border border-cyan-100">
                       <div className="text-[9px] text-cyan-600 font-semibold mb-1.5">📸 الصور ({overlayIntervention.photos.length})</div>
                       <div className="grid grid-cols-3 gap-1.5">
@@ -983,6 +1057,75 @@ function MapView({ interventions, quartiers, selectedCommune, canSeeAllCommunes,
                             <span className="text-xs font-bold text-cyan-600">+{overlayIntervention.photos.length - 6}</span>
                           </div>
                         )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* System Info — NEW section */}
+                  {isSectionVisible('systemInfo') && (
+                    <div className="bg-slate-50/80 rounded-xl p-2.5 border border-slate-200">
+                      <div className="text-[9px] text-slate-500 font-semibold mb-1.5">⚙️ معلومات النظام</div>
+                      <div className="space-y-1">
+                        <div className="flex items-center justify-between bg-white/60 rounded-lg px-2.5 py-1.5 border border-slate-100">
+                          <span className="text-[10px] text-slate-400 font-medium">تاريخ الإنشاء</span>
+                          <span className="text-[10px] font-bold text-slate-600 font-mono" dir="ltr">
+                            {overlayIntervention.createdAt ? new Date(overlayIntervention.createdAt).toLocaleDateString('ar-MA', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between bg-white/60 rounded-lg px-2.5 py-1.5 border border-slate-100">
+                          <span className="text-[10px] text-slate-400 font-medium">آخر تحديث</span>
+                          <span className="text-[10px] font-bold text-slate-600 font-mono" dir="ltr">
+                            {overlayIntervention.updatedAt ? new Date(overlayIntervention.updatedAt).toLocaleDateString('ar-MA', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between bg-white/60 rounded-lg px-2.5 py-1.5 border border-slate-100">
+                          <span className="text-[10px] text-slate-400 font-medium">المعرّف</span>
+                          <span className="text-[10px] font-bold text-slate-500 font-mono truncate max-w-[180px]" dir="ltr">{overlayIntervention.id}</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Quick Actions — NEW section */}
+                  {isSectionVisible('quickActions') && (
+                    <div className="bg-gradient-to-l from-violet-50/80 to-purple-50/80 rounded-xl p-2.5 border border-violet-100">
+                      <div className="text-[9px] text-violet-600 font-semibold mb-1.5">⚡ إجراءات سريعة</div>
+                      <div className="grid grid-cols-3 gap-1.5">
+                        <button
+                          onClick={() => {
+                            if (onNavigateToInterventions) onNavigateToInterventions()
+                          }}
+                          className="flex flex-col items-center gap-1 bg-white/70 rounded-lg px-2 py-2 border border-violet-50 hover:bg-violet-50 transition-colors"
+                        >
+                          <span className="text-sm">👁️</span>
+                          <span className="text-[9px] font-bold text-violet-600">التفاصيل</span>
+                        </button>
+                        <button
+                          onClick={() => {
+                            const url = `https://www.google.com/maps?q=${overlayIntervention.latitude},${overlayIntervention.longitude}`
+                            window.open(url, '_blank')
+                          }}
+                          className="flex flex-col items-center gap-1 bg-white/70 rounded-lg px-2 py-2 border border-violet-50 hover:bg-violet-50 transition-colors"
+                        >
+                          <span className="text-sm">🗺️</span>
+                          <span className="text-[9px] font-bold text-violet-600">خرائط جوجل</span>
+                        </button>
+                        <button
+                          onClick={() => {
+                            const text = `تدخل ${TYPE_LABELS[overlayIntervention.type] || overlayIntervention.type} — ${overlayIntervention.quartier} — ${new Date(overlayIntervention.date).toLocaleDateString('ar-MA')} — ${STATUT_LABELS[overlayIntervention.statut] || overlayIntervention.statut}`
+                            if (navigator.share) {
+                              navigator.share({ title: 'تفاصيل التدخل', text }).catch(() => {})
+                            } else {
+                              navigator.clipboard.writeText(text).then(() => {
+                                // Brief visual feedback
+                              }).catch(() => {})
+                            }
+                          }}
+                          className="flex flex-col items-center gap-1 bg-white/70 rounded-lg px-2 py-2 border border-violet-50 hover:bg-violet-50 transition-colors"
+                        >
+                          <span className="text-sm">📤</span>
+                          <span className="text-[9px] font-bold text-violet-600">مشاركة</span>
+                        </button>
                       </div>
                     </div>
                   )}

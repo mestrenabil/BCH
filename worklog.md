@@ -1008,3 +1008,36 @@ Stage Summary:
 - Added all requested fields: المرجع, النوع, الحالة, العون, التاريخ, الحي, العنوان, الوصف, الملاحظات, المساحة, المنتجات المستعملة
 - Floating overlay is now draggable, closeable, and has "عرض التفاصيل" button
 - Verified working via browser testing with agent-browser
+
+---
+Task ID: 7
+Agent: main
+Task: Add togglable overlay sections that can be hidden from Settings
+
+Work Log:
+- Added `OverlaySectionKey` type and `OVERLAY_SECTION_LABELS` constant to `src/lib/store.ts` with 14 sections:
+  - 10 default-visible sections: location, details, timeDetails, costs, product, materials, description, observations, documents, photos
+  - 4 new hidden-by-default sections: coordinates, systemInfo, quickActions, progressIndicator
+- Added `overlaySectionVisibility: Record<OverlaySectionKey, boolean>` to `AppSettings` interface
+- Added default visibility values to `DEFAULT_SETTINGS` (computed from OVERLAY_SECTION_LABELS)
+- Added "🪟 أقسام لوحة التدخل" settings section to `settings-view-lite.tsx`:
+  - Two groups: "الأقسام الأساسية" (10 default-visible) and "✨ أقسام إضافية" (4 hidden-by-default)
+  - Toggle switches for each section with emerald/amber color coding
+  - "إظهار الكل", "إخفاء الكل", "الافتراضي" quick-action buttons
+  - Info box explaining the feature
+- Updated `map-view-lite.tsx`:
+  - Added `isSectionVisible()` helper function using settings.overlaySectionVisibility
+  - Wrapped all existing overlay sections with visibility checks
+  - Added 4 new sections:
+    - **مؤشر التقدم** (Progress Indicator): animated progress bar based on intervention status
+    - **الإحداثيات الجغرافية** (GPS Coordinates): lat/lng display + "Open in Google Maps" button
+    - **معلومات النظام** (System Info): creation date, last update, intervention ID
+    - **إجراءات سريعة** (Quick Actions): 3-button grid with View Details, Google Maps, Share
+- Updated `src/app/api/settings/route.ts` to include overlaySectionVisibility in DEFAULT_SETTINGS
+- Lint passes cleanly, dev server running successfully
+
+Stage Summary:
+- 14 overlay sections now individually toggleable from Settings page
+- 4 new sections added: Progress Indicator, GPS Coordinates, System Info, Quick Actions
+- Settings persist to backend via existing auto-save mechanism
+- All new sections default to hidden, can be enabled from settings

@@ -18,6 +18,12 @@ const DEFAULT_SETTINGS = {
   deadlineReminderDays: 3,
   fontSize: 'medium',
   compactMode: false,
+  // Overlay section visibility
+  overlaySectionVisibility: {
+    location: true, details: true, timeDetails: true, costs: true, product: true,
+    materials: true, description: true, observations: true, documents: true, photos: true,
+    coordinates: false, systemInfo: false, quickActions: false, progressIndicator: false,
+  },
   // Print / Document settings
   presidentName: '',
   responsableName: '',

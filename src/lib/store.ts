@@ -14,6 +14,28 @@ export interface AuthUser {
   role: string
 }
 
+export type OverlaySectionKey =
+  | 'location' | 'details' | 'timeDetails' | 'costs' | 'product'
+  | 'materials' | 'description' | 'observations' | 'documents' | 'photos'
+  | 'coordinates' | 'systemInfo' | 'quickActions' | 'progressIndicator'
+
+export const OVERLAY_SECTION_LABELS: Record<OverlaySectionKey, { ar: string; icon: string; defaultVisible: boolean }> = {
+  location: { ar: 'الموقع', icon: '📍', defaultVisible: true },
+  details: { ar: 'التفاصيل', icon: '📋', defaultVisible: true },
+  timeDetails: { ar: 'أوقات التدخل', icon: '⏰', defaultVisible: true },
+  costs: { ar: 'التكاليف', icon: '💰', defaultVisible: true },
+  product: { ar: 'المنتج المستعمل', icon: '💊', defaultVisible: true },
+  materials: { ar: 'المنتجات المستعملة', icon: '🧪', defaultVisible: true },
+  description: { ar: 'الوصف', icon: '📝', defaultVisible: true },
+  observations: { ar: 'الملاحظات', icon: '💬', defaultVisible: true },
+  documents: { ar: 'الوثائق', icon: '📄', defaultVisible: true },
+  photos: { ar: 'الصور', icon: '📸', defaultVisible: true },
+  coordinates: { ar: 'الإحداثيات الجغرافية', icon: '🌍', defaultVisible: false },
+  systemInfo: { ar: 'معلومات النظام', icon: '⚙️', defaultVisible: false },
+  quickActions: { ar: 'إجراءات سريعة', icon: '⚡', defaultVisible: false },
+  progressIndicator: { ar: 'مؤشر التقدم', icon: '📊', defaultVisible: false },
+}
+
 export interface AppSettings {
   animationsEnabled: boolean
   mapClickEnabled: boolean
@@ -29,6 +51,8 @@ export interface AppSettings {
   deadlineReminderDays: number
   fontSize: 'small' | 'medium' | 'large'
   compactMode: boolean
+  // Overlay section visibility
+  overlaySectionVisibility: Record<OverlaySectionKey, boolean>
   // Print / Document settings
   presidentName: string
   responsableName: string
@@ -126,6 +150,10 @@ export const DEFAULT_SETTINGS: AppSettings = {
   deadlineReminderDays: 3,
   fontSize: 'medium',
   compactMode: false,
+  // Overlay section visibility — defaults from OVERLAY_SECTION_LABELS
+  overlaySectionVisibility: Object.fromEntries(
+    Object.entries(OVERLAY_SECTION_LABELS).map(([key, val]) => [key, val.defaultVisible])
+  ) as Record<OverlaySectionKey, boolean>,
   // Print / Document settings
   presidentName: '',
   responsableName: '',

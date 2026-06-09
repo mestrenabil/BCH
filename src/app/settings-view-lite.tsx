@@ -3,7 +3,7 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { toast } from 'sonner'
-import { useAppStore, type CommuneType } from '@/lib/store'
+import { useAppStore, type CommuneType, type OverlaySectionKey, OVERLAY_SECTION_LABELS } from '@/lib/store'
 import { getYearOptions } from '@/lib/store'
 import {
   type Quartier,
@@ -1114,6 +1114,145 @@ function SettingsView() {
                 className="flex-1 h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-600" />
               <span className="text-sm font-bold text-slate-700 bg-slate-50 px-3 py-1 rounded-lg min-w-[3rem] text-center">{settings.mapClusterRadius}</span>
             </div>
+          </div>
+        </div>
+      </motion.div>
+
+      {/* Overlay Section Visibility Settings */}
+      <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }}
+        className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+        <div className="bg-gradient-to-l from-teal-600 to-emerald-600 text-white px-6 py-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="font-bold text-base">🪟 أقسام لوحة التدخل</h3>
+              <p className="text-teal-200 text-xs mt-0.5">إظهار أو إخفاء أقسام لوحة تفاصيل التدخل على الخريطة</p>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => {
+                  const allVisible = Object.fromEntries(
+                    (Object.keys(OVERLAY_SECTION_LABELS) as OverlaySectionKey[]).map(k => [k, true])
+                  ) as Record<OverlaySectionKey, boolean>
+                  handleUpdateAndSave({ overlaySectionVisibility: allVisible })
+                }}
+                className="px-3 py-1.5 bg-white/20 backdrop-blur-sm rounded-lg text-xs font-bold hover:bg-white/30 transition-colors"
+              >
+                إظهار الكل
+              </button>
+              <button
+                onClick={() => {
+                  const allHidden = Object.fromEntries(
+                    (Object.keys(OVERLAY_SECTION_LABELS) as OverlaySectionKey[]).map(k => [k, false])
+                  ) as Record<OverlaySectionKey, boolean>
+                  handleUpdateAndSave({ overlaySectionVisibility: allHidden })
+                }}
+                className="px-3 py-1.5 bg-white/20 backdrop-blur-sm rounded-lg text-xs font-bold hover:bg-white/30 transition-colors"
+              >
+                إخفاء الكل
+              </button>
+              <button
+                onClick={() => {
+                  const defaults = Object.fromEntries(
+                    Object.entries(OVERLAY_SECTION_LABELS).map(([key, val]) => [key, val.defaultVisible])
+                  ) as Record<OverlaySectionKey, boolean>
+                  handleUpdateAndSave({ overlaySectionVisibility: defaults })
+                }}
+                className="px-3 py-1.5 bg-white/20 backdrop-blur-sm rounded-lg text-xs font-bold hover:bg-white/30 transition-colors"
+              >
+                الافتراضي
+              </button>
+            </div>
+          </div>
+        </div>
+        <div className="p-6 space-y-1" dir="rtl">
+          {/* Group: Default visible sections */}
+          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 mt-1">الأقسام الأساسية</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {(Object.keys(OVERLAY_SECTION_LABELS) as OverlaySectionKey[])
+              .filter(key => OVERLAY_SECTION_LABELS[key].defaultVisible)
+              .map((key) => {
+                const section = OVERLAY_SECTION_LABELS[key]
+                const isVisible = settings.overlaySectionVisibility?.[key] ?? section.defaultVisible
+                return (
+                  <div key={key}
+                    className={`flex items-center justify-between gap-3 rounded-xl p-3 border transition-all ${
+                      isVisible ? 'bg-emerald-50/50 border-emerald-100' : 'bg-slate-50 border-slate-100 opacity-60'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <span className="text-base">{section.icon}</span>
+                      <span className={`text-sm font-medium ${isVisible ? 'text-slate-700' : 'text-slate-400'}`}>{section.ar}</span>
+                    </div>
+                    <button
+                      onClick={() => {
+                        handleUpdateAndSave({
+                          overlaySectionVisibility: {
+                            ...settings.overlaySectionVisibility,
+                            [key]: !isVisible,
+                          } as Record<OverlaySectionKey, boolean>,
+                        })
+                      }}
+                      className={`relative w-11 h-6 rounded-full transition-colors duration-300 ${isVisible ? 'bg-emerald-500' : 'bg-slate-300'}`}
+                    >
+                      <motion.div
+                        className="absolute top-0.5 w-5 h-5 bg-white rounded-full shadow-sm"
+                        animate={{ right: isVisible ? '0.125rem' : '1.375rem' }}
+                        transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+                      />
+                    </button>
+                  </div>
+                )
+              })}
+          </div>
+
+          <div className="border-t border-slate-100 my-3" />
+
+          {/* Group: Default hidden sections (new) */}
+          <p className="text-[10px] font-bold text-amber-500 uppercase tracking-wider mb-2 mt-1">✨ أقسام إضافية (مخفية افتراضياً)</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {(Object.keys(OVERLAY_SECTION_LABELS) as OverlaySectionKey[])
+              .filter(key => !OVERLAY_SECTION_LABELS[key].defaultVisible)
+              .map((key) => {
+                const section = OVERLAY_SECTION_LABELS[key]
+                const isVisible = settings.overlaySectionVisibility?.[key] ?? section.defaultVisible
+                return (
+                  <div key={key}
+                    className={`flex items-center justify-between gap-3 rounded-xl p-3 border transition-all ${
+                      isVisible ? 'bg-amber-50/50 border-amber-100' : 'bg-slate-50 border-slate-100 opacity-60'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <span className="text-base">{section.icon}</span>
+                      <span className={`text-sm font-medium ${isVisible ? 'text-slate-700' : 'text-slate-400'}`}>{section.ar}</span>
+                    </div>
+                    <button
+                      onClick={() => {
+                        handleUpdateAndSave({
+                          overlaySectionVisibility: {
+                            ...settings.overlaySectionVisibility,
+                            [key]: !isVisible,
+                          } as Record<OverlaySectionKey, boolean>,
+                        })
+                      }}
+                      className={`relative w-11 h-6 rounded-full transition-colors duration-300 ${isVisible ? 'bg-amber-500' : 'bg-slate-300'}`}
+                    >
+                      <motion.div
+                        className="absolute top-0.5 w-5 h-5 bg-white rounded-full shadow-sm"
+                        animate={{ right: isVisible ? '0.125rem' : '1.375rem' }}
+                        transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+                      />
+                    </button>
+                  </div>
+                )
+              })}
+          </div>
+
+          {/* Info box */}
+          <div className="bg-teal-50/80 rounded-xl p-3 flex items-start gap-2.5 mt-3 border border-teal-100">
+            <span className="text-sm mt-0.5">💡</span>
+            <p className="text-xs text-teal-700 leading-relaxed">
+              الأقسام المخفية لا تظهر في لوحة تفاصيل التدخل عند النقر على تدخل في الخريطة. يمكنك تفعيل الأقسام الإضافية مثل <strong>الإحداثيات الجغرافية</strong> و <strong>معلومات النظام</strong> حسب حاجتك.
+            </p>
           </div>
         </div>
       </motion.div>
