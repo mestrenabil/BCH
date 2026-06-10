@@ -222,8 +222,17 @@ function MapView({ interventions, quartiers, selectedCommune, canSeeAllCommunes,
 
   // === HANDLERS FOR NEW FEATURES ===
 
+  // Helper: close all floating panels, then optionally open one
+  const closeAllPanels = useCallback((except?: 'legend' | 'quickStats' | 'measure' | 'overlay') => {
+    if (except !== 'legend') setShowLegend(false)
+    if (except !== 'quickStats') setShowQuickStatsPopup(false)
+    if (except !== 'measure') { setMeasureMode(false); setMeasureResult(null) }
+    if (except !== 'overlay') setOverlayIntervention(null)
+  }, [])
+
   // Intervention click → show floating overlay
   const handleInterventionClick = useCallback((intervention: Intervention, lat: number, lng: number) => {
+    closeAllPanels('overlay')
     setOverlayIntervention(intervention)
     // Position the overlay near center of the map area
     const mapEl = document.getElementById('map-area-container')
@@ -719,7 +728,7 @@ function MapView({ interventions, quartiers, selectedCommune, canSeeAllCommunes,
           transition={{ delay: 0.3 }}
           whileHover={{ scale: 1.08 }}
           whileTap={{ scale: 0.92 }}
-          onClick={() => setMobileSidebarOpen(v => !v)}
+          onClick={() => { setMobileSidebarOpen(v => !v); closeAllPanels() }}
           className="absolute top-3 right-3 z-[1000] w-10 h-10 bg-white/90 backdrop-blur-sm rounded-xl shadow-lg border border-slate-200/60 flex items-center justify-center hover:bg-white transition-colors lg:hidden"
           title="القائمة الجانبية"
         >
@@ -803,7 +812,15 @@ function MapView({ interventions, quartiers, selectedCommune, canSeeAllCommunes,
           transition={{ delay: 1.0 }}
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
-          onClick={() => { setMeasureMode(!measureMode); setMeasureResult(null) }}
+          onClick={() => {
+            if (!measureMode) {
+              closeAllPanels('measure')
+              setMeasureMode(true)
+            } else {
+              setMeasureMode(false)
+              setMeasureResult(null)
+            }
+          }}
           className={`absolute top-[212px] left-3 z-[1000] w-10 h-10 rounded-xl shadow-lg border flex items-center justify-center transition-all text-sm ${
             measureMode
               ? 'bg-red-600 text-white border-red-500 shadow-red-200'
@@ -821,7 +838,14 @@ function MapView({ interventions, quartiers, selectedCommune, canSeeAllCommunes,
           transition={{ delay: 1.1 }}
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
-          onClick={() => setShowLegend(!showLegend)}
+          onClick={() => {
+            if (!showLegend) {
+              closeAllPanels('legend')
+              setShowLegend(true)
+            } else {
+              setShowLegend(false)
+            }
+          }}
           className={`absolute top-[256px] left-3 z-[1000] w-10 h-10 rounded-xl shadow-lg border flex items-center justify-center transition-all text-sm ${
             showLegend
               ? 'bg-amber-600 text-white border-amber-500 shadow-amber-200'
@@ -986,7 +1010,14 @@ function MapView({ interventions, quartiers, selectedCommune, canSeeAllCommunes,
           transition={{ delay: 0.8 }}
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
-          onClick={() => setShowQuickStatsPopup(!showQuickStatsPopup)}
+          onClick={() => {
+            if (!showQuickStatsPopup) {
+              closeAllPanels('quickStats')
+              setShowQuickStatsPopup(true)
+            } else {
+              setShowQuickStatsPopup(false)
+            }
+          }}
           className="absolute bottom-4 left-4 z-[1000] w-12 h-12 bg-emerald-600 text-white rounded-xl shadow-lg shadow-emerald-200 flex items-center justify-center hover:bg-emerald-500 transition-colors"
           title="إحصائيات سريعة"
         >
@@ -1000,7 +1031,7 @@ function MapView({ interventions, quartiers, selectedCommune, canSeeAllCommunes,
               initial={{ opacity: 0, y: 20, scale: 0.95 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 20, scale: 0.95 }}
-              className="absolute bottom-18 left-4 z-[1000] bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-slate-200/60 p-4 w-64"
+              className="absolute bottom-20 left-4 z-[1000] bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-slate-200/60 p-4 w-64"
               dir="rtl"
             >
               <div className="flex items-center justify-between mb-3">
