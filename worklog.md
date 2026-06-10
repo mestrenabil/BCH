@@ -29,3 +29,26 @@ Stage Summary:
 - Desktop sidebar: hidden on mobile, visible on lg+ screens
 - Mobile sidebar: toggle via hamburger button, 85vw max width, close button
 - All verified working via Agent Browser
+---
+Task ID: 1
+Agent: Main Agent
+Task: Move legend and measurement tools to the right side of the map and ensure panel mutual exclusion
+
+Work Log:
+- Read map-view-lite.tsx (~1250 lines) to understand current layout and button positions
+- Identified that legend (📖) and measure (📏) buttons were on the LEFT side at top-[256px] left-3 and top-[212px] left-3
+- Moved measure button to RIGHT side: top-[52px] right-3 with animation direction changed from x:-20 to x:20
+- Moved legend button to RIGHT side: top-[96px] right-3 with animation direction changed from x:-20 to x:20
+- Moved print button to RIGHT side below legend: top-[140px] right-3
+- Moved legend panel to open on right side: top-[96px] right-14 with exit animation direction changed to x:20
+- Verified mutual exclusion logic (closeAllPanels) was already correctly implemented
+- Ran lint check - passed with no errors
+- Dev server running without errors
+- Browser verification confirmed all 6 checks pass
+
+Stage Summary:
+- Legend (📖) and Measure (📏) tools now appear on the RIGHT side of the map
+- Left side retains: Fullscreen, Map Layers (street/satellite/dark), Quartier toggle
+- Legend panel opens to the left of the right-side button
+- Mutual exclusion works: clicking one tool closes the other
+- Print button also moved to right side for consistency
