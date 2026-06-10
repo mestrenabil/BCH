@@ -787,15 +787,15 @@ function MapView({ interventions, quartiers, selectedCommune, canSeeAllCommunes,
           })}
         </div>
 
-        {/* Quartier Markers Toggle (replaces heatmap) */}
+        {/* Quartier Markers Toggle — RIGHT side */}
         <motion.button
-          initial={{ opacity: 0, x: -20 }}
+          initial={{ opacity: 0, x: 20 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ delay: 0.9 }}
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
           onClick={() => setShowQuartiers(!showQuartiers)}
-          className={`absolute top-[168px] left-3 z-[1000] w-10 h-10 rounded-xl shadow-lg border flex items-center justify-center transition-all text-sm ${
+          className={`absolute top-[184px] right-3 z-[1000] w-10 h-10 rounded-xl shadow-lg border flex items-center justify-center transition-all text-sm ${
             showQuartiers
               ? 'bg-teal-600 text-white border-teal-500 shadow-teal-200'
               : 'bg-white/90 backdrop-blur-sm text-slate-600 border-slate-200/60 hover:bg-white'
