@@ -789,25 +789,99 @@ function MapView({ interventions, quartiers, selectedCommune, canSeeAllCommunes,
               </svg>
             )}
           </motion.button>
+
+          {/* Divider */}
+          <div className="w-6 h-px bg-slate-300/60 mx-auto" />
+
+          {/* Quick Stats Toggle */}
+          <motion.button
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ delay: 0.9 }}
+            whileHover={{ scale: 1.08 }}
+            whileTap={{ scale: 0.92 }}
+            onClick={() => {
+              if (!showQuickStatsPopup) {
+                closeAllPanels('quickStats')
+                setShowQuickStatsPopup(true)
+              } else {
+                setShowQuickStatsPopup(false)
+              }
+            }}
+            className={`w-10 h-10 rounded-xl shadow-lg border flex items-center justify-center transition-all text-sm ${
+              showQuickStatsPopup
+                ? 'bg-emerald-600 text-white border-emerald-500 shadow-emerald-200'
+                : 'bg-white/90 backdrop-blur-sm text-slate-600 border-slate-200/60 hover:bg-white'
+            }`}
+            title="إحصائيات سريعة"
+          >
+            📊
+          </motion.button>
+
+          {/* Divider */}
+          <div className="w-6 h-px bg-slate-300/60 mx-auto" />
+
+          {/* Quartier Markers Toggle */}
+          <motion.button
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: 1.0 }}
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={() => setShowQuartiers(!showQuartiers)}
+            className={`w-10 h-10 rounded-xl shadow-lg border flex items-center justify-center transition-all text-sm ${
+              showQuartiers
+                ? 'bg-teal-600 text-white border-teal-500 shadow-teal-200'
+                : 'bg-white/90 backdrop-blur-sm text-slate-600 border-slate-200/60 hover:bg-white'
+            }`}
+            title="إظهار الأحياء"
+          >
+            📍
+          </motion.button>
         </div>
 
-        {/* Quartier Markers Toggle — RIGHT side */}
-        <motion.button
-          initial={{ opacity: 0, x: 20 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ delay: 0.9 }}
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
-          onClick={() => setShowQuartiers(!showQuartiers)}
-          className={`absolute top-[184px] right-3 z-[1000] w-10 h-10 rounded-xl shadow-lg border flex items-center justify-center transition-all text-sm ${
-            showQuartiers
-              ? 'bg-teal-600 text-white border-teal-500 shadow-teal-200'
-              : 'bg-white/90 backdrop-blur-sm text-slate-600 border-slate-200/60 hover:bg-white'
-          }`}
-          title="إظهار الأحياء"
-        >
-          📍
-        </motion.button>
+        {/* Quick Stats Popup — opens to the right of left toolbar */}
+        <AnimatePresence>
+          {showQuickStatsPopup && (
+            <motion.div
+              initial={{ opacity: 0, x: -20, scale: 0.95 }}
+              animate={{ opacity: 1, x: 0, scale: 1 }}
+              exit={{ opacity: 0, x: -20, scale: 0.95 }}
+              className="absolute top-1/2 -translate-y-1/2 left-[60px] z-[1000] bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-slate-200/60 p-4 w-64"
+              dir="rtl"
+            >
+              <div className="flex items-center justify-between mb-3">
+                <h4 className="font-bold text-sm text-slate-800">📊 إحصائيات سريعة</h4>
+                <button onClick={() => setShowQuickStatsPopup(false)} className="p-1 hover:bg-slate-100 rounded-lg text-slate-400">✕</button>
+              </div>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-slate-500">إجمالي التدخلات</span>
+                  <span className="text-sm font-bold text-emerald-600">{filteredInterventions.length}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-slate-500">نسبة الإنجاز</span>
+                  <span className="text-sm font-bold text-emerald-600">{completionRate}%</span>
+                </div>
+                {typeCounts.map(t => (
+                  <div key={t.key} className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-xs">{t.icon}</span>
+                      <span className="text-xs text-slate-500">{t.label}</span>
+                    </div>
+                    <span className="text-xs font-bold" style={{ color: t.color }}>{t.count}</span>
+                  </div>
+                ))}
+                <div className="border-t border-slate-100 pt-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-slate-500">الأحياء</span>
+                    <span className="text-xs font-bold text-slate-700">{quartiers.length}</span>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* Measure Distance Toggle — RIGHT side */}
         <motion.button
@@ -1002,70 +1076,6 @@ function MapView({ interventions, quartiers, selectedCommune, canSeeAllCommunes,
                 >
                   ✕
                 </button>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {/* Quick Stats Floating Button */}
-        <motion.button
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.8 }}
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
-          onClick={() => {
-            if (!showQuickStatsPopup) {
-              closeAllPanels('quickStats')
-              setShowQuickStatsPopup(true)
-            } else {
-              setShowQuickStatsPopup(false)
-            }
-          }}
-          className="absolute bottom-4 left-1/2 -translate-x-1/2 z-[1000] w-12 h-12 bg-emerald-600 text-white rounded-xl shadow-lg shadow-emerald-200 flex items-center justify-center hover:bg-emerald-500 transition-colors"
-          title="إحصائيات سريعة"
-        >
-          📊
-        </motion.button>
-
-        {/* Quick Stats Popup */}
-        <AnimatePresence>
-          {showQuickStatsPopup && (
-            <motion.div
-              initial={{ opacity: 0, y: 20, scale: 0.95 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 20, scale: 0.95 }}
-              className="absolute bottom-20 left-1/2 -translate-x-1/2 z-[1000] bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-slate-200/60 p-4 w-64"
-              dir="rtl"
-            >
-              <div className="flex items-center justify-between mb-3">
-                <h4 className="font-bold text-sm text-slate-800">📊 إحصائيات سريعة</h4>
-                <button onClick={() => setShowQuickStatsPopup(false)} className="p-1 hover:bg-slate-100 rounded-lg text-slate-400">✕</button>
-              </div>
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-slate-500">إجمالي التدخلات</span>
-                  <span className="text-sm font-bold text-emerald-600">{filteredInterventions.length}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-slate-500">نسبة الإنجاز</span>
-                  <span className="text-sm font-bold text-emerald-600">{completionRate}%</span>
-                </div>
-                {typeCounts.map(t => (
-                  <div key={t.key} className="flex items-center justify-between">
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-xs">{t.icon}</span>
-                      <span className="text-xs text-slate-500">{t.label}</span>
-                    </div>
-                    <span className="text-xs font-bold" style={{ color: t.color }}>{t.count}</span>
-                  </div>
-                ))}
-                <div className="border-t border-slate-100 pt-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs text-slate-500">الأحياء</span>
-                    <span className="text-xs font-bold text-slate-700">{quartiers.length}</span>
-                  </div>
-                </div>
               </div>
             </motion.div>
           )}
