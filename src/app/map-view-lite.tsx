@@ -838,6 +838,74 @@ function MapView({ interventions, quartiers, selectedCommune, canSeeAllCommunes,
           >
             📍
           </motion.button>
+
+          {/* Divider */}
+          <div className="w-6 h-px bg-slate-300/60 mx-auto" />
+
+          {/* Measure Distance Toggle */}
+          <motion.button
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: 1.1 }}
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={() => {
+              if (!measureMode) {
+                closeAllPanels('measure')
+                setMeasureMode(true)
+              } else {
+                setMeasureMode(false)
+                setMeasureResult(null)
+              }
+            }}
+            className={`w-10 h-10 rounded-xl shadow-lg border flex items-center justify-center transition-all text-sm ${
+              measureMode
+                ? 'bg-red-600 text-white border-red-500 shadow-red-200'
+                : 'bg-white/90 backdrop-blur-sm text-slate-600 border-slate-200/60 hover:bg-white'
+            }`}
+            title="قياس المسافة"
+          >
+            📏
+          </motion.button>
+
+          {/* SIG Legend Toggle */}
+          <motion.button
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: 1.2 }}
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={() => {
+              if (!showLegend) {
+                closeAllPanels('legend')
+                setShowLegend(true)
+              } else {
+                setShowLegend(false)
+              }
+            }}
+            className={`w-10 h-10 rounded-xl shadow-lg border flex items-center justify-center transition-all text-sm ${
+              showLegend
+                ? 'bg-amber-600 text-white border-amber-500 shadow-amber-200'
+                : 'bg-white/90 backdrop-blur-sm text-slate-600 border-slate-200/60 hover:bg-white'
+            }`}
+            title="دليل الرموز"
+          >
+            📖
+          </motion.button>
+
+          {/* Export Map / Print */}
+          <motion.button
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: 1.3 }}
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={() => window.print()}
+            className="w-10 h-10 bg-white/90 backdrop-blur-sm rounded-xl shadow-lg border border-slate-200/60 flex items-center justify-center hover:bg-white transition-all text-sm text-slate-600"
+            title="طباعة الخريطة"
+          >
+            🖨️
+          </motion.button>
         </div>
 
         {/* Quick Stats Popup — opens to the right of left toolbar */}
@@ -883,79 +951,14 @@ function MapView({ interventions, quartiers, selectedCommune, canSeeAllCommunes,
           )}
         </AnimatePresence>
 
-        {/* Measure Distance Toggle — RIGHT side */}
-        <motion.button
-          initial={{ opacity: 0, x: 20 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ delay: 1.0 }}
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
-          onClick={() => {
-            if (!measureMode) {
-              closeAllPanels('measure')
-              setMeasureMode(true)
-            } else {
-              setMeasureMode(false)
-              setMeasureResult(null)
-            }
-          }}
-          className={`absolute top-[52px] right-3 z-[1000] w-10 h-10 rounded-xl shadow-lg border flex items-center justify-center transition-all text-sm ${
-            measureMode
-              ? 'bg-red-600 text-white border-red-500 shadow-red-200'
-              : 'bg-white/90 backdrop-blur-sm text-slate-600 border-slate-200/60 hover:bg-white'
-          }`}
-          title="قياس المسافة"
-        >
-          📏
-        </motion.button>
-
-        {/* SIG Legend Toggle Button — RIGHT side */}
-        <motion.button
-          initial={{ opacity: 0, x: 20 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ delay: 1.1 }}
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
-          onClick={() => {
-            if (!showLegend) {
-              closeAllPanels('legend')
-              setShowLegend(true)
-            } else {
-              setShowLegend(false)
-            }
-          }}
-          className={`absolute top-[96px] right-3 z-[1000] w-10 h-10 rounded-xl shadow-lg border flex items-center justify-center transition-all text-sm ${
-            showLegend
-              ? 'bg-amber-600 text-white border-amber-500 shadow-amber-200'
-              : 'bg-white/90 backdrop-blur-sm text-slate-600 border-slate-200/60 hover:bg-white'
-          }`}
-          title="دليل الرموز"
-        >
-          📖
-        </motion.button>
-
-        {/* Export Map Button — RIGHT side below legend */}
-        <motion.button
-          initial={{ opacity: 0, x: 20 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ delay: 1.2 }}
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
-          onClick={() => window.print()}
-          className="absolute top-[140px] right-3 z-[1000] w-10 h-10 bg-white/90 backdrop-blur-sm rounded-xl shadow-lg border border-slate-200/60 flex items-center justify-center hover:bg-white transition-all text-sm text-slate-600"
-          title="طباعة الخريطة"
-        >
-          🖨️
-        </motion.button>
-
-        {/* SIG Legend Panel — opens to the LEFT of the right-side button */}
+        {/* SIG Legend Panel — opens to the right of left toolbar */}
         <AnimatePresence>
           {showLegend && (
             <motion.div
-              initial={{ opacity: 0, x: 20, scale: 0.95 }}
+              initial={{ opacity: 0, x: -20, scale: 0.95 }}
               animate={{ opacity: 1, x: 0, scale: 1 }}
-              exit={{ opacity: 0, x: 20, scale: 0.95 }}
-              className="absolute top-[96px] right-14 z-[1000] bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-slate-200/60 p-4 w-64"
+              exit={{ opacity: 0, x: -20, scale: 0.95 }}
+              className="absolute top-1/2 -translate-y-1/2 left-[60px] z-[1000] bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-slate-200/60 p-4 w-64"
               dir="rtl"
             >
               <div className="flex items-center justify-between mb-3">
