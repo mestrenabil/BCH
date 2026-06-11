@@ -737,30 +737,9 @@ function MapView({ interventions, quartiers, selectedCommune, canSeeAllCommunes,
           </svg>
         </motion.button>
 
-        {/* 1. Fullscreen Toggle Button - bottom-left */}
-        <motion.button
-          initial={{ opacity: 0, scale: 0.8 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ delay: 0.5 }}
-          whileHover={{ scale: 1.08 }}
-          whileTap={{ scale: 0.92 }}
-          onClick={() => setIsFullscreen(!isFullscreen)}
-          className="absolute bottom-4 left-4 z-[1000] w-10 h-10 bg-white/90 backdrop-blur-sm rounded-xl shadow-lg border border-slate-200/60 flex items-center justify-center hover:bg-white transition-colors"
-          title={isFullscreen ? 'عرض عادي' : 'ملء الشاشة'}
-        >
-          {isFullscreen ? (
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-slate-600" viewBox="0 0 20 20" fill="currentColor">
-              <path fillRule="evenodd" d="M5 10a1 1 0 01-1 1H3a1 1 0 110-2h1a1 1 0 011 1zm12 0a1 1 0 01-1 1h-1a1 1 0 110-2h1a1 1 0 011 1zm-7-5a1 1 0 011-1h1a1 1 0 110 2h-1a1 1 0 01-1-1zM8 15a1 1 0 011 1h1a1 1 0 110-2H9a1 1 0 01-1 1z" clipRule="evenodd" />
-            </svg>
-          ) : (
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-slate-600" viewBox="0 0 20 20" fill="currentColor">
-              <path fillRule="evenodd" d="M3 4a1 1 0 011-1h4a1 1 0 010 2H6.414l2.293 2.293a1 1 0 11-1.414 1.414L5 6.414V8a1 1 0 01-2 0V4zm9 1a1 1 0 010-2h4a1 1 0 011 1v4a1 1 0 01-2 0V6.414l-2.293 2.293a1 1 0 11-1.414-1.414L13.586 5H12zm-9 7a1 1 0 012 0v1.586l2.293-2.293a1 1 0 111.414 1.414L6.414 15H8a1 1 0 010 2H4a1 1 0 01-1-1v-4zm13.707 1.707a1 1 0 01-1.414-1.414L17.586 14H16a1 1 0 010-2h4a1 1 0 011 1v4a1 1 0 01-2 0v-1.586l-2.293 2.293z" clipRule="evenodd" />
-            </svg>
-          )}
-        </motion.button>
-
-        {/* 2. Map Layer Toggle - bottom-left, above fullscreen */}
-        <div className="absolute bottom-16 left-4 z-[1000] flex flex-col gap-2">
+        {/* Left-side toolbar — vertically centered */}
+        <div className="absolute top-1/2 -translate-y-1/2 left-4 z-[1000] flex flex-col gap-2">
+          {/* Map Layer Toggle */}
           {(['street', 'satellite', 'dark'] as const).map((layer) => {
             const isActive = tileLayer === layer
             const icons: Record<string, string> = { street: '🗺️', satellite: '🛰️', dark: '🌙' }
@@ -770,7 +749,7 @@ function MapView({ interventions, quartiers, selectedCommune, canSeeAllCommunes,
                 key={layer}
                 initial={{ opacity: 0, x: -20 }}
                 animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: 0.6 + (layer === 'satellite' ? 0.1 : layer === 'dark' ? 0.2 : 0) }}
+                transition={{ delay: 0.5 + (layer === 'satellite' ? 0.1 : layer === 'dark' ? 0.2 : 0) }}
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
                 onClick={() => setTileLayer(layer)}
@@ -785,6 +764,31 @@ function MapView({ interventions, quartiers, selectedCommune, canSeeAllCommunes,
               </motion.button>
             )
           })}
+
+          {/* Divider */}
+          <div className="w-6 h-px bg-slate-300/60 mx-auto" />
+
+          {/* Fullscreen Toggle */}
+          <motion.button
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ delay: 0.8 }}
+            whileHover={{ scale: 1.08 }}
+            whileTap={{ scale: 0.92 }}
+            onClick={() => setIsFullscreen(!isFullscreen)}
+            className="w-10 h-10 bg-white/90 backdrop-blur-sm rounded-xl shadow-lg border border-slate-200/60 flex items-center justify-center hover:bg-white transition-colors"
+            title={isFullscreen ? 'عرض عادي' : 'ملء الشاشة'}
+          >
+            {isFullscreen ? (
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-slate-600" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M5 10a1 1 0 01-1 1H3a1 1 0 110-2h1a1 1 0 011 1zm12 0a1 1 0 01-1 1h-1a1 1 0 110-2h1a1 1 0 011 1zm-7-5a1 1 0 011-1h1a1 1 0 110 2h-1a1 1 0 01-1-1zM8 15a1 1 0 011 1h1a1 1 0 110-2H9a1 1 0 01-1 1z" clipRule="evenodd" />
+              </svg>
+            ) : (
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-slate-600" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M3 4a1 1 0 011-1h4a1 1 0 010 2H6.414l2.293 2.293a1 1 0 11-1.414 1.414L5 6.414V8a1 1 0 01-2 0V4zm9 1a1 1 0 010-2h4a1 1 0 011 1v4a1 1 0 01-2 0V6.414l-2.293 2.293a1 1 0 11-1.414-1.414L13.586 5H12zm-9 7a1 1 0 012 0v1.586l2.293-2.293a1 1 0 111.414 1.414L6.414 15H8a1 1 0 010 2H4a1 1 0 01-1-1v-4zm13.707 1.707a1 1 0 01-1.414-1.414L17.586 14H16a1 1 0 010-2h4a1 1 0 011 1v4a1 1 0 01-2 0v-1.586l-2.293 2.293z" clipRule="evenodd" />
+              </svg>
+            )}
+          </motion.button>
         </div>
 
         {/* Quartier Markers Toggle — RIGHT side */}
