@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { readFile } from 'fs/promises'
+import { readFile, access } from 'fs/promises'
 import path from 'path'
+import { constants } from 'fs'
 
 // GET /api/documents/download/[id] — Serve/download a document file
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -13,6 +14,15 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     }
 
     const filePath = path.join(process.cwd(), 'public', document.cheminFichier)
+
+    // Check if the file actually exists on disk before trying to read it
+    try {
+      await access(filePath, constants.R_OK)
+    } catch {
+      console.error('File not found on disk:', filePath)
+      return NextResponse.json({ error: 'الملف غير موجود على الخادم — يرجى إعادة رفعه' }, { status: 404 })
+    }
+
     const fileBuffer = await readFile(filePath)
 
     // Determine content type

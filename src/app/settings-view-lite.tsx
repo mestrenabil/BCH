@@ -1409,12 +1409,24 @@ function SettingsView() {
         <div className="p-6 space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {/* Export CSV */}
-            <motion.button onClick={() => {
+            <motion.button onClick={async () => {
               const params = new URLSearchParams({ format: 'csv' })
               if (settings.defaultYear) params.set('year', settings.defaultYear)
               if (settings.defaultCommune !== 'ALL') params.set('commune', settings.defaultCommune)
-              window.open(`/api/export?${params.toString()}`, '_blank')
-              toast.success('جاري تحميل ملف CSV...')
+              try {
+                const res = await fetch(`/api/export?${params.toString()}`)
+                if (!res.ok) {
+                  if (res.status === 401) { toast.error('يرجى تسجيل الدخول أولاً'); return }
+                  throw new Error()
+                }
+                const blob = await res.blob()
+                const url = URL.createObjectURL(blob)
+                const a = document.createElement('a')
+                a.href = url; a.download = `interventions-${settings.defaultYear || 'all'}.csv`
+                document.body.appendChild(a); a.click(); document.body.removeChild(a)
+                URL.revokeObjectURL(url)
+                toast.success('تم تحميل ملف CSV بنجاح')
+              } catch { toast.error('فشل في تصدير ملف CSV') }
             }} whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
               className="flex items-center gap-3 p-4 rounded-xl border-2 border-dashed border-emerald-200 hover:border-emerald-400 hover:bg-emerald-50/50 transition-all group">
               <div className="w-12 h-12 rounded-xl bg-emerald-100 flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">📊</div>
@@ -1425,12 +1437,24 @@ function SettingsView() {
             </motion.button>
 
             {/* Export JSON */}
-            <motion.button onClick={() => {
+            <motion.button onClick={async () => {
               const params = new URLSearchParams({ format: 'json' })
               if (settings.defaultYear) params.set('year', settings.defaultYear)
               if (settings.defaultCommune !== 'ALL') params.set('commune', settings.defaultCommune)
-              window.open(`/api/export?${params.toString()}`, '_blank')
-              toast.success('جاري تحميل ملف JSON...')
+              try {
+                const res = await fetch(`/api/export?${params.toString()}`)
+                if (!res.ok) {
+                  if (res.status === 401) { toast.error('يرجى تسجيل الدخول أولاً'); return }
+                  throw new Error()
+                }
+                const blob = await res.blob()
+                const url = URL.createObjectURL(blob)
+                const a = document.createElement('a')
+                a.href = url; a.download = `interventions-${settings.defaultYear || 'all'}.json`
+                document.body.appendChild(a); a.click(); document.body.removeChild(a)
+                URL.revokeObjectURL(url)
+                toast.success('تم تحميل ملف JSON بنجاح')
+              } catch { toast.error('فشل في تصدير ملف JSON') }
             }} whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
               className="flex items-center gap-3 p-4 rounded-xl border-2 border-dashed border-blue-200 hover:border-blue-400 hover:bg-blue-50/50 transition-all group">
               <div className="w-12 h-12 rounded-xl bg-blue-100 flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">📋</div>
