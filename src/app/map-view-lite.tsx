@@ -737,7 +737,7 @@ function MapView({ interventions, quartiers, selectedCommune, canSeeAllCommunes,
           </svg>
         </motion.button>
 
-        {/* 1. Fullscreen Toggle Button - top-left */}
+        {/* 1. Fullscreen Toggle Button - bottom-left */}
         <motion.button
           initial={{ opacity: 0, scale: 0.8 }}
           animate={{ opacity: 1, scale: 1 }}
@@ -745,7 +745,7 @@ function MapView({ interventions, quartiers, selectedCommune, canSeeAllCommunes,
           whileHover={{ scale: 1.08 }}
           whileTap={{ scale: 0.92 }}
           onClick={() => setIsFullscreen(!isFullscreen)}
-          className="absolute top-3 left-3 z-[1000] w-10 h-10 bg-white/90 backdrop-blur-sm rounded-xl shadow-lg border border-slate-200/60 flex items-center justify-center hover:bg-white transition-colors"
+          className="absolute bottom-4 left-4 z-[1000] w-10 h-10 bg-white/90 backdrop-blur-sm rounded-xl shadow-lg border border-slate-200/60 flex items-center justify-center hover:bg-white transition-colors"
           title={isFullscreen ? 'عرض عادي' : 'ملء الشاشة'}
         >
           {isFullscreen ? (
@@ -759,8 +759,8 @@ function MapView({ interventions, quartiers, selectedCommune, canSeeAllCommunes,
           )}
         </motion.button>
 
-        {/* 2. Map Layer Toggle - top-left, below fullscreen */}
-        <div className="absolute top-16 left-3 z-[1000] flex flex-col gap-2">
+        {/* 2. Map Layer Toggle - bottom-left, above fullscreen */}
+        <div className="absolute bottom-16 left-4 z-[1000] flex flex-col gap-2">
           {(['street', 'satellite', 'dark'] as const).map((layer) => {
             const isActive = tileLayer === layer
             const icons: Record<string, string> = { street: '🗺️', satellite: '🛰️', dark: '🌙' }
@@ -1018,7 +1018,7 @@ function MapView({ interventions, quartiers, selectedCommune, canSeeAllCommunes,
               setShowQuickStatsPopup(false)
             }
           }}
-          className="absolute bottom-4 left-4 z-[1000] w-12 h-12 bg-emerald-600 text-white rounded-xl shadow-lg shadow-emerald-200 flex items-center justify-center hover:bg-emerald-500 transition-colors"
+          className="absolute bottom-4 left-1/2 -translate-x-1/2 z-[1000] w-12 h-12 bg-emerald-600 text-white rounded-xl shadow-lg shadow-emerald-200 flex items-center justify-center hover:bg-emerald-500 transition-colors"
           title="إحصائيات سريعة"
         >
           📊
@@ -1031,7 +1031,7 @@ function MapView({ interventions, quartiers, selectedCommune, canSeeAllCommunes,
               initial={{ opacity: 0, y: 20, scale: 0.95 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 20, scale: 0.95 }}
-              className="absolute bottom-20 left-4 z-[1000] bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-slate-200/60 p-4 w-64"
+              className="absolute bottom-20 left-1/2 -translate-x-1/2 z-[1000] bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-slate-200/60 p-4 w-64"
               dir="rtl"
             >
               <div className="flex items-center justify-between mb-3">
