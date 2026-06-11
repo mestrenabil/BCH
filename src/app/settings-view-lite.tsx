@@ -1601,28 +1601,22 @@ function SettingsView() {
             {/* Backup */}
             <motion.button onClick={async () => {
               try {
-                const [interventions, products, quartiers, agents] = await Promise.all([
-                  fetch('/api/export?format=json').then(r => r.json()),
-                  fetch('/api/products').then(r => r.json()),
-                  fetch('/api/quartiers').then(r => r.json()),
-                  fetch('/api/agents').then(r => r.json()),
-                ])
-                const backup = {
-                  version: '2.0',
-                  date: new Date().toISOString(),
-                  interventions,
-                  products: products.products || [],
-                  quartiers: quartiers.quartiers || [],
-                  agents: agents.agents || [],
-                  settings,
+                toast.info('جاري إنشاء النسخة الاحتياطية...', { id: 'backup' })
+                const res = await fetch('/api/backup')
+                if (!res.ok) {
+                  if (res.status === 401) { toast.error('يرجى تسجيل الدخول أولاً', { id: 'backup' }); return }
+                  throw new Error('backup_failed')
                 }
-                const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' })
+                const data = await res.json()
+                const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
                 const url = URL.createObjectURL(blob)
                 const a = document.createElement('a')
                 a.href = url; a.download = `backup-3d-${new Date().toISOString().split('T')[0]}.json`
-                a.click(); URL.revokeObjectURL(url)
-                toast.success('تم تحميل النسخة الاحتياطية بنجاح')
-              } catch { toast.error('حدث خطأ أثناء النسخ الاحتياطي') }
+                document.body.appendChild(a); a.click(); document.body.removeChild(a)
+                URL.revokeObjectURL(url)
+                const summary = data.summary
+                toast.success(`تم تحميل النسخة الاحتياطية — ${summary?.interventions || 0} تدخل، ${summary?.agents || 0} عون`, { id: 'backup' })
+              } catch { toast.error('فشل في إنشاء النسخة الاحتياطية — يرجى المحاولة مرة أخرى', { id: 'backup' }) }
             }} whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
               className="flex items-center gap-3 p-4 rounded-xl bg-cyan-50 border border-cyan-100 hover:bg-cyan-100/70 transition-all group">
               <div className="w-12 h-12 rounded-xl bg-cyan-200/70 flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">💾</div>
@@ -1724,20 +1718,23 @@ function SettingsView() {
           <button
             onClick={async () => {
               try {
+                toast.info('جاري إنشاء النسخة الاحتياطية...', { id: 'backup2' })
                 const res = await fetch('/api/backup')
-                if (res.ok) {
-                  const data = await res.json()
-                  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
-                  const url = URL.createObjectURL(blob)
-                  const a = document.createElement('a')
-                  a.href = url
-                  a.download = `backup-3d-sale-${new Date().toISOString().split('T')[0]}.json`
-                  a.click()
-                  URL.revokeObjectURL(url)
-                  toast.success('تم إنشاء النسخة الاحتياطية بنجاح')
+                if (!res.ok) {
+                  if (res.status === 401) { toast.error('يرجى تسجيل الدخول أولاً', { id: 'backup2' }); return }
+                  throw new Error('backup_failed')
                 }
+                const data = await res.json()
+                const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+                const url = URL.createObjectURL(blob)
+                const a = document.createElement('a')
+                a.href = url
+                a.download = `backup-3d-sale-${new Date().toISOString().split('T')[0]}.json`
+                document.body.appendChild(a); a.click(); document.body.removeChild(a)
+                URL.revokeObjectURL(url)
+                toast.success('تم إنشاء النسخة الاحتياطية بنجاح', { id: 'backup2' })
               } catch {
-                toast.error('حدث خطأ أثناء إنشاء النسخة الاحتياطية')
+                toast.error('حدث خطأ أثناء إنشاء النسخة الاحتياطية', { id: 'backup2' })
               }
             }}
             className="flex-1 px-4 py-2.5 bg-emerald-600 text-white rounded-lg text-xs font-bold hover:bg-emerald-500 transition-colors flex items-center justify-center gap-2"
