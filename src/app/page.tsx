@@ -635,6 +635,33 @@ export default function HomePage() {
                   <option value="DESINFECTION" className="text-black">{t('DESINFECTION', language)}</option>
                 </select>
               </div>
+              {/* Backup Download Button */}
+              <motion.button
+                onClick={async () => {
+                  try {
+                    toast.info('جاري إنشاء النسخة الاحتياطية...', { id: 'header-backup' })
+                    const res = await fetch('/api/backup')
+                    if (!res.ok) {
+                      if (res.status === 401) { toast.error('يرجى تسجيل الدخول أولاً', { id: 'header-backup' }); return }
+                      throw new Error()
+                    }
+                    const data = await res.json()
+                    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+                    const url = URL.createObjectURL(blob)
+                    const a = document.createElement('a')
+                    a.href = url; a.download = `backup-3d-${new Date().toISOString().split('T')[0]}.json`
+                    document.body.appendChild(a); a.click(); document.body.removeChild(a)
+                    URL.revokeObjectURL(url)
+                    toast.success(`تم تحميل النسخة الاحتياطية — ${data.summary?.interventions || 0} تدخل`, { id: 'header-backup' })
+                  } catch { toast.error('فشل في إنشاء النسخة الاحتياطية', { id: 'header-backup' }) }
+                }}
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                className="hidden sm:flex items-center gap-1.5 bg-white/10 backdrop-blur-sm rounded-xl px-3 py-2 border border-white/10 hover:bg-white/20 transition-all text-xs font-bold"
+                title="تحميل النسخة الاحتياطية"
+              >
+                💾
+              </motion.button>
               {/* User Info & Logout */}
               <div className="hidden sm:flex items-center gap-2 bg-white/10 backdrop-blur-sm rounded-xl px-3 py-2 border border-white/10">
                 <div className="w-7 h-7 rounded-lg flex items-center justify-center text-sm"
