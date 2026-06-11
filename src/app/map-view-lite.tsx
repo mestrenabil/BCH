@@ -739,35 +739,6 @@ function MapView({ interventions, quartiers, selectedCommune, canSeeAllCommunes,
 
         {/* Left-side toolbar — vertically centered */}
         <div className="absolute top-1/2 -translate-y-1/2 left-4 z-[1000] flex flex-col gap-2">
-          {/* Map Layer Toggle */}
-          {(['street', 'satellite', 'dark'] as const).map((layer) => {
-            const isActive = tileLayer === layer
-            const icons: Record<string, string> = { street: '🗺️', satellite: '🛰️', dark: '🌙' }
-            const labels: Record<string, string> = { street: 'خريطة', satellite: 'ساتلية', dark: 'داكنة' }
-            return (
-              <motion.button
-                key={layer}
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: 0.5 + (layer === 'satellite' ? 0.1 : layer === 'dark' ? 0.2 : 0) }}
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                onClick={() => setTileLayer(layer)}
-                className={`w-10 h-10 rounded-xl shadow-lg border flex items-center justify-center transition-all text-sm ${
-                  isActive
-                    ? 'bg-emerald-600 text-white border-emerald-500 shadow-emerald-200'
-                    : 'bg-white/90 backdrop-blur-sm text-slate-600 border-slate-200/60 hover:bg-white'
-                }`}
-                title={labels[layer]}
-              >
-                {icons[layer]}
-              </motion.button>
-            )
-          })}
-
-          {/* Divider */}
-          <div className="w-6 h-px bg-slate-300/60 mx-auto" />
-
           {/* Fullscreen Toggle */}
           <motion.button
             initial={{ opacity: 0, scale: 0.8 }}
