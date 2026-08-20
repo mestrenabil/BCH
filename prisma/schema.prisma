@@ -3,13 +3,14 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
 model Intervention {
   id                 String   @id @default(cuid())
   type               String   // DERATISATION, DESINSECTISATION, DESINFECTION
+  gisLayer           String   @default("interventions") // طبقة الخريطة المرتبطة
   date               DateTime
   quartier           String
   adresse            String
@@ -30,13 +31,36 @@ model Intervention {
   coutMateriaux      Float?   // تكلفة المواد
   coutTotal          Float?   // التكلفة الإجمالية
   reference          String   @unique
+  campagneId         String?  // ربط اختياري بحملة (Campagne)
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
   materials          InterventionMaterial[]
   documents          InterventionDocument[]
   photos             InterventionPhoto[]
   complaints         Complaint[]
+  workOrders         WorkOrder[]
   comments           InterventionComment[]
+  campagne           Campagne? @relation(fields: [campagneId], references: [id], onDelete: SetNull)
+}
+
+model Campagne {
+  id            String   @id @default(cuid())
+  nom           String   // اسم الحملة
+  type          String   // DERATISATION, DESINSECTISATION, DESINFECTION, MIXTE
+  commune       String   @default("") // الجماعة الترابية (أو ALL للكل)
+  description   String   @default("") // وصف الحملة
+  objectif      String   @default("") // الهدف العام للحملة
+  budgetPrevu   Float?   // الميزانية المخططة
+  coutReel      Float?   // التكلفة الفعلية (محسوبة من التدخلات المرتبطة)
+  dateDebut     DateTime // تاريخ بداية الحملة
+  dateFin       DateTime? // تاريخ نهاية الحملة (nullable للحملات الجارية)
+  statut        String   @default("PLANIFIEE") // PLANIFIEE, EN_COURS, TERMINEE, ANNULEE
+  responsable   String   @default("") // المسؤول عن الحملة
+  couleur       String   @default("#10b981") // لون مميز للحملة
+  reference     String   @unique // "CAMP-2026-001"
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  interventions Intervention[] // التدخلات المرتبطة بالحملة
 }
 
 model Quartier {
@@ -61,11 +85,26 @@ model Product {
   fournisseur     String   @default("") // المورد
   description     String   @default("") // وصف المنتج
   reference       String   @unique // مرجع المنتج
+  imagePath       String?  // مسار صورة المنتج المُخزَّنة (في storage/product-images/)
   dateExpiration  DateTime? // تاريخ انتهاء الصلاحية
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
   interventions   InterventionMaterial[]
   movements       StockMovement[]
+}
+
+model ProductCategory {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  label     String
+  commune   String   @default("")
+  color     String   @default("#6366f1")
+  icon      String   @default("📦")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([label, commune])
+  @@index([commune])
 }
 
 model InterventionMaterial {
@@ -89,8 +128,31 @@ model Agent {
   commune   String   @default("") // الجماعة الترابية
   fonction  String   @default("عون صحية") // الوظيفة: عون صحية، مراقب، مسؤول
   actif     Boolean  @default(true) // نشط أو لا
+  teamId    String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  workOrders WorkOrder[]
+  user       User?
+  team      Team?    @relation(fields: [teamId], references: [id], onDelete: SetNull)
+
+  @@index([commune, teamId])
+}
+
+model Team {
+  id          String   @id @default(cuid())
+  name        String
+  commune     String
+  office      String   @default("OFFICE_04")
+  mission     String   @default("")
+  description String   @default("")
+  color       String   @default("#10b981")
+  actif       Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  agents      Agent[]
+
+  @@index([commune, office])
+  @@unique([name, commune])
 }
 
 model User {
@@ -99,12 +161,17 @@ model User {
   password     String   // كلمة المرور (مشفرة)
   nom          String   // الاسم الكامل
   commune      String   // الجماعة الترابية: سلا، سيدي أبي القنادل، عامر، أو ALL للمسؤول العام
-  role         String   @default("responsable") // الدور: admin (مسؤول عام)، responsable (مسؤول جماعة)
+  managedCommunes String @default("[]") // قائمة الجماعات التي يديرها حساب المجموعة
+  communeGroupName String? // اسم مجموعة الجماعات عند إدارة أكثر من جماعة
+  navVisibilityJson String   @default("{}") // JSON: إظهار/إخفاء الأقسام لهذا الحساب
+  role         String   @default("responsable") // الدور: admin، responsable، agent (عون ميداني)
+  agentId      String?  @unique
   actif        Boolean  @default(true) // نشط أو لا
   lastLogin    DateTime? // آخر دخول
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
   sessions     Session[]
+  agent        Agent?   @relation(fields: [agentId], references: [id], onDelete: SetNull)
 }
 
 model Session {
@@ -152,6 +219,21 @@ model Document {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   interventions InterventionDocument[]
+  environmentalDossiers EnvironmentalDossierDocument[]
+}
+
+model DocumentCategory {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  label     String
+  commune   String   @default("")
+  icon      String   @default("📎")
+  color     String   @default("#64748b")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([label, commune])
+  @@index([commune])
 }
 
 // جدول الربط بين التدخلات والمستندات
@@ -182,20 +264,88 @@ model Complaint {
   reference      String   @unique  // "PL-2026-001"
   nomCitoyen     String   // اسم المواطن
   telephone      String?  // رقم الهاتف
+  email          String?
   adresse        String   // العنوان
   quartier       String?  // الحي
   commune        String   // الجماعة
-  type           String   // "DERATISATION", "DESINSECTISATION", "DESINFECTION", "AUTRE"
+  type           String   // "DERATISATION", "DESINSECTISATION", "DESINFECTION", "FOOD", "ANIMAL"
   description    String   // وصف الشكاية
   priorite       String   @default("NORMALE") // "URGENTE", "HAUTE", "NORMALE", "BASSE"
   statut         String   @default("EN_ATTENTE") // "EN_ATTENTE", "EN_COURS", "TRAITEE", "REJETEE"
+  source         String   @default("INTERNAL") // "INTERNAL" or "PUBLIC"
+  latitude       Float?
+  longitude      Float?
   interventionId String?  // linked intervention
   intervention   Intervention? @relation(fields: [interventionId], references: [id])
+  environmentalDossierId String?
+  environmentalDossier EnvironmentalDossier? @relation(fields: [environmentalDossierId], references: [id], onDelete: SetNull)
+  workOrders     WorkOrder[]
+  contacts       ComplaintContact[]
   dateReception  DateTime @default(now())
   dateTraitement DateTime?
   observations   String?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
+}
+
+model ComplaintContact {
+  id            String   @id @default(cuid())
+  complaintId   String
+  channel       String
+  outcome       String
+  notes         String   @default("")
+  contactedAt   DateTime @default(now())
+  contactedBy   String   @default("")
+  createdAt     DateTime @default(now())
+  complaint     Complaint @relation(fields: [complaintId], references: [id], onDelete: Cascade)
+
+  @@index([complaintId, contactedAt])
+}
+
+model WorkOrder {
+  id              String   @id @default(cuid())
+  reference       String   @unique // "OT-2026-AB12CD34"
+  commune         String
+  title           String
+  description     String   @default("")
+  priority        String   @default("NORMALE") // "URGENTE", "HAUTE", "NORMALE", "BASSE"
+  status          String   @default("NOUVEAU") // "NOUVEAU", "ASSIGNE", "EN_ROUTE", "EN_COURS", "TERMINE", "ANNULE"
+  complaintId     String?
+  interventionId  String?
+  assignedAgentId String?
+  scheduledFor    DateTime?
+  dueAt           DateTime?
+  startedAt       DateTime?
+  completedAt     DateTime?
+  completionNotes String?
+  latitude        Float?
+  longitude       Float?
+  createdBy       String   @default("")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  complaint       Complaint?    @relation(fields: [complaintId], references: [id], onDelete: SetNull)
+  intervention    Intervention? @relation(fields: [interventionId], references: [id], onDelete: SetNull)
+  assignedAgent   Agent?        @relation(fields: [assignedAgentId], references: [id], onDelete: SetNull)
+  photos          WorkOrderPhoto[]
+
+  @@index([commune, status])
+  @@index([assignedAgentId, status])
+}
+
+model WorkOrderPhoto {
+  id             String   @id @default(cuid())
+  workOrderId    String
+  storedFileName String   @unique
+  originalName   String
+  mimeType       String
+  size           Int
+  type           String   @default("AFTER") // "BEFORE" or "AFTER"
+  caption        String?
+  uploadedBy     String   @default("")
+  createdAt      DateTime @default(now())
+  workOrder      WorkOrder @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+
+  @@index([workOrderId, type])
 }
 
 model ActivityLog {
@@ -221,4 +371,1999 @@ model InterventionComment {
   type           String   @default("COMMENT") // COMMENT, NOTE, STATUS_CHANGE
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
+}
+
+// ===== CSVR — Gestion des animaux errants (Capture-Stérilisation-Vaccination-Relâcher) =====
+
+model StrayReport {
+  id              String   @id @default(cuid())
+  reference       String   @unique // "SIG-CSVR-2026-XXXXXX"
+  source          String   @default("INTERNAL") // INTERNAL/PUBLIC/PHONE/AUTHORITY
+  declarantName   String   @default("")
+  declarantPhone  String   @default("")
+  declarantRole   String   @default("") // citoyen/autorité/agent/association
+  commune         String   @default("")
+  quartier        String   @default("")
+  secteur         String   @default("")
+  adresse         String   @default("")
+  latitude        Float?
+  longitude       Float?
+  species         String   @default("DOG") // DOG/CAT/OTHER
+  estimatedCount  Int      @default(1)
+  hasYoung        Boolean  @default(false)
+  isAggressive    Boolean  @default(false)
+  isInjured       Boolean  @default(false)
+  isSick          Boolean  @default(false)
+  rabiesSuspect   Boolean  @default(false)
+  biteReported    Boolean  @default(false)
+  nearSchool      Boolean  @default(false)
+  nearMarket      Boolean  @default(false)
+  nearHealth      Boolean  @default(false)
+  nearDump        Boolean  @default(false)
+  description     String   @default("")
+  priority        String   @default("NORMALE") // FAIBLE/NORMALE/HAUTE/URGENTE/SANITAIRE
+  statut          String   @default("NOUVEAU") // NOUVEAU/VERIFICATION/VALIDE/MISSION_PLANIFIEE/EN_COURS/TRAITE/PARTIEL/NON_LOCALISE/DOUBLON/CLASSE
+  observations    String   @default("")
+  missionId       String?
+  mission         CaptureMission? @relation(fields: [missionId], references: [id], onDelete: SetNull)
+  photos          StrayReportPhoto[]
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([commune, statut])
+  @@index([commune, priority])
+  @@index([species])
+}
+
+model StrayReportPhoto {
+  id              String   @id @default(cuid())
+  reportId        String
+  report          StrayReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  storedFileName  String   @unique
+  originalName    String   @default("")
+  mimeType        String   @default("image/jpeg")
+  size            Int      @default(0)
+  caption         String?
+  uploadedBy      String   @default("")
+  createdAt       DateTime @default(now())
+
+  @@index([reportId])
+}
+
+model CaptureMission {
+  id               String   @id @default(cuid())
+  reference        String   @unique // "MIS-CSVR-2026-NNN"
+  commune          String   @default("")
+  quartier         String   @default("")
+  latitude         Float?
+  longitude        Float?
+  zone             String   @default("") // zone d'intervention
+  scheduledAt      DateTime?
+  priority         String   @default("NORMALE")
+  statut           String   @default("PLANIFIEE") // PLANIFIEE/CONFIRME/EN_ROUTE/SUR_PLACE/CAPTURE_EN_COURS/TERMINEE/PARTIEL/REPORTEE/ANNULEE
+  teamLead         String   @default("")
+  driver           String   @default("")
+  agents           String   @default("[]") // JSON array of agent names
+  veterinarian     String   @default("")
+  vehicle          String   @default("")
+  equipment        String   @default("")
+  cagesAvailable   Int      @default(0)
+  estimatedAnimals Int      @default(0)
+  safetyNotes      String   @default("")
+  preNotes         String   @default("")
+  // Post-mission
+  arrivalTime      String?
+  endTime          String?
+  observedCount    Int?
+  capturedCount    Int?
+  notCapturedCount Int?
+  difficulties     String   @default("")
+  incidents        String   @default("")
+  agentInjured     Boolean  @default(false)
+  biteOccurred     Boolean  @default(false)
+  materialDamage   Boolean  @default(false)
+  postNotes        String   @default("")
+  completedAt      DateTime?
+  createdBy        String   @default("")
+  reports          StrayReport[]
+  animals          StrayAnimal[]
+  photos           CaptureMissionPhoto[]
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([commune, statut])
+  @@index([scheduledAt])
+}
+
+model CaptureMissionPhoto {
+  id              String   @id @default(cuid())
+  missionId       String
+  mission         CaptureMission @relation(fields: [missionId], references: [id], onDelete: Cascade)
+  storedFileName  String   @unique
+  originalName    String   @default("")
+  mimeType        String   @default("image/jpeg")
+  size            Int      @default(0)
+  type            String   @default("BEFORE") // BEFORE/AFTER
+  caption         String?
+  uploadedBy      String   @default("")
+  createdAt       DateTime @default(now())
+
+  @@index([missionId, type])
+}
+
+model StrayAnimal {
+  id               String   @id @default(cuid())
+  csvrNumber       String   @unique // "BCH-CSVR-2026-000001"
+  species          String   @default("DOG") // DOG/CAT/OTHER
+  breed            String   @default("")
+  sex              String   @default("UNKNOWN") // MALE/FEMALE/UNKNOWN
+  estimatedAge     String   @default("")
+  weight           Float?
+  size             String   @default("") // SMALL/MEDIUM/LARGE
+  primaryColor     String   @default("")
+  secondaryColors  String   @default("")
+  distinctiveMarks String   @default("")
+  microchipNumber  String   @default("")
+  tagNumber        String   @default("")
+  collarNumber     String   @default("")
+  qrCode           String   @default("")
+  // Origine
+  reportId         String?
+  missionId        String?
+  mission          CaptureMission? @relation(fields: [missionId], references: [id], onDelete: SetNull)
+  captureDate      DateTime?
+  captureTime      String?
+  captureLocation  String   @default("")
+  captureQuartier  String   @default("")
+  captureLatitude  Float?
+  captureLongitude Float?
+  capturedBy       String   @default("")
+  // État lors de la capture
+  captureState     String   @default("") // CALME/PEUREUX/AGRESSIF/BLESSE/MALADE/AMAIGRI/GESTANTE/ALLAITANTE
+  hasParasites     Boolean  @default(false)
+  diseaseSuspect   Boolean  @default(false)
+  captureNotes     String   @default("")
+  // Statut actuel (workflow CSVR)
+  statut           String   @default("CAPTURE") // SIGNALISE/LOCALISE/CAPTURE/TRANSPORTE/ADMIT_CENTRE/QUARANTINE/OBSERVATION/SOINS/APTE_STERIL/STERILISE/VACCINE/IDENTIFIE/CONVALESCENCE/PRET_RELACHER/RELACHE/ADOPTABLE/ADOPTE/TRANSFERE/DECEDE/CLOTURE
+  commune          String   @default("")
+  shelterName      String   @default("")
+  boxOrCage        String   @default("")
+  // Photos
+  mainPhoto        String? // storedFileName
+  photos           StrayAnimalPhoto[]
+  statusHistory    StrayAnimalStatus[]
+  careEvents       StrayAnimalCareEvent[]
+  destinations     StrayAnimalDestination[]
+  followUps        StrayAnimalFollowUp[]
+  biteCases        BiteCase[]
+  admissions       StrayAnimalAdmission[]
+  transports       StrayAnimalTransport[]
+  healthAlerts     StrayAnimalHealthAlert[]
+  identifications  StrayAnimalIdentification[]
+  createdBy        String   @default("")
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([commune, statut])
+  @@index([species])
+  @@index([csvrNumber])
+}
+
+model StrayAnimalPhoto {
+  id              String   @id @default(cuid())
+  animalId        String
+  animal          StrayAnimal @relation(fields: [animalId], references: [id], onDelete: Cascade)
+  storedFileName  String   @unique
+  originalName    String   @default("")
+  mimeType        String   @default("image/jpeg")
+  size            Int      @default(0)
+  isMain          Boolean  @default(false)
+  caption         String?
+  uploadedBy      String   @default("")
+  createdAt       DateTime @default(now())
+
+  @@index([animalId])
+}
+
+model StrayAnimalStatus {
+  id          String   @id @default(cuid())
+  animalId    String
+  animal      StrayAnimal @relation(fields: [animalId], references: [id], onDelete: Cascade)
+  fromStatus  String?
+  toStatus    String
+  reason      String   @default("")
+  changedBy   String   @default("")
+  notes       String   @default("")
+  createdAt   DateTime @default(now())
+
+  @@index([animalId, createdAt])
+}
+
+model CsvrSettings {
+  id        String   @id @default(cuid())
+  commune   String   @unique
+  settings  String   @default("{}") // JSON: speciesTypes, priorityLevels, shelters, centers
+  updatedAt DateTime @updatedAt
+}
+
+model StrayAnimalCenter {
+  id           String   @id @default(cuid())
+  name         String
+  type         String   @default("REFUGE") // REFUGE/CENTRE_VETERINAIRE/QUARANTINE/OTHER
+  commune      String   @default("")
+  adresse      String   @default("")
+  latitude     Float?
+  longitude    Float?
+  responsible  String   @default("")
+  telephone    String   @default("")
+  capacity     Int      @default(0)
+  status       String   @default("ACTIVE") // ACTIVE/INACTIVE
+  notes        String   @default("")
+  admissions   StrayAnimalAdmission[]
+  createdBy    String   @default("")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([commune, status])
+  @@unique([name, commune])
+}
+
+model StrayAnimalAdmission {
+  id              String            @id @default(cuid())
+  animalId        String
+  animal          StrayAnimal       @relation(fields: [animalId], references: [id], onDelete: Cascade)
+  centerId        String
+  center          StrayAnimalCenter  @relation(fields: [centerId], references: [id], onDelete: Restrict)
+  admittedAt      DateTime          @default(now())
+  releasedAt      DateTime?
+  boxOrZone       String            @default("")
+  generalCondition String           @default("")
+  weight          Float?
+  temperature     Float?
+  observation     String            @default("")
+  agent           String            @default("")
+  createdBy       String            @default("")
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  @@index([animalId, admittedAt])
+  @@index([centerId, releasedAt])
+}
+
+model StrayAnimalTransport {
+  id             String      @id @default(cuid())
+  animalId       String
+  animal         StrayAnimal @relation(fields: [animalId], references: [id], onDelete: Cascade)
+  departureDate  DateTime    @default(now())
+  departureTime  String      @default("")
+  arrivalDate    DateTime?
+  arrivalTime    String      @default("")
+  vehicle        String      @default("")
+  driver         String      @default("")
+  agent          String      @default("")
+  destination    String      @default("")
+  animalCount    Int         @default(1)
+  incident       String      @default("")
+  notes          String      @default("")
+  createdBy      String      @default("")
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  @@index([animalId, departureDate])
+  @@index([destination, departureDate])
+}
+
+model StrayAnimalHealthAlert {
+  id                       String      @id @default(cuid())
+  animalId                 String
+  animal                   StrayAnimal @relation(fields: [animalId], references: [id], onDelete: Cascade)
+  reportedAt               DateTime    @default(now())
+  type                     String      @default("RAGE_SUSPECT")
+  urgency                  String      @default("URGENT")
+  clinicalSuspicion        Boolean     @default(false)
+  vaccinationStatus        String      @default("UNKNOWN")
+  measureTaken             String      @default("")
+  healthServiceInformed    Boolean     @default(false)
+  authorityInformed        Boolean     @default(false)
+  resolvedAt               DateTime?
+  notes                    String      @default("")
+  createdBy                String      @default("")
+  createdAt                DateTime    @default(now())
+  updatedAt                DateTime    @updatedAt
+
+  @@index([animalId, reportedAt])
+  @@index([type, urgency, resolvedAt])
+}
+
+model StrayAnimalDeathReport {
+  id                 String   @id @default(cuid())
+  reference          String   @unique
+  reportedAt         DateTime @default(now())
+  species            String   @default("DOG")
+  quantity           Int      @default(1)
+  commune            String   @default("")
+  quartier           String   @default("")
+  location           String   @default("")
+  latitude           Float?
+  longitude          Float?
+  apparentCause      String   @default("")
+  accident           Boolean  @default(false)
+  healthSuspicion    Boolean  @default(false)
+  removalDate        DateTime?
+  team               String   @default("")
+  destination        String   @default("")
+  handlingMode       String   @default("")
+  observations       String   @default("")
+  createdBy          String   @default("")
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@index([commune, reportedAt])
+  @@index([healthSuspicion, removalDate])
+}
+
+model StrayAnimalHotspot {
+  id                   String   @id @default(cuid())
+  reference            String   @unique
+  name                 String
+  commune              String   @default("")
+  quartier             String   @default("")
+  location             String   @default("")
+  latitude             Float?
+  longitude            Float?
+  priority             String   @default("MODERATE")
+  status               String   @default("ACTIVE")
+  reportCount          Int      @default(0)
+  groupCount           Int      @default(0)
+  biteCount            Int      @default(0)
+  interventionCount    Int      @default(0)
+  lastReviewDate       DateTime?
+  nextReviewDate       DateTime?
+  resolutionNotes      String   @default("")
+  notes                String   @default("")
+  createdBy            String   @default("")
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  @@index([commune, status, priority])
+  @@index([nextReviewDate])
+}
+
+model StrayPartner {
+  id          String   @id @default(cuid())
+  name        String
+  type        String   @default("OTHER")
+  commune     String   @default("")
+  contact     String   @default("")
+  telephone   String   @default("")
+  email       String   @default("")
+  status      String   @default("ACTIVE")
+  notes       String   @default("")
+  createdBy   String   @default("")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([name, commune])
+  @@index([commune, type, status])
+}
+
+model StrayAnimalIdentification {
+  id          String      @id @default(cuid())
+  animalId    String
+  animal      StrayAnimal @relation(fields: [animalId], references: [id], onDelete: Cascade)
+  type        String      @default("MICROCHIP")
+  number      String
+  date        DateTime    @default(now())
+  operator    String      @default("")
+  photo       String      @default("")
+  notes       String      @default("")
+  createdBy   String      @default("")
+  createdAt   DateTime    @default(now())
+
+  @@unique([type, number])
+  @@index([animalId, date])
+}
+
+model StrayCampaign {
+  id                 String   @id @default(cuid())
+  reference          String   @unique
+  year               Int
+  type               String   @default("CAPTURE") // CENSUS/CAPTURE/VACCINATION/STERILIZATION/IDENTIFICATION/AWARENESS/TARGETED/OTHER
+  name               String
+  commune            String   @default("")
+  zone               String   @default("")
+  objective          String   @default("")
+  responsible        String   @default("")
+  partners           String   @default("")
+  startDate          DateTime
+  endDate            DateTime?
+  indicator          String   @default("")
+  quantitativeTarget Int      @default(0)
+  achieved           Int      @default(0)
+  status             String   @default("PLANNED") // PLANNED/IN_PROGRESS/COMPLETED/CANCELLED
+  notes              String   @default("")
+  activities         StrayCampaignActivity[]
+  createdBy          String   @default("")
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@index([commune, year, status])
+  @@index([startDate])
+}
+
+model StrayCampaignActivity {
+  id           String       @id @default(cuid())
+  campaignId   String
+  campaign     StrayCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  date         DateTime     @default(now())
+  type         String       @default("RESULT") // RESULT/CAPTURE/VACCINATION/STERILIZATION/IDENTIFICATION/RELEASE
+  zone         String       @default("")
+  quantity     Int          @default(0)
+  staff        String       @default("")
+  latitude     Float?
+  longitude    Float?
+  notes        String       @default("")
+  createdBy    String       @default("")
+  createdAt    DateTime     @default(now())
+
+  @@index([campaignId, date])
+  @@index([type, date])
+}
+
+model StrayAnimalCareEvent {
+  id                 String      @id @default(cuid())
+  animalId           String
+  animal             StrayAnimal  @relation(fields: [animalId], references: [id], onDelete: Cascade)
+  type               String      @default("EXAMINATION") // EXAMINATION/TREATMENT/VACCINATION/STERILIZATION/CONTROL
+  date               DateTime    @default(now())
+  practitioner       String      @default("")
+  facility           String      @default("")
+  weight             Float?
+  temperature        Float?
+  generalCondition   String      @default("")
+  diagnosis          String      @default("")
+  treatment          String      @default("")
+  vaccineName        String      @default("")
+  vaccineLot         String      @default("")
+  vaccineExpiryDate  DateTime?
+  dose               String      @default("")
+  surgeryType        String      @default("")
+  postoperativeNotes String      @default("")
+  nextDate           DateTime?
+  notes              String      @default("")
+  createdBy          String      @default("")
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
+
+  @@index([animalId, type, date])
+  @@index([date])
+}
+
+model StrayAnimalDestination {
+  id                       String     @id @default(cuid())
+  animalId                 String
+  animal                   StrayAnimal @relation(fields: [animalId], references: [id], onDelete: Cascade)
+  type                     String     @default("RETURN") // RETURN/ADOPTION/TRANSFER/DEATH
+  date                     DateTime   @default(now())
+  time                     String     @default("")
+  site                     String     @default("")
+  commune                  String     @default("")
+  quartier                 String     @default("")
+  latitude                 Float?
+  longitude                Float?
+  structure                String     @default("")
+  adopterName              String     @default("")
+  adopterPhone             String     @default("")
+  adoptionDocument         String     @default("")
+  adoptionCommitment       Boolean    @default(false)
+  vaccinationConfirmed     Boolean    @default(false)
+  sterilizationConfirmed  Boolean    @default(false)
+  identificationConfirmed Boolean    @default(false)
+  notes                    String     @default("")
+  createdBy                String     @default("")
+  createdAt                DateTime   @default(now())
+
+  @@index([animalId, type, date])
+  @@index([commune, type])
+}
+
+model StrayAnimalFollowUp {
+  id             String      @id @default(cuid())
+  animalId       String
+  animal         StrayAnimal  @relation(fields: [animalId], references: [id], onDelete: Cascade)
+  destinationId  String?
+  type           String      @default("POST_ADOPTION") // POST_ADOPTION/POST_RELEASE/CENTER_CHECK
+  scheduledDate  DateTime?
+  visitDate      DateTime?
+  status         String      @default("PLANNED") // PLANNED/CONTACTED/COMPLETED/FAILED/CANCELLED
+  contactName    String      @default("")
+  contactPhone   String      @default("")
+  welfareStatus  String      @default("")
+  location       String      @default("")
+  outcome        String      @default("")
+  notes          String      @default("")
+  createdBy      String      @default("")
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  @@index([animalId, type, status])
+  @@index([scheduledDate, status])
+}
+
+// ===== Food safety reports (Salubrité alimentaire) =====
+
+model FoodReport {
+  id                String   @id @default(cuid())
+  reference         String   @unique          // SIG-FOOD-YYYY-XXXXXX
+  source            String   @default("INTERNAL") // INTERNAL/PUBLIC
+  declarantName     String   @default("")
+  declarantPhone    String   @default("")
+  declarantEmail    String   @default("")
+  commune           String   @default("")
+  quartier          String   @default("")
+  adresse           String   @default("")
+  latitude          Float?
+  longitude         Float?
+  reportType        String   @default("RESTAURANT") // RESTAURANT/EXPIRED_PRODUCT/STREET_VENDOR/PREMISES_HYGIENE
+  establishmentName String   @default("")
+  establishmentType String   @default("")    // مطعم/مقهى/محل/سوق/بائع متجول
+  description       String   @default("")
+  priority          String   @default("NORMALE") // FAIBLE/NORMALE/HAUTE/URGENTE/SANITAIRE
+  statut            String   @default("NOUVEAU") // NOUVEAU/VERIFICATION/VALIDE/EN_COURS/TRAITE/REJETE/CLASSE
+  observations      String   @default("")
+  photos            FoodReportPhoto[]
+  inspections       Inspection[]
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  @@index([commune, statut])
+  @@index([commune, reportType])
+  @@index([reportType])
+}
+
+model FoodReportPhoto {
+  id              String   @id @default(cuid())
+  reportId        String
+  report          FoodReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  storedFileName  String   @unique
+  originalName    String   @default("")
+  mimeType        String   @default("image/jpeg")
+  size            Int      @default(0)
+  caption         String?
+  uploadedBy      String   @default("")
+  createdAt       DateTime @default(now())
+  @@index([reportId])
+}
+
+// ===== Dossiers unifiés =====
+// طبقة توحيد فوق كل الكيانات (Intervention/Complaint/WorkOrder/StrayReport/FoodReport)
+// راجع docs/DATA_MODEL.md الفجوة 1 و docs/BACKLOG.md المرحلة 2
+
+model Dossier {
+  id              String   @id @default(cuid())
+  reference       String   @unique          // DOS-YYYY-NNNNNN
+  office          String   @default("")    // OFFICE_01..OFFICE_09 (ثابت في constants)
+  type            String   @default("OTHER") // نوع الملف (INSPECTION/COMPLAINT/MISSION/3D_INTERVENTION...)
+  title           String   @default("")
+  description     String   @default("")
+  status          String   @default("NEW") // NEW/ASSIGNED/IN_PROGRESS/INSPECTED/ACTION_REQUIRED/FOLLOW_UP/PENDING_VALIDATION/CLOSED/ARCHIVED
+  priority        String   @default("NORMALE") // FAIBLE/NORMALE/HAUTE/URGENTE/SANITAIRE
+  commune         String   @default("")
+  quartier        String   @default("")
+  adresse         String   @default("")
+  latitude        Float?
+  longitude       Float?
+  assignedTo      String   @default("")    // userId المكلف (أو فارغ)
+  assignedToName  String   @default("")    // اسم المكلف (للعرض السريع)
+  dueDate         DateTime?                // مهلة SLA
+  closedAt        DateTime?                // متى أُغلق
+  // روابط اختيارية للكيانات الموجودة (polymorphic-lite)
+  interventionId  String?
+  complaintId     String?
+  workOrderId     String?
+  strayReportId   String?
+  foodReportId    String?
+  createdBy       String   @default("")    // userId المنشئ
+  createdByName   String   @default("")
+  notes           String   @default("")
+  events          DossierEvent[]
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  @@index([commune, status])
+  @@index([commune, office])
+  @@index([commune, type])
+  @@index([status])
+  @@index([office])
+  @@index([assignedTo])
+}
+
+model DossierEvent {
+  id          String   @id @default(cuid())
+  dossierId   String
+  dossier     Dossier  @relation(fields: [dossierId], references: [id], onDelete: Cascade)
+  fromStatus  String?                    // الحالة السابقة (null للحدث الأول)
+  toStatus    String                      // الحالة الجديدة
+  action      String   @default("STATUS_CHANGE") // STATUS_CHANGE/CREATE/ASSIGN/COMMENT/LINK
+  reason      String   @default("")
+  changedBy   String   @default("")      // userId
+  changedByName String @default("")
+  metadata    String   @default("{}")    // JSON: تفاصيل إضافية (كيان مربوط، ملاحظة...)
+  createdAt   DateTime @default(now())
+  @@index([dossierId])
+  @@index([dossierId, createdAt])
+}
+
+// ===== Bureau 02: Contrôle Sanitaire et Sécurité Alimentaire =====
+// راجع docs/BACKLOG.md المرحلة 3
+
+model Establishment {
+  id                 String   @id @default(cuid())
+  reference          String   @unique          // EST-YYYY-NNNNNN
+  name               String   @default("")
+  activity           String   @default("")    // النشاط (مطعم/مقهى/بقالة...)
+  category           String   @default("")    // الفئة (I/II/III حسب المخاطر)
+  ownerName          String   @default("")    // المالك/المستغل
+  ownerCin           String   @default("")    // البطاقة الوطنية (عند الاقتضاء)
+  telephone          String   @default("")
+  commune            String   @default("")
+  quartier           String   @default("")
+  adresse            String   @default("")
+  latitude           Float?
+  longitude          Float?
+  authorizationNumber String  @default("")    // رقم الرخصة
+  authorizationDate  DateTime?                // تاريخ الرخصة
+  openingDate        DateTime?                // تاريخ الافتتاح
+  status             String   @default("ACTIVE") // ACTIVE/SUSPENDED/CLOSED
+  riskCategory       String   @default("UNCLASSIFIED") // LOW/MEDIUM/HIGH/CRITICAL/UNCLASSIFIED
+  riskScore          Int      @default(0)     // درجة المخاطر الداخلية 0-100
+  description        String   @default("")
+  inspections        Inspection[]
+  healthCards        HealthCard[]
+  samples            Sample[]
+  temperatureLogs    TemperatureLog[]
+  foodProducts       FoodProduct[]
+  labResults         LabResult[]
+  nonConformities    FoodNonConformity[]
+  fryingOilChecks    FryingOilCheck[]
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  @@index([commune, status])
+  @@index([commune, riskCategory])
+  @@index([commune, activity])
+}
+
+model Inspection {
+  id              String   @id @default(cuid())
+  reference       String   @unique          // INSP-YYYY-NNNNNN
+  establishmentId String
+  establishment   Establishment @relation(fields: [establishmentId], references: [id], onDelete: Cascade)
+  type            String   @default("PERIODIC") // INITIAL/PERIODIC/UNANNOUNCED/COMPLAINT/COUNTER_VISIT/AUTHORIZATION/COMMITTEE
+  commune         String   @default("")
+  inspectionDate  DateTime @default(now())
+  inspectorName   String   @default("")
+  inspectorId     String   @default("")     // userId
+  overallResult   String   @default("PENDING") // PENDING/CONFORM/NON_CONFORM_MINOR/NON_CONFORM_MAJOR/NON_CONFORM_CRITICAL/CLOSED
+  riskScore       Int      @default(0)      // درجة مخاطر هذا التفتيش (0-100)
+  checklistJson   String   @default("{}")   // JSON: نتائج قائمة الفحص
+  notes           String   @default("")
+  status          String   @default("COMPLETED") // PLANNED/COMPLETED/CANCELLED
+  foodReportId    String?                   // ربط اختياري ببلاغ غذائي
+  foodReport      FoodReport? @relation(fields: [foodReportId], references: [id], onDelete: SetNull)
+  findings        Finding[]
+  correctiveActions CorrectiveAction[]
+  counterVisits   CounterVisit[]
+  temperatureLogs TemperatureLog[]
+  foodProducts    FoodProduct[]
+  nonConformities FoodNonConformity[]
+  fryingOilChecks FryingOilCheck[]
+  samples         Sample[]
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  @@index([establishmentId])
+  @@index([commune, inspectionDate])
+  @@index([commune, overallResult])
+}
+
+model Finding {
+  id              String   @id @default(cuid())
+  inspectionId    String
+  inspection      Inspection @relation(fields: [inspectionId], references: [id], onDelete: Cascade)
+  category        String   @default("")    // فئة النقص (نظافة/طاقم/أسطح/تخزين...)
+  description     String   @default("")
+  severity        String   @default("MINOR") // MINOR/MAJOR/CRITICAL
+  weight          Int      @default(1)      // وزن النقص في درجة المخاطر
+  status          String   @default("OPEN") // OPEN/CORRECTED
+  createdAt       DateTime @default(now())
+  @@index([inspectionId])
+  @@index([severity])
+}
+
+model CorrectiveAction {
+  id              String   @id @default(cuid())
+  inspectionId    String
+  inspection      Inspection @relation(fields: [inspectionId], references: [id], onDelete: Cascade)
+  description     String   @default("")
+  responsible     String   @default("")
+  deadline        DateTime?
+  status          String   @default("PENDING") // PENDING/IN_PROGRESS/DONE/VERIFIED
+  verifiedAt      DateTime?
+  verifiedBy      String   @default("")
+  notes           String   @default("")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  @@index([inspectionId])
+  @@index([status])
+}
+
+model CounterVisit {
+  id              String   @id @default(cuid())
+  inspectionId    String
+  inspection      Inspection @relation(fields: [inspectionId], references: [id], onDelete: Cascade)
+  visitDate       DateTime @default(now())
+  visitorName     String   @default("")
+  result          String   @default("PENDING") // PENDING/CONFORM/NON_CONFORM/CLOSED
+  findingsResolved String  @default("0")        // عدد النقائص المحلولة
+  notes           String   @default("")
+  createdAt       DateTime @default(now())
+  @@index([inspectionId])
+}
+
+model HealthCard {
+  id              String   @id @default(cuid())
+  reference       String   @unique          // CS-YYYY-NNNNNN (Carte Sanitaire)
+  workerName      String   @default("")
+  workerCin       String   @default("")
+  establishmentId String?
+  establishment   Establishment? @relation(fields: [establishmentId], references: [id], onDelete: SetNull)
+  occupation      String   @default("")    // المهنة
+  commune         String   @default("")
+  cardNumber      String   @default("")
+  issueDate       DateTime?
+  expiryDate      DateTime?                 // تنبيهات الانتهاء
+  examinationDate DateTime?
+  status          String   @default("VALID") // VALID/EXPIRED/PENDING/RENEWING
+  notes           String   @default("")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  @@index([establishmentId])
+  @@index([commune, status])
+  @@index([expiryDate])
+}
+
+model Sample {
+  id              String   @id @default(cuid())
+  reference       String   @unique          // ECH-YYYY-NNNNNN
+  establishmentId String?
+  establishment   Establishment? @relation(fields: [establishmentId], references: [id], onDelete: SetNull)
+  inspectionId    String?
+  inspection      Inspection? @relation(fields: [inspectionId], references: [id], onDelete: SetNull)
+  commune         String   @default("")
+  product         String   @default("")    // المنتج المفحوص
+  sampleDate      DateTime @default(now())
+  reason          String   @default("")    // سبب الأخذ
+  temperature     Float?                   // حرارة العينة
+  collectorName   String   @default("")    // جامع العينة
+  laboratory      String   @default("")    // المخبر
+  requestedTests  String   @default("")    // الاختبارات المطلوبة
+  resultsJson     String   @default("{}")  // JSON: النتائج (معامل/قيمة/مطابقة)
+  conformity      String   @default("PENDING") // PENDING/CONFORM/NON_CONFORM
+  labResults      LabResult[]
+  notes           String   @default("")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  @@index([establishmentId])
+  @@index([inspectionId])
+  @@index([commune, conformity])
+  @@index([sampleDate])
+}
+
+model TemperatureLog {
+  id                String   @id @default(cuid())
+  reference         String   @unique          // TEMP-YYYY-NNNNNN
+  establishmentId   String
+  establishment     Establishment @relation(fields: [establishmentId], references: [id], onDelete: Cascade)
+  inspectionId      String?
+  inspection        Inspection? @relation(fields: [inspectionId], references: [id], onDelete: SetNull)
+  commune           String   @default("")
+  equipmentType     String   @default("REFRIGERATOR") // REFRIGERATOR/COLD_ROOM/FREEZER/DISPLAY/PRODUCT/RECEPTION
+  equipmentName     String   @default("")
+  product           String   @default("")
+  measuredAt        DateTime @default(now())
+  temperature      Float
+  unit              String   @default("°C")
+  referenceMin      Float?
+  referenceMax      Float?
+  conformity        String   @default("PENDING") // PENDING/CONFORM/NON_CONFORM
+  deviceCode        String   @default("")
+  agentName         String   @default("")
+  correctiveAction  String   @default("")
+  notes             String   @default("")
+  createdBy         String   @default("")
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  @@index([establishmentId, measuredAt])
+  @@index([inspectionId])
+  @@index([commune, conformity])
+}
+
+model FoodProduct {
+  id                  String   @id @default(cuid())
+  reference           String   @unique          // PROD-YYYY-NNNNNN
+  establishmentId     String
+  establishment       Establishment @relation(fields: [establishmentId], references: [id], onDelete: Cascade)
+  inspectionId        String?
+  inspection          Inspection? @relation(fields: [inspectionId], references: [id], onDelete: SetNull)
+  commune             String   @default("")
+  product             String   @default("")
+  category            String   @default("")
+  brand               String   @default("")
+  lot                 String   @default("")
+  supplier            String   @default("")
+  receivedAt          DateTime?
+  expiryDate          DateTime?
+  openingDate         DateTime?
+  preparationDate     DateTime?
+  quantity            Float?
+  unit                String   @default("")
+  storage             String   @default("")
+  packagingCondition  String   @default("")
+  labelingStatus      String   @default("PENDING")
+  traceabilityStatus  String   @default("PENDING")
+  conformity          String   @default("PENDING")
+  observedTemperature Float?
+  notes               String   @default("")
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  @@index([establishmentId, expiryDate])
+  @@index([inspectionId])
+  @@index([commune, conformity])
+}
+
+model LabResult {
+  id              String   @id @default(cuid())
+  reference       String   @unique          // LAB-YYYY-NNNNNN
+  sampleId        String
+  sample          Sample   @relation(fields: [sampleId], references: [id], onDelete: Cascade)
+  establishmentId String?
+  establishment   Establishment? @relation(fields: [establishmentId], references: [id], onDelete: SetNull)
+  commune         String   @default("")
+  laboratory      String   @default("")
+  receivedAt      DateTime?
+  analyzedAt      DateTime?
+  parameter       String   @default("")
+  resultValue     String   @default("")
+  unit            String   @default("")
+  method          String   @default("")
+  referenceValue  String   @default("")
+  conformity      String   @default("PENDING")
+  notes           String   @default("")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  @@index([sampleId])
+  @@index([establishmentId, conformity])
+}
+
+model FoodNonConformity {
+  id              String   @id @default(cuid())
+  reference       String   @unique          // NC-YYYY-NNNNNN
+  establishmentId String
+  establishment   Establishment @relation(fields: [establishmentId], references: [id], onDelete: Cascade)
+  inspectionId    String?
+  inspection      Inspection? @relation(fields: [inspectionId], references: [id], onDelete: SetNull)
+  commune         String   @default("")
+  category        String   @default("")
+  description     String   @default("")
+  level           String   @default("MINOR") // MINOR/MODERATE/MAJOR/CRITICAL
+  evidenceJson    String   @default("{}")
+  status          String   @default("OPEN") // OPEN/IN_PROGRESS/CORRECTED/VERIFIED/CLOSED
+  deadline        DateTime?
+  responsible     String   @default("")
+  correctiveAction String  @default("")
+  createdBy       String   @default("")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  @@index([establishmentId, status])
+  @@index([inspectionId])
+  @@index([commune, level])
+}
+
+model FryingOilCheck {
+  id                String   @id @default(cuid())
+  reference         String   @unique          // OIL-YYYY-NNNNNN
+  establishmentId   String
+  establishment     Establishment @relation(fields: [establishmentId], references: [id], onDelete: Cascade)
+  inspectionId      String?
+  inspection        Inspection? @relation(fields: [inspectionId], references: [id], onDelete: SetNull)
+  commune           String   @default("")
+  fryerName         String   @default("")
+  oilType           String   @default("")
+  firstUseDate      DateTime?
+  checkedAt         DateTime @default(now())
+  appearance        String   @default("")
+  color             String   @default("")
+  odor              String   @default("")
+  foam              String   @default("")
+  residues          String   @default("")
+  useTemperature    Float?
+  tpmValue          Float?
+  deviceCode        String   @default("")
+  conformity        String   @default("PENDING")
+  changeDate        DateTime?
+  removedQuantity   Float?
+  newQuantity       Float?
+  disposalMethod    String   @default("")
+  collector         String   @default("")
+  notes             String   @default("")
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  @@index([establishmentId, checkedAt])
+  @@index([inspectionId])
+  @@index([commune, conformity])
+}
+
+// ===== Bureau 03: Eau, Assainissement et Hygiène du Milieu =====
+// راجع docs/BACKLOG.md المرحلة 4
+
+model WaterPoint {
+  id              String   @id @default(cuid())
+  reference       String   @unique          // PE-YYYY-NNNNNN (Point d'Eau)
+  name            String   @default("")     // اسم النقطة
+  type            String   @default("NETWORK") // NETWORK/RESERVOIR/TOWER/FOUNTAIN/WELL/BOREHOLE/SOURCE/CISTERN/INSTITUTION
+  commune         String   @default("")
+  quartier        String   @default("")
+  adresse         String   @default("")
+  latitude        Float?
+  longitude       Float?
+  operator        String   @default("")     // المُشغّل (الوكالة الوطنية/الجماعة/خاص)
+  status          String   @default("ACTIVE") // ACTIVE/MAINTENANCE/OUT_OF_SERVICE
+  description     String   @default("")
+  measurements    WaterMeasurement[]
+  samples         WaterSample[]
+  inspections     WaterInspection[]
+  devices         WaterDevice[]
+  actions         WaterAction[]
+  disinfectionOperations WaterDisinfectionOperation[]
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  @@index([commune, type])
+  @@index([commune, status])
+}
+
+model WaterMeasurement {
+  id              String   @id @default(cuid())
+  reference       String   @unique          // MES-YYYY-NNNNNN
+  waterPointId    String
+  waterPoint      WaterPoint @relation(fields: [waterPointId], references: [id], onDelete: Cascade)
+  sampleId        String?
+  sample          WaterSample? @relation(fields: [sampleId], references: [id], onDelete: SetNull)
+  deviceId        String?
+  device          WaterDevice? @relation(fields: [deviceId], references: [id], onDelete: SetNull)
+  commune         String   @default("")
+  sampleNumber    String   @default("")     // رقم العينة
+  measurementDate DateTime @default(now())
+  chlorineResidual Float?                   // الكلور المتبقي (mg/L)
+  ph              Float?                   // الحموضة
+  temperature     Float?                   // الحرارة (°C)
+  turbidity       Float?                   // التعكّر (NTU)
+  conductivity    Float?                   // الموصلية (μS/cm)
+  // اختبارات مخبرية قابلة للتهيئة (JSON)
+  labTestsJson    String   @default("{}")   // { ecoli, totalColiforms, enterococci }
+  conformity      String   @default("PENDING") // PENDING/CONFORM/NON_CONFORM
+  collectorName   String   @default("")
+  laboratory      String   @default("")
+  notes           String   @default("")
+  createdAt       DateTime @default(now())
+  @@index([waterPointId])
+  @@index([commune, conformity])
+  @@index([measurementDate])
+  @@index([sampleId])
+  @@index([deviceId])
+}
+
+model Pool {
+  id              String   @id @default(cuid())
+  reference       String   @unique          // PISC-YYYY-NNNNNN
+  name            String   @default("")
+  type            String   @default("SWIMMING") // SWIMMING/BASIN/BATHING_SITE
+  commune         String   @default("")
+  quartier        String   @default("")
+  adresse         String   @default("")
+  latitude        Float?
+  longitude       Float?
+  operator        String   @default("")
+  status          String   @default("ACTIVE") // ACTIVE/CLOSED/MAINTENANCE
+  waterType       String   @default("TREATED") // TREATED/NATURAL
+  lastPh          Float?
+  lastChlorine    Float?
+  lastInspection  DateTime?
+  notes           String   @default("")
+  samples         WaterSample[]
+  inspections     WaterInspection[]
+  actions         WaterAction[]
+  disinfectionOperations WaterDisinfectionOperation[]
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  @@index([commune, type])
+  @@index([commune, status])
+}
+
+model SanitationIncident {
+  id              String   @id @default(cuid())
+  reference       String   @unique          // ASS-YYYY-NNNNNN (Assainissement)
+  type            String   @default("BLOCKAGE") // BLOCKAGE/OVERFLOW/DISCHARGE/STAGNANT/BROKEN/SEPTIC/NUISANCE
+  commune         String   @default("")
+  quartier        String   @default("")
+  adresse         String   @default("")
+  latitude        Float?
+  longitude       Float?
+  description     String   @default("")
+  riskLevel       String   @default("LOW") // LOW/MEDIUM/HIGH/CRITICAL
+  source          String   @default("INTERNAL") // INTERNAL/PUBLIC/PHONE
+  declarantName   String   @default("")
+  declarantPhone  String   @default("")
+  assignedTo      String   @default("")
+  status          String   @default("NEW") // NEW/ASSIGNED/IN_PROGRESS/VERIFIED/CLOSED
+  resolution      String   @default("")
+  closedAt        DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  actions         WaterAction[]
+  @@index([commune, status])
+  @@index([commune, riskLevel])
+  @@index([type])
+}
+
+model SanitationAsset {
+  id                 String   @id @default(cuid())
+  reference          String   @unique          // ASS-AST-YYYY-NNNNNN
+  name               String   @default("")
+  type               String   @default("DRAIN") // SEWER_LINE/DRAIN/PUMP_STATION/TANK/TREATMENT_PLANT
+  commune            String   @default("")
+  quartier           String   @default("")
+  adresse            String   @default("")
+  latitude           Float?
+  longitude          Float?
+  operator           String   @default("")
+  status             String   @default("ACTIVE") // ACTIVE/MAINTENANCE/OUT_OF_SERVICE
+  capacity           Float?
+  capacityUnit       String   @default("m³/j")
+  lastMaintenanceAt  DateTime?
+  nextMaintenanceAt  DateTime?
+  description        String   @default("")
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  @@index([commune, type])
+  @@index([commune, status])
+  @@index([nextMaintenanceAt])
+}
+
+model WaterEmergencyPlan {
+  id                 String   @id @default(cuid())
+  reference          String   @unique          // URG-WATER-YYYY-NNNNNN
+  commune            String   @default("")
+  title              String   @default("")
+  planType           String   @default("CONTAMINATION") // CONTAMINATION/OUTAGE/FLOOD/SHORTAGE/OTHER
+  trigger            String   @default("")
+  riskLevel          String   @default("HIGH") // MEDIUM/HIGH/CRITICAL
+  status             String   @default("DRAFT") // DRAFT/ACTIVE/MONITORING/CLOSED
+  responsible       String   @default("")
+  alternativeSource  String   @default("")
+  activatedAt        DateTime?
+  targetCloseAt      DateTime?
+  closedAt           DateTime?
+  measures           String   @default("")
+  communicationNote  String   @default("")
+  notes              String   @default("")
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  @@index([commune, status])
+  @@index([commune, riskLevel])
+  @@index([targetCloseAt])
+}
+
+model WaterIncident {
+  id                 String   @id @default(cuid())
+  reference          String   @unique          // INC-WATER-YYYY-NNNNNN
+  commune            String   @default("")
+  quartier           String   @default("")
+  adresse            String   @default("")
+  latitude           Float?
+  longitude          Float?
+  incidentType       String   @default("OUTAGE") // OUTAGE/CONTAMINATION/LOW_PRESSURE/PIPE_BURST/FLOOD/OTHER
+  severity           String   @default("MEDIUM") // LOW/MEDIUM/HIGH/CRITICAL
+  source             String   @default("INTERNAL") // INTERNAL/PUBLIC/PHONE/AUTHORITY
+  description        String   @default("")
+  affectedPopulation Int      @default(0)
+  affectedPoints     Int      @default(0)
+  startedAt          DateTime @default(now())
+  resolvedAt         DateTime?
+  assignedTo         String   @default("")
+  status             String   @default("NEW") // NEW/INVESTIGATING/RESPONDING/RESOLVED/CLOSED
+  response           String   @default("")
+  notes              String   @default("")
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  @@index([commune, status])
+  @@index([commune, severity])
+  @@index([incidentType])
+  @@index([startedAt])
+}
+
+model WaterLaboratory {
+  id                    String   @id @default(cuid())
+  reference             String   @unique          // LAB-WATER-YYYY-NNNNNN
+  commune               String   @default("")
+  name                  String   @default("")
+  laboratoryType        String   @default("PUBLIC") // PUBLIC/PRIVATE/UNIVERSITY/REFERENCE
+  accreditationStatus   String   @default("UNKNOWN") // ACCREDITED/PENDING/EXPIRED/UNKNOWN
+  accreditationReference String  @default("")
+  contactName           String   @default("")
+  phone                 String   @default("")
+  email                 String   @default("")
+  address               String   @default("")
+  turnaroundDays        Int      @default(7)
+  parameters            String   @default("")
+  active                Boolean  @default(true)
+  notes                 String   @default("")
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  @@index([commune, active])
+  @@index([commune, laboratoryType])
+  @@index([accreditationStatus])
+}
+
+model WaterMonitoringProgram {
+  id              String   @id @default(cuid())
+  reference       String   @unique          // PRG-WATER-YYYY-NNNNNN
+  commune         String   @default("")
+  name            String   @default("")
+  programType     String   @default("QUALITY") // QUALITY/DISINFECTION/SANITATION/POOL/EMERGENCY
+  objective       String   @default("")
+  targetArea      String   @default("")
+  responsible     String   @default("")
+  team            String   @default("")
+  status          String   @default("PLANNED") // PLANNED/ACTIVE/COMPLETED/CANCELLED
+  startDate       DateTime?
+  endDate         DateTime?
+  frequencyDays   Int?
+  targetCount     Int?
+  completedCount  Int      @default(0)
+  notes           String   @default("")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  @@index([commune, status])
+  @@index([commune, startDate])
+  @@index([endDate])
+}
+
+model WaterSample {
+  id                    String   @id @default(cuid())
+  reference             String   @unique          // PREL-YYYY-NNNNNN
+  waterPointId          String?
+  waterPoint            WaterPoint? @relation(fields: [waterPointId], references: [id], onDelete: SetNull)
+  poolId                String?
+  pool                  Pool? @relation(fields: [poolId], references: [id], onDelete: SetNull)
+  commune               String   @default("")
+  sampleType            String   @default("DRINKING_WATER")
+  sampleDate            DateTime @default(now())
+  sampleTime            String   @default("")
+  collectorName         String   @default("")
+  volumeMl              Int?
+  containerType         String   @default("")
+  sterile               Boolean  @default(false)
+  preservative          String   @default("")
+  transportTemperature  Float?
+  departureAt           DateTime?
+  laboratoryArrivalAt   DateTime?
+  laboratory            String   @default("")
+  reason                String   @default("")
+  requestedTests        String   @default("")
+  observation           String   @default("")
+  status                String   @default("COLLECTED") // COLLECTED/LABELLED/STORED/TRANSPORTED/RECEIVED/ANALYZED/RESULT_RECEIVED/VALIDATED/CANCELLED
+  laboratoryResult      String   @default("")
+  resultReceivedAt      DateTime?
+  validatedBy           String   @default("")
+  validatedAt           DateTime?
+  validationNote        String   @default("")
+  chainEvents           WaterSampleEvent[]
+  inspections           WaterInspection[]
+  measurements          WaterMeasurement[]
+  actions               WaterAction[]
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  @@index([commune, status])
+  @@index([waterPointId, sampleDate])
+  @@index([poolId, sampleDate])
+  @@index([sampleDate])
+}
+
+model WaterSampleEvent {
+  id          String   @id @default(cuid())
+  sampleId    String
+  sample      WaterSample @relation(fields: [sampleId], references: [id], onDelete: Cascade)
+  action      String
+  actorId     String   @default("")
+  actorName   String   @default("")
+  occurredAt  DateTime @default(now())
+  note        String   @default("")
+  @@index([sampleId, occurredAt])
+}
+
+model WaterInspection {
+  id                String   @id @default(cuid())
+  reference         String   @unique          // INS-WATER-YYYY-NNNNNN
+  waterPointId      String?
+  waterPoint        WaterPoint? @relation(fields: [waterPointId], references: [id], onDelete: SetNull)
+  poolId            String?
+  pool              Pool? @relation(fields: [poolId], references: [id], onDelete: SetNull)
+  sampleId          String?
+  sample            WaterSample? @relation(fields: [sampleId], references: [id], onDelete: SetNull)
+  commune           String   @default("")
+  inspectionDate    DateTime @default(now())
+  inspectorName     String   @default("")
+  checklistJson     String   @default("{}")
+  observation       String   @default("")
+  probability       Int      @default(1)
+  severity          Int      @default(1)
+  riskScore         Int      @default(0)
+  riskLevel         String   @default("LOW")
+  conformity        String   @default("PENDING") // PENDING/CONFORM/PARTIAL/NON_CONFORM
+  correctiveAction  String   @default("")
+  followUpDate      DateTime?
+  status            String   @default("COMPLETED") // PLANNED/IN_PROGRESS/COMPLETED/FOLLOW_UP/CLOSED
+  closedAt          DateTime?
+  actions           WaterAction[]
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  @@index([commune, inspectionDate])
+  @@index([commune, status])
+  @@index([waterPointId, inspectionDate])
+  @@index([poolId, inspectionDate])
+  @@index([sampleId])
+}
+
+model WaterAction {
+  id                    String   @id @default(cuid())
+  reference             String   @unique          // ACT-WATER-YYYY-NNNNNN
+  waterPointId          String?
+  waterPoint            WaterPoint? @relation(fields: [waterPointId], references: [id], onDelete: SetNull)
+  poolId                String?
+  pool                  Pool? @relation(fields: [poolId], references: [id], onDelete: SetNull)
+  inspectionId          String?
+  inspection            WaterInspection? @relation(fields: [inspectionId], references: [id], onDelete: SetNull)
+  sampleId              String?
+  sample                WaterSample? @relation(fields: [sampleId], references: [id], onDelete: SetNull)
+  sanitationIncidentId  String?
+  sanitationIncident    SanitationIncident? @relation(fields: [sanitationIncidentId], references: [id], onDelete: SetNull)
+  commune               String   @default("")
+  actionType            String   @default("CONTROL") // CONTROL/DISINFECTION/REPAIR/CLEANING/SAMPLING/NOTICE/OTHER
+  priority              String   @default("NORMAL") // LOW/NORMAL/HIGH/URGENT
+  status                String   @default("PLANNED") // PLANNED/ASSIGNED/IN_PROGRESS/COMPLETED/VERIFIED/CLOSED
+  responsible           String   @default("")
+  plannedDate           DateTime?
+  executedDate          DateTime?
+  followUpDate          DateTime?
+  measures              String   @default("")
+  outcome               String   @default("")
+  observation           String   @default("")
+  closedAt              DateTime?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  @@index([commune, status])
+  @@index([commune, plannedDate])
+  @@index([waterPointId])
+  @@index([inspectionId])
+  @@index([sanitationIncidentId])
+}
+
+model WaterDisinfectionOperation {
+  id              String   @id @default(cuid())
+  reference       String   @unique          // DSV-WATER-YYYY-NNNNNN
+  waterPointId    String?
+  waterPoint      WaterPoint? @relation(fields: [waterPointId], references: [id], onDelete: SetNull)
+  poolId          String?
+  pool            Pool? @relation(fields: [poolId], references: [id], onDelete: SetNull)
+  commune         String   @default("")
+  operationDate   DateTime @default(now())
+  operationType   String   @default("CHLORINATION") // CHLORINATION/DISINFECTION/SHOCK
+  productName     String   @default("")
+  activeSubstance String   @default("")
+  lotNumber       String   @default("")
+  doseValue       Float?
+  doseUnit        String   @default("mg/L")
+  treatedVolume   Float?
+  volumeUnit      String   @default("m³")
+  residualBefore  Float?
+  residualAfter   Float?
+  contactTimeMin  Int?
+  operator        String   @default("")
+  status          String   @default("COMPLETED") // PLANNED/COMPLETED/VERIFIED
+  result          String   @default("")
+  observation     String   @default("")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  @@index([commune, operationDate])
+  @@index([commune, status])
+  @@index([waterPointId])
+  @@index([poolId])
+}
+
+model WaterThreshold {
+  id          String   @id @default(cuid())
+  commune     String   @default("ALL")
+  parameter   String
+  label       String   @default("")
+  unit        String   @default("")
+  minValue    Float?
+  maxValue    Float?
+  active      Boolean  @default(true)
+  notes       String   @default("")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  @@unique([commune, parameter])
+  @@index([commune, active])
+}
+
+model WaterDevice {
+  id                 String   @id @default(cuid())
+  reference          String   @unique          // DEV-WATER-YYYY-NNNNNN
+  commune            String   @default("")
+  waterPointId       String?
+  waterPoint         WaterPoint? @relation(fields: [waterPointId], references: [id], onDelete: SetNull)
+  name               String   @default("")
+  type               String   @default("MULTIMETER") // MULTIMETER/PHMETER/CHLORINE/TURBIDITY/THERMOMETER/OTHER
+  serialNumber       String   @default("")
+  manufacturer       String   @default("")
+  model              String   @default("")
+  status             String   @default("ACTIVE") // ACTIVE/MAINTENANCE/OUT_OF_SERVICE
+  calibrationDueDate DateTime?
+  notes              String   @default("")
+  calibrations       WaterDeviceCalibration[]
+  measurements       WaterMeasurement[]
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  @@index([commune, status])
+  @@index([calibrationDueDate])
+}
+
+model WaterDeviceCalibration {
+  id                   String   @id @default(cuid())
+  deviceId             String
+  device               WaterDevice @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  calibrationDate      DateTime @default(now())
+  nextDueDate          DateTime?
+  performedBy          String   @default("")
+  certificateReference String   @default("")
+  result               String   @default("CONFORM") // CONFORM/NON_CONFORM/PENDING
+  notes                String   @default("")
+  createdAt            DateTime @default(now())
+  @@index([deviceId, calibrationDate])
+  @@index([nextDueDate])
+}
+
+// ===== Bureau 04: Lutte Antivectorielle (محاربة النواقل) =====
+// راجع docs/BACKLOG.md المرحلة 5
+// ملاحظة: Intervention/Campagne/Product/StockMovement موجودة بالفعل لنشاط 3D.
+// هنا نضيف: مخزون البيوسيدات المتخصص + حالات السع/العضة.
+
+model PestProduct {
+  id              String   @id @default(cuid())
+  reference       String   @unique          // PP-YYYY-NNNNNN
+  commercialName  String   @default("")     // الاسم التجاري
+  activeSubstance String   @default("")    // المادة الفعّالة
+  category        String   @default("INSECTICIDE") // INSECTICIDE/RODENTICIDE/DISINFECTANT/REPELLENT/BAIT/OTHER
+  formulation     String   @default("")     // الصيغة (سائل/مسحوق/جل/حبيبات/أerosol)
+  concentration   String   @default("")     // التركيز
+  lotNumber       String   @default("")     // رقم الرزمة
+  unit            String   @default("LITRE") // LITRE/KG/UNIT/BOX
+  quantityStock   Int      @default(0)
+  thresholdAlert  Int      @default(10)
+  expiryDate      DateTime?                // انتهاء الصلاحية + تنبيهات
+  target          String   @default("")     // الهدف (rats/mosquitoes/flies/cockroaches...)
+  supplier        String   @default("")
+  unitPrice       Float    @default(0)
+  commune         String   @default("")     // جماعة أو فارغ للمشترك
+  description     String   @default("")
+  imagePath       String?
+  movements       PestStockMovement[]
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  @@index([commune, category])
+  @@index([expiryDate])
+}
+
+model PestStockMovement {
+  id              String   @id @default(cuid())
+  productId       String
+  product         PestProduct @relation(fields: [productId], references: [id], onDelete: Cascade)
+  type            String   // ENTREE/SORTIE/AJUSTEMENT/PEREMPTION
+  quantity        Int      // موجب للدخول، سالب للخروج
+  reason          String   @default("")    // سبب الحركة
+  interventionRef String   @default("")    // مرجع التدخل المرتبط (اختياري)
+  commune         String   @default("")
+  userName        String   @default("")    // من قام بالحركة
+  createdAt       DateTime @default(now())
+  @@index([productId])
+  @@index([commune])
+}
+
+model BiteCase {
+  id              String   @id @default(cuid())
+  reference       String   @unique          // MORS-YYYY-NNNNNN
+  // الضحية (بيانات إدارية فقط — لا معلومات طبية شخصية حساسة)
+  victimName      String   @default("")
+  victimAge       Int?
+  victimGender    String   @default("")    // M/F
+  victimPhone     String   @default("")
+  victimCin       String   @default("")    // رقم البطاقة الوطنية
+  victimRegistrationNumber String @default("") // رقم تسجيل المصاب/الملف
+  victimAddress   String   @default("")    // عنوان المصاب
+  guardianName    String   @default("")    // ولي الأمر عند الحاجة
+  guardianPhone   String   @default("")
+  declarantName   String   @default("")    // المبلّغ إذا لم يكن المصاب
+  declarantPhone  String   @default("")
+  // الحيوان
+  animalType      String   @default("DOG") // DOG/CAT/MONKEY/OTHER
+  animalStatus    String   @default("UNKNOWN") // OWNED/STRAY/VACCINATED/SUSPECT/DEAD
+  animalDescription String @default("")     // وصف الحيوان
+  // الحادث
+  biteDate        DateTime @default(now())
+  biteLocation    String   @default("")    // مكان العضة
+  commune         String   @default("")
+  quartier        String   @default("")
+  adresse         String   @default("")
+  latitude        Float?
+  longitude       Float?
+  biteSite        String   @default("")    // مكان العضة على الجسم (عام، لا تفاصيل طبية)
+  description     String   @default("")
+  medicalFacility String   @default("")    // المرفق الصحي المحال إليه
+  medicalReferralDate DateTime?            // تاريخ الإحالة
+  exposureCategory String   @default("UNKNOWN") // WHO I/II/III/UNKNOWN
+  woundWashConfirmed Boolean @default(false)
+  woundWashDate  DateTime?
+  woundCareNotes String   @default("")
+  vaccineType    String   @default("UNKNOWN") // نوع لقاح السعار المستعمل
+  vaccineRoute   String   @default("UNKNOWN") // ID/IM/UNKNOWN
+  pepProtocol    String   @default("PENDING_ASSESSMENT") // بروتوكول الوقاية بعد التعرض
+  rigIndicated   Boolean  @default(false)       // يحدده الطبيب للحالات الشديدة
+  rigAdministered Boolean @default(false)
+  rigType        String   @default("")
+  rigDate        DateTime?
+  vaccinationNotes String @default("")
+  // المتابعة الإدارية (لا تشخيص طبي آلي)
+  source          String   @default("INTERNAL") // INTERNAL/PUBLIC/HOSPITAL/AUTHORITY
+  status          String   @default("NEW") // NEW/REPORTED/FOLLOWING/VACCINATION_STARTED/VACCINATION_COMPLETE/CLOSED/LOST_CONTACT
+  reportingDate   DateTime @default(now())
+  followUpNotes   String   @default("")
+  assignedTo      String   @default("")
+  strayReportId   String?                  // ربط اختياري ببلاغ CSVR
+  animalId        String?
+  animal          StrayAnimal? @relation(fields: [animalId], references: [id], onDelete: SetNull)
+  vaccinationSteps BiteVaccinationStep[]
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  @@index([commune, status])
+  @@index([commune, animalType])
+  @@index([biteDate])
+  @@index([animalId])
+}
+
+model BiteVaccinationStep {
+  id              String   @id @default(cuid())
+  biteCaseId      String
+  stepKey         String   // WOUND_CARE/RIG/DAY_0/DAY_3/DAY_7/DAY_14...
+  label           String   @default("")
+  status          String   @default("PLANNED") // PLANNED/DONE/MISSED/CANCELLED
+  scheduledDate   DateTime?
+  administeredDate DateTime?
+  vaccineType    String   @default("")
+  route          String   @default("")
+  lotNumber      String   @default("")
+  facility       String   @default("")
+  administeredBy String   @default("")
+  notes          String   @default("")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  biteCase       BiteCase @relation(fields: [biteCaseId], references: [id], onDelete: Cascade)
+  @@unique([biteCaseId, stepKey])
+  @@index([biteCaseId, scheduledDate])
+  @@index([status])
+}
+
+// ===== Bureau 05: Funérailles, Cimetières et Morgue =====
+// راجع docs/BACKLOG.md المرحلة 6
+// ⚠️ كل إذن يتطلب مصادقة يدوية + حقول قانونية قابلة للتهيئة. راجع docs/LEGAL_SAFETY.md.
+
+model DeathCase {
+  id              String   @id @default(cuid())
+  reference       String   @unique          // DEC-YYYY-NNNNNN
+  deceasedName    String   @default("")     // اسم المتوفى
+  deceasedCin     String   @default("")     // البطاقة الوطنية
+  deceasedAge     Int?
+  deceasedGender  String   @default("")    // M/F
+  deathDate       DateTime?
+  deathCause      String   @default("")    // سبب الوفاة (عام)
+  deathPlace      String   @default("")    // مكان الوفاة
+  commune         String   @default("")
+  // حالة المستودع (morgue)
+  morgueStatus    String   @default("NONE") // NONE/ADMITTED/RELEASED
+  morgueAdmissionDate DateTime?
+  morgueReleaseDate   DateTime?
+  // مصدر البلاغ
+  source          String   @default("INTERNAL") // INTERNAL/HOSPITAL/AUTHORITY/PUBLIC
+  declarantName   String   @default("")
+  declarantPhone  String   @default("")
+  status          String   @default("NEW") // NEW/MORGUE/BURIED/TRANSPORTED/EXHUMED/CLOSED
+  notes           String   @default("")
+  burialId        String?                   // ربط بملف الدفن
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  @@index([commune, status])
+  @@index([deathDate])
+}
+
+model BurialDossier {
+  id              String   @id @default(cuid())
+  reference       String   @unique          // DEF-YYYY-NNNNNN
+  deceasedName    String   @default("")
+  deceasedCin     String   @default("")
+  commune         String   @default("")
+  cemeteryId      String?                   // المقبرة
+  cemetery        Cemetery? @relation("BurialCemetery", fields: [cemeteryId], references: [id], onDelete: SetNull)
+  plotSection     String   @default("")    // القسم/القبر
+  burialDate      DateTime?
+  // ⚠️ إذن الدفن — يتطلب مصادقة يدوية + مرجع قانوني
+  authorizationStatus String @default("PENDING") // PENDING/APPROVED/REJECTED
+  authorizedBy    String   @default("")    // الموظف المختص
+  authorizedAt    DateTime?
+  legalReference  String   @default("")    // المرجع القانوني (قابل للتهيئة)
+  competentAuthority String @default("")   // الجهة المختصة
+  deathCaseId     String?                   // ربط بحالة الوفاة
+  officiantName   String   @default("")    // إمام/موظف الجنائز
+  notes           String   @default("")
+  status          String   @default("NEW") // NEW/AUTHORIZED/BURIED/CLOSED
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  @@index([commune, status])
+  @@index([cemeteryId])
+}
+
+model Cemetery {
+  id              String   @id @default(cuid())
+  reference       String   @unique          // CIM-YYYY-NNNNNN
+  name            String   @default("")
+  type            String   @default("MUSLIM") // MUSLIM/JEWISH/CHRISTIAN/COMMUNAL
+  commune         String   @default("")
+  quartier        String   @default("")
+  adresse         String   @default("")
+  latitude        Float?
+  longitude       Float?
+  capacity        Int      @default(0)      // الطاقة الاستيعابية التقديرية
+  occupied        Int      @default(0)      // القبور المشغولة
+  sectionsJson    String   @default("[]")   // JSON: الأقسام والقيعان
+  status          String   @default("ACTIVE") // ACTIVE/FULL/CLOSED/MAINTENANCE
+  notes           String   @default("")
+  burials         BurialDossier[] @relation("BurialCemetery")
+  exhumations     ExhumationDossier[] @relation("ExhumationCemetery")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  @@index([commune, status])
+}
+
+model CorpseTransport {
+  id              String   @id @default(cuid())
+  reference       String   @unique          // TRANS-YYYY-NNNNNN
+  deceasedName    String   @default("")
+  commune         String   @default("")
+  // الرحلة
+  originPlace     String   @default("")    // مكان الانطلاق
+  destinationPlace String  @default("")    // الوجهة
+  transportDate   DateTime?
+  vehiclePlate    String   @default("")    // لوحة المركبة
+  driverName      String   @default("")    // السائق
+  driverPhone     String   @default("")
+  // ⚠️ إذن النقل
+  authorizationStatus String @default("PENDING")
+  authorizedBy    String   @default("")
+  authorizedAt    DateTime?
+  legalReference  String   @default("")
+  deathCaseId     String?
+  status          String   @default("NEW") // NEW/AUTHORIZED/IN_TRANSIT/COMPLETED/CANCELLED
+  notes           String   @default("")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  @@index([commune, status])
+}
+
+model ExhumationDossier {
+  id              String   @id @default(cuid())
+  reference       String   @unique          // EXH-YYYY-NNNNNN
+  deceasedName    String   @default("")
+  deceasedCin     String   @default("")
+  commune         String   @default("")
+  cemeteryId      String?
+  cemetery        Cemetery? @relation("ExhumationCemetery", fields: [cemeteryId], references: [id], onDelete: SetNull)
+  plotSection     String   @default("")
+  originalBurialDate DateTime?
+  exhumationDate  DateTime?
+  reason          String   @default("")    // سبب النبش
+  newDestination  String   @default("")    // الوجهة الجديدة
+  // ⚠️ إذن النبش — حساس جداً
+  authorizationStatus String @default("PENDING")
+  authorizedBy    String   @default("")
+  authorizedAt    DateTime?
+  legalReference  String   @default("")
+  competentAuthority String @default("")
+  requesterName   String   @default("")    // مقدم الطلب
+  requesterCin    String   @default("")
+  status          String   @default("NEW") // NEW/AUTHORIZED/COMPLETED/REJECTED
+  notes           String   @default("")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  @@index([commune, status])
+}
+
+// ===== Bureau 06: Protection de l'Environnement =====
+// راجع docs/BACKLOG.md المرحلة 7
+
+model EnvironmentalDossier {
+  id              String   @id @default(cuid())
+  reference       String   @unique          // ENV-YYYY-NNNNNN
+  title           String   @default("")
+  category        String   @default("OTHER") // POLLUTION/WASTE/PROJECT/IMPACT_REVIEW/SITE/NATURAL_HERITAGE/OTHER
+  commune         String   @default("")
+  quartier        String   @default("")
+  adresse         String   @default("")
+  latitude        Float?
+  longitude       Float?
+  description     String   @default("")
+  riskScore       Int      @default(0)      // درجة المخاطر البيئية الداخلية (0-100)
+  probability     Int      @default(1)      // احتمال الحدوث 1..5
+  severity        Int      @default(1)      // شدة الأثر 1..5
+  riskLevel       String   @default("LOW")  // LOW/MEDIUM/HIGH/CRITICAL
+  priority        String   @default("NORMALE")
+  status          String   @default("NEW")  // NEW/IN_PROGRESS/INSPECTED/ACTION_REQUIRED/CLOSED
+  assignedTo      String   @default("")
+  company         String   @default("")     // الشركة المعنية
+  progress        Int      @default(0)      // نسبة التقدم %
+  notes           String   @default("")
+  source          String   @default("INTERNAL") // INTERNAL/PUBLIC/PHONE/AUTHORITY
+  probableSource  String   @default("")
+  extent          String   @default("") // LOCAL/QUARTER/COMMUNAL/INTERCOMMUNAL
+  exposedPopulation Int    @default(0)
+  milieu          String   @default("") // AIR/WATER/SOIL/URBAN/NATURAL/OTHER
+  servicesConcerned String @default("[]") // الخدمات والشركاء المعنيون
+  legalReference  String   @default("") // أساس قانوني قابل للتحقق
+  measuresTaken   String   @default("") // الإجراءات المتخذة
+  dueDate         DateTime?
+  inspectionDate  DateTime?
+  nextFollowUpDate DateTime?
+  closedAt        DateTime?
+  unifiedDossierId String? @unique
+  documents       EnvironmentalDossierDocument[]
+  evidence        EnvironmentalEvidence[]
+  inspections     EnvironmentalInspection[]
+  followUps       EnvironmentalFollowUp[]
+  programs        EnvironmentalProgram[]
+  pollutionIncidents PollutionIncident[]
+  wasteSpots      WasteBlackSpot[]
+  naturalSites    NaturalSite[]
+  campaigns       AwarenessCampaign[]
+  complaints      Complaint[]
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  @@index([commune, status])
+  @@index([commune, category])
+  @@index([riskLevel])
+}
+
+model EnvironmentalInspection {
+  id                     String   @id @default(cuid())
+  reference              String   @unique // EINS-YYYY-XXXXXX
+  environmentalDossierId String
+  commune                String   @default("")
+  inspectionDate         DateTime @default(now())
+  inspectorName          String   @default("")
+  observation            String   @default("")
+  probableSource         String   @default("")
+  extent                 String   @default("")
+  exposedPopulation      Int      @default(0)
+  milieu                 String   @default("")
+  probability            Int      @default(1)
+  severity               Int      @default(1)
+  riskScore              Int      @default(1)
+  riskLevel              String   @default("LOW")
+  resolution             String   @default("PENDING") // YES/NO/PARTIAL/PENDING
+  nextAction             String   @default("")
+  nextFollowUpDate       DateTime?
+  notes                  String   @default("")
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  environmentalDossier EnvironmentalDossier @relation(fields: [environmentalDossierId], references: [id], onDelete: Cascade)
+
+  @@index([commune, inspectionDate])
+  @@index([environmentalDossierId, inspectionDate])
+}
+
+model EnvironmentalFollowUp {
+  id                     String   @id @default(cuid())
+  reference              String   @unique // EFOL-YYYY-XXXXXX
+  environmentalDossierId String
+  commune                String   @default("")
+  followUpDate           DateTime @default(now())
+  employeeName           String   @default("")
+  currentStatus          String   @default("")
+  damageRemoved          String   @default("PENDING") // YES/NO/PARTIAL/PENDING
+  notes                  String   @default("")
+  nextAction             String   @default("")
+  nextFollowUpDate       DateTime?
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  environmentalDossier EnvironmentalDossier @relation(fields: [environmentalDossierId], references: [id], onDelete: Cascade)
+
+  @@index([commune, followUpDate])
+  @@index([environmentalDossierId, followUpDate])
+}
+
+model EnvironmentalProgram {
+  id              String   @id @default(cuid())
+  reference       String   @unique // EPRG-YYYY-XXXXXX
+  year            Int
+  operation       String
+  axis            String   @default("")
+  commune         String   @default("")
+  environmentalDossierId String?
+  quartier        String   @default("")
+  objective       String   @default("")
+  responsible     String   @default("")
+  startDate       DateTime?
+  endDate         DateTime?
+  budget          Float?
+  indicator       String   @default("")
+  quantitativeTarget Int   @default(0)
+  achieved        Int      @default(0)
+  progress        Int      @default(0)
+  status          String   @default("PLANNED") // PLANNED/IN_PROGRESS/COMPLETED/DELAYED/CANCELLED
+  notes           String   @default("")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  environmentalDossier EnvironmentalDossier? @relation(fields: [environmentalDossierId], references: [id], onDelete: SetNull)
+  campaigns       AwarenessCampaign[]
+
+  @@index([commune, year])
+  @@index([commune, status])
+  @@index([environmentalDossierId])
+}
+
+model EnvironmentalDossierDocument {
+  id                     String   @id @default(cuid())
+  environmentalDossierId String
+  documentId             String
+  createdAt              DateTime @default(now())
+
+  environmentalDossier EnvironmentalDossier @relation(fields: [environmentalDossierId], references: [id], onDelete: Cascade)
+  document             Document             @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@unique([environmentalDossierId, documentId])
+  @@index([documentId])
+}
+
+model EnvironmentalEvidence {
+  id                     String   @id @default(cuid())
+  environmentalDossierId String
+  url                    String   // صورة أو فيديو محفوظ كبيانات آمنة
+  caption                String   @default("")
+  type                   String   @default("INSPECTION") // BEFORE/AFTER/INSPECTION/ANALYSIS/CORRESPONDENCE
+  mimeType               String   @default("")
+  originalName           String   @default("")
+  uploadedBy             String   @default("")
+  createdAt              DateTime @default(now())
+
+  environmentalDossier EnvironmentalDossier @relation(fields: [environmentalDossierId], references: [id], onDelete: Cascade)
+
+  @@index([environmentalDossierId, type])
+}
+
+model PollutionIncident {
+  id              String   @id @default(cuid())
+  reference       String   @unique          // POL-YYYY-NNNNNN
+  type            String   @default("AIR")  // AIR/WATER/SOIL/NOISE/OdOUR/SMOKE/DUST/WASTEWATER/INDUSTRIAL
+  commune         String   @default("")
+  quartier        String   @default("")
+  adresse         String   @default("")
+  latitude        Float?
+  longitude       Float?
+  description     String   @default("")
+  source          String   @default("INTERNAL") // INTERNAL/PUBLIC/PHONE
+  declarantName   String   @default("")
+  declarantPhone  String   @default("")
+  pollutantName   String   @default("")     // اسم الملوّث
+  severity        String   @default("LOW")  // LOW/MEDIUM/HIGH/CRITICAL
+  company         String   @default("")     // المصدر المتسبب
+  environmentalDossierId String?
+  status          String   @default("NEW")  // NEW/INVESTIGATING/MITIGATING/CLOSED
+  mitigation      String   @default("")     // إجراءات التخفيف
+  closedAt        DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  environmentalDossier EnvironmentalDossier? @relation(fields: [environmentalDossierId], references: [id], onDelete: SetNull)
+  @@index([commune, status])
+  @@index([commune, type])
+  @@index([severity])
+  @@index([environmentalDossierId])
+}
+
+model WasteBlackSpot {
+  id              String   @id @default(cuid())
+  reference       String   @unique          // DEP-YYYY-NNNNNN
+  commune         String   @default("")
+  quartier        String   @default("")
+  adresse         String   @default("")
+  latitude        Float?
+  longitude       Float?
+  description     String   @default("")
+  wasteType       String   @default("MIXED") // HOUSEHOLD/CONSTRUCTION/INDUSTRIAL/GREEN/MIXED
+  recurring       Boolean  @default(false)   // نقطة رمي متكررة
+  recurrenceCount Int      @default(0)       // عدد مرات الرصد
+  source          String   @default("INTERNAL")
+  status          String   @default("ACTIVE") // ACTIVE/CLEANED/MONITORING/CLOSED
+  lastCleanedAt   DateTime?
+  notes           String   @default("")
+  environmentalDossierId String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  environmentalDossier EnvironmentalDossier? @relation(fields: [environmentalDossierId], references: [id], onDelete: SetNull)
+  @@index([commune, status])
+  @@index([commune, recurring])
+  @@index([environmentalDossierId])
+}
+
+model NaturalSite {
+  id              String   @id @default(cuid())
+  reference       String   @unique          // SITE-YYYY-NNNNNN
+  name            String   @default("")
+  type            String   @default("FOREST") // FOREST/WETLAND/COASTAL/PARK/RESERVE/HISTORICAL/OTHER
+  commune         String   @default("")
+  quartier        String   @default("")
+  adresse         String   @default("")
+  latitude        Float?
+  longitude       Float?
+  area            Float?                    // المساحة (هكتار)
+  description     String   @default("")
+  protectionLevel String   @default("NONE") // NONE/LOCAL/REGIONAL/NATIONAL/INTERNATIONAL
+  status          String   @default("INTACT") // INTACT/THREATENED/DEGRADED/PROTECTED
+  threats         String   @default("")     // التهديدات
+  notes           String   @default("")
+  environmentalDossierId String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  environmentalDossier EnvironmentalDossier? @relation(fields: [environmentalDossierId], references: [id], onDelete: SetNull)
+  @@index([commune, status])
+  @@index([commune, type])
+  @@index([environmentalDossierId])
+}
+
+model AwarenessCampaign {
+  id              String   @id @default(cuid())
+  reference       String   @unique          // CAMP-ENV-YYYY-NNNNNN
+  title           String   @default("")
+  theme           String   @default("GENERAL") // WASTE_REDUCTION/RECYCLING/WATER/AIR/BIODIVERSITY/TREE_PLANTING/GENERAL
+  commune         String   @default("")
+  environmentalDossierId String?
+  environmentalProgramId String?
+  description     String   @default("")
+  targetAudience  String   @default("")     // الجمهور المستهدف
+  startDate       DateTime?
+  endDate         DateTime?
+  budget          Float?
+  participantsCount Int    @default(0)
+  organizerName   String   @default("")
+  status          String   @default("PLANNED") // PLANNED/ACTIVE/COMPLETED/CANCELLED
+  outcomes        String   @default("")     // النتائج
+  notes           String   @default("")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  environmentalDossier EnvironmentalDossier? @relation(fields: [environmentalDossierId], references: [id], onDelete: SetNull)
+  environmentalProgram EnvironmentalProgram? @relation(fields: [environmentalProgramId], references: [id], onDelete: SetNull)
+  @@index([commune, status])
+  @@index([commune, theme])
+  @@index([environmentalDossierId])
+  @@index([environmentalProgramId])
+}
+
+// ===== Bureau 08: Avis Sanitaire, Autorisations et Commissions =====
+// راجع docs/BACKLOG.md المرحلة 9
+// ⚠️ كل رأي/ترخيص يتطلب مصادقة يدوية. راجع docs/LEGAL_SAFETY.md.
+// ملاحظة: لا ادّعاء تكامل Rokhas — rokhasReference حقل نصي اختياري فقط.
+
+model AuthorizationDossier {
+  id              String   @id @default(cuid())
+  reference       String   @unique          // AUT-YYYY-NNNNNN
+  applicantName   String   @default("")     // مقدم الطلب
+  applicantCin    String   @default("")     // البطاقة الوطنية
+  applicantPhone  String   @default("")
+  establishmentName String @default("")     // اسم المنشأة المراد ترخيصها
+  activity        String   @default("")     // النشاط
+  commune         String   @default("")
+  quartier        String   @default("")
+  adresse         String   @default("")
+  // نوع الرأي المطلوب
+  requestType     String   @default("COMMERCIAL") // COMMERCIAL/BUILDING/OCCUPANCY/CONFORMITY/CLASSIFIED
+  // المرجع الخارجي (Rokhas) — اختياري، نص فقط، لا تكامل API
+  rokhasReference String   @default("")
+  // الرأي الصحي
+  opinionStatus   String   @default("PENDING") // PENDING/FAVORABLE/FAVORABLE_RESERVATIONS/UNFAVORABLE/ADDITIONAL_INFO
+  opinionDate     DateTime?
+  opinionNotes    String   @default("")     // ملاحظات الرأي
+  reservations    String   @default("")     // التحفّظات
+  competentAuthority String @default("")    // الجهة المختصة
+  legalReference  String   @default("")     // المرجع القانوني
+  authorizedBy    String   @default("")     // من أصدر الرأي
+  status          String   @default("NEW")  // NEW/UNDER_REVIEW/OPINION_ISSUED/CLOSED/REJECTED
+  checklistJson   String   @default("[]")   // JSON: قائمة الوثائق المطلوبة
+  notes           String   @default("")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  @@index([commune, status])
+  @@index([commune, requestType])
+  @@index([opinionStatus])
+}
+
+model SanitaryOpinion {
+  id              String   @id @default(cuid())
+  reference       String   @unique          // AVIS-YYYY-NNNNNN
+  dossierId       String?                   // ربط بملف ترخيص
+  establishmentName String @default("")
+  commune         String   @default("")
+  opinionType     String   @default("COMMERCIAL") // COMMERCIAL/BUILDING/OCCUPANCY/CONFORMITY
+  // الرأي
+  result          String   @default("PENDING") // PENDING/FAVORABLE/FAVORABLE_RESERVATIONS/UNFAVORABLE
+  date            DateTime @default(now())
+  inspectorName   String   @default("")
+  observations    String   @default("")
+  reservations    String   @default("")     // التحفّظات
+  correctiveActions String @default("")     // الإجراءات التصحيحية المطلوبة
+  recommendation  String   @default("")     // التوصية النهائية
+  // المصادقة
+  validationStatus String  @default("PENDING") // PENDING/APPROVED/REJECTED
+  validatedBy     String   @default("")
+  validatedAt     DateTime?
+  legalReference  String   @default("")
+  notes           String   @default("")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  @@index([commune, result])
+  @@index([validationStatus])
+  @@index([dossierId])
+}
+
+model CommitteeVisit {
+  id              String   @id @default(cuid())
+  reference       String   @unique          // VIS-YYYY-NNNNNN
+  dossierId       String?                   // ربط بملف ترخيص
+  establishmentName String @default("")
+  commune         String   @default("")
+  visitDate       DateTime @default(now())
+  // المشاركون
+  participantsJson String  @default("[]")   // JSON: قائمة المشاركين
+  // المعاينة
+  inspectionNotes String   @default("")
+  findingsJson    String   @default("[]")   // JSON: الملاحظات/النقائص
+  // النتيجة
+  recommendation  String   @default("PENDING") // PENDING/FAVORABLE/FAVORABLE_RESERVATIONS/UNFAVORABLE
+  reservations    String   @default("")
+  correctiveActions String @default("")
+  // المصادقة
+  validationStatus String  @default("PENDING")
+  validatedBy     String   @default("")
+  validatedAt     DateTime?
+  notes           String   @default("")
+  status          String   @default("PLANNED") // PLANNED/COMPLETED/CANCELLED
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  @@index([commune, status])
+  @@index([dossierId])
+  @@index([visitDate])
 }
