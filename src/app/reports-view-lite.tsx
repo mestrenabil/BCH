@@ -7,12 +7,13 @@ import {
   PieChart, Pie, Cell, AreaChart, Area,
 } from 'recharts'
 import { type CommuneType } from '@/lib/store'
+import { appendTerritoryParams, type TerritoryFilter } from '@/lib/geography'
 import {
   type Statistics, type Intervention,
   TYPE_LABELS, TYPE_COLORS, CHART_COLORS, COMMUNE_COLORS, COMMUNE_LABELS, MONTH_NAMES_AR,
 } from '@/lib/constants'
 
-function ReportsView({ stats, selectedCommune, canSeeAllCommunes, selectedYear }: { stats: Statistics | null; selectedCommune: CommuneType | 'ALL'; canSeeAllCommunes: boolean; selectedYear: string }) {
+function ReportsView({ stats, selectedCommune, canSeeAllCommunes, selectedYear, territoryFilter, useTerritoryFilter }: { stats: Statistics | null; selectedCommune: CommuneType | 'ALL'; canSeeAllCommunes: boolean; selectedYear: string; territoryFilter: TerritoryFilter; useTerritoryFilter: boolean }) {
   const [monthlyCosts, setMonthlyCosts] = useState<Record<string, number>>({})
 
   // Fetch monthly costs
@@ -22,6 +23,7 @@ function ReportsView({ stats, selectedCommune, canSeeAllCommunes, selectedYear }
         const params = new URLSearchParams({ limit: '9999' })
         if (selectedYear) { params.set('from', `${selectedYear}-01-01`); params.set('to', `${selectedYear}-12-31`) }
         if (selectedCommune !== 'ALL') params.set('commune', selectedCommune)
+        if (useTerritoryFilter) appendTerritoryParams(params, territoryFilter)
         const res = await fetch(`/api/interventions?${params.toString()}`)
         if (res.ok) {
           const data = await res.json()
@@ -38,7 +40,7 @@ function ReportsView({ stats, selectedCommune, canSeeAllCommunes, selectedYear }
       } catch { /* ignore */ }
     }
     load()
-  }, [selectedYear, selectedCommune])
+  }, [selectedYear, selectedCommune, territoryFilter, useTerritoryFilter])
 
   if (!stats) return null
 

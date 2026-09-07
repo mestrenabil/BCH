@@ -9,6 +9,7 @@ import {
 } from 'recharts'
 import { type ViewType, type CommuneType } from '@/lib/store'
 import { useAppStore } from '@/lib/store'
+import { appendTerritoryParams, type TerritoryFilter, loadTerritoryCatalog, territoryFilterLabel } from '@/lib/geography'
 import {
   type Statistics,
   TYPE_LABELS, STATUT_LABELS, TYPE_COLORS, STATUT_COLORS,
@@ -19,9 +20,13 @@ import {
 // Helper: get Hijri date
 function getHijriDate(date: Date): string {
   try {
-    return new Intl.DateTimeFormat('ar-SA-u-ca-islamic', {
-      day: 'numeric', month: 'long', year: 'numeric'
-    }).format(date)
+    const parts = new Intl.DateTimeFormat('ar-SA-u-ca-islamic-nu-latn', {
+      day: 'numeric', month: 'long', year: 'numeric',
+    }).formatToParts(date)
+    const day = parts.find((part) => part.type === 'day')?.value
+    const month = parts.find((part) => part.type === 'month')?.value
+    const year = parts.find((part) => part.type === 'year')?.value
+    return day && month && year ? `${day} ${month} ${year} هـ` : ''
   } catch {
     return ''
   }
@@ -45,42 +50,149 @@ function formatRelativeTime(dateStr: string): string {
 }
 
 // Weather data interface
-interface WeatherData {
-  temperature: number
-  humidity: number
-  windSpeed: number
-  description: string
-  descriptionAr: string
-  city: string
-  icon: string
+interface DashboardOverview {
+  year: number
+  sections: Record<string, number>
+  details: Record<string, Record<string, number>>
+  totals: { records: number; activeAgents: number; lowStock: number; expiringStock: number }
+  today: { total: number; interventions: number; complaints: number; workOrders: number; inspections: number; fieldOperations: number; activityLog: number }
+  statuses: {
+    interventions: Record<string, number>
+    complaints: Record<string, number>
+    workOrders: Record<string, number>
+  }
+  activityLog: Array<{ id: string; action: string; entityType: string; userName: string; commune: string; createdAt: string }>
+}
+
+const SECTION_DETAIL_LABELS: Record<string, Record<string, string>> = {
+  map: { total: 'نقاط وبيانات مكانية' },
+  interventions: { total: 'الإجمالي', DERATISATION: 'قوارض', DESINSECTISATION: 'حشرات', DESINFECTION: 'تطهير' },
+  complaints: { total: 'الإجمالي', EN_ATTENTE: 'في الانتظار', EN_COURS: 'قيد المعالجة', TRAITEE: 'معالجة', REJETEE: 'مرفوضة' },
+  workOrders: { total: 'الإجمالي', NOUVEAU: 'جديدة', ASSIGNE: 'مسندة', EN_COURS: 'قيد التنفيذ', TERMINE: 'منجزة' },
+  agents: { total: 'الأعوان' },
+  inventory: { total: 'الإجمالي', products: 'عام', vectorProducts: 'نواقل', lowStock: 'تنبيهات' },
+  documents: { total: 'المستندات' },
+  campagnes: { total: 'الحملات' },
+  csvr: { reports: 'بلاغات', missions: 'مهام', animals: 'حيوانات' },
+  food: { reports: 'بلاغات غذائية' },
+  dossiers: { total: 'الملفات' },
+  sanitary: { establishments: 'منشآت', inspections: 'تفتيشات', healthCards: 'بطاقات', samples: 'عينات' },
+  water: { points: 'نقط', measurements: 'قياسات', pools: 'مسابح', sanitationIncidents: 'حوادث' },
+  vector: { products: 'مواد', bites: 'عضات' },
+  funeral: { deaths: 'وفيات', burials: 'دفن', cemeteries: 'مقابر', transports: 'نقل', exhumations: 'نبش' },
+  environment: { dossiers: 'ملفات', pollution: 'تلوث', waste: 'نفايات', sites: 'مواقع', campaigns: 'حملات' },
+  authorizations: { dossiers: 'طلبات', opinions: 'آراء', visits: 'لجان' },
+  reports: { interventions: 'تدخلات', complaints: 'شكايات', workOrders: 'أوامر', dossiers: 'ملفات' },
+  calendar: { workOrders: 'أوامر', campagnes: 'حملات', interventions: 'تدخلات' },
+  operations: { interventions: 'تدخلات', workOrders: 'أوامر' },
+  kpi: { interventions: 'تدخلات 3D' },
+  alerts: { complaints: 'شكايات', workOrders: 'أوامر', lowStock: 'مخزون' },
+  activityLog: { total: 'أنشطة' },
+  timeline: { total: 'أحداث' },
+  export: { total: 'سجلات' },
+  users: { total: 'حسابات' },
+  settings: { total: 'إعدادات' },
+}
+
+function getSectionDetailItems(key: string, details: Record<string, number>): string[] {
+  const labels = SECTION_DETAIL_LABELS[key] || {}
+  return Object.entries(details)
+    .filter(([, value]) => value > 0)
+    .slice(0, 4)
+    .map(([detailKey, value]) => `${labels[detailKey] || detailKey}: ${value}`)
 }
 
 // Helper: compute trend badge between current and previous values
-function getTrendBadge(current: number, previous: number | undefined): { text: string; color: string; bg: string } | null {
+function getTrendBadge(current: number, previous: number | undefined): { text: string; color: string } | null {
   if (previous === undefined || previous === null) {
-    return { text: '🆕 جديد', color: '#7c3aed', bg: 'rgba(124,58,237,0.15)' }
+    return { text: '🆕 جديد', color: '#7c3aed' }
   }
   if (current === previous) {
-    return { text: '— 0%', color: '#94a3b8', bg: 'rgba(148,163,184,0.15)' }
+    return { text: '— 0%', color: '#64748b' }
   }
   const pct = Math.round(((current - previous) / Math.max(previous, 1)) * 100)
   if (current > previous) {
-    return { text: `↑ ${pct}%`, color: '#10b981', bg: 'rgba(16,185,129,0.15)' }
+    return { text: `↑ ${pct}%`, color: '#059669' }
   }
-  return { text: `↓ ${Math.abs(pct)}%`, color: '#ef4444', bg: 'rgba(239,68,68,0.15)' }
+  return { text: `↓ ${Math.abs(pct)}%`, color: '#dc2626' }
 }
 
-function DashboardView({ stats, onNavigate, selectedCommune, canSeeAllCommunes, onRetry, selectedYear }: { stats: Statistics | null; onNavigate: (v: ViewType) => void; selectedCommune: CommuneType | 'ALL'; canSeeAllCommunes: boolean; onRetry?: () => void; selectedYear?: string }) {
+const OVERVIEW_SECTION_CARDS: Array<{ key: string; view: ViewType; icon: string; title: string; description: string; tone: string; detail?: string }> = [
+  { key: 'map', view: 'gis', icon: '🌐', title: 'الخريطة الموحدة', description: 'المعطيات ذات الموقع الجغرافي', tone: 'from-sky-500 to-blue-600' },
+  { key: 'interventions', view: 'interventions', icon: '📋', title: 'التدخلات', description: 'عمليات 3D المنجزة والمبرمجة', tone: 'from-emerald-500 to-teal-600' },
+  { key: 'complaints', view: 'complaints', icon: '📢', title: 'الشكايات والبلاغات', description: 'الاستقبال والمعالجة والتفاعل', tone: 'from-rose-500 to-pink-600' },
+  { key: 'workOrders', view: 'workOrders', icon: '🧭', title: 'أوامر العمل', description: 'الإسناد والتنفيذ الميداني', tone: 'from-cyan-500 to-blue-600' },
+  { key: 'agents', view: 'agents', icon: '👥', title: 'الأعوان', description: 'الموارد البشرية النشطة', tone: 'from-amber-500 to-orange-600' },
+  { key: 'inventory', view: 'inventory', icon: '📦', title: 'المخزون الموحد', description: 'المخزون العام ومخزون النواقل', tone: 'from-orange-500 to-red-600', detail: 'lowStock' },
+  { key: 'campagnes', view: 'campagnes', icon: '🎪', title: 'الحملات', description: 'البرامج والنتائج الميدانية', tone: 'from-fuchsia-500 to-purple-600' },
+  { key: 'csvr', view: 'csvr', icon: '🐕', title: 'الحيوانات الشاردة', description: 'البلاغات والمهام والحيوانات', tone: 'from-cyan-500 to-teal-600' },
+  { key: 'food', view: 'food', icon: '🍽️', title: 'السلامة الغذائية', description: 'بلاغات ومراقبة الأغذية', tone: 'from-orange-500 to-amber-600' },
+  { key: 'sanitary', view: 'sanitary', icon: '🧪', title: 'المراقبة الصحية', description: 'المؤسسات والتفتيش والبطائق', tone: 'from-lime-500 to-green-600' },
+  { key: 'water', view: 'water', icon: '💧', title: 'الماء والتطهير', description: 'النقط والقياسات والمسابح', tone: 'from-blue-500 to-indigo-600' },
+  { key: 'vector', view: 'vector', icon: '🦟', title: 'محاربة النواقل', description: 'العضات والمواد المتخصصة', tone: 'from-fuchsia-500 to-rose-600' },
+  { key: 'funeral', view: 'funeral', icon: '⚰️', title: 'الجنائز والمقابر', description: 'الوفيات والدفن والنقل', tone: 'from-slate-600 to-slate-800' },
+  { key: 'environment', view: 'environment', icon: '🌿', title: 'البيئة', description: 'التلوث والنفايات والمواقع', tone: 'from-green-500 to-emerald-700' },
+  { key: 'authorizations', view: 'authorizations', icon: '⚖️', title: 'التراخيص والآراء', description: 'الملفات الصحية واللجان', tone: 'from-indigo-500 to-violet-700' },
+  { key: 'dossiers', view: 'dossiers', icon: '🗂️', title: 'الملفات الموحدة', description: 'حالات الملفات وتتبعها', tone: 'from-violet-500 to-purple-700' },
+  { key: 'reports', view: 'reports', icon: '📈', title: 'التقارير والإحصائيات', description: 'تقارير شاملة قابلة للتصدير', tone: 'from-purple-500 to-indigo-700' },
+  { key: 'calendar', view: 'calendar', icon: '📅', title: 'التقويم والبرمجة', description: 'المواعيد والمهام القادمة', tone: 'from-blue-500 to-cyan-600' },
+  { key: 'operations', view: 'operations', icon: '⏱️', title: 'المتابعة التشغيلية', description: 'الآجال والإنجازات', tone: 'from-teal-500 to-emerald-600' },
+  { key: 'kpi', view: 'kpi', icon: '🎯', title: 'مؤشرات الأداء', description: 'القياس والأهداف', tone: 'from-lime-500 to-green-600' },
+  { key: 'alerts', view: 'alerts', icon: '⚡', title: 'التنبيهات', description: 'المخاطر والمهام المفتوحة', tone: 'from-yellow-500 to-orange-600' },
+  { key: 'activityLog', view: 'activityLog', icon: '📝', title: 'سجل النشاط', description: 'آخر العمليات المسجلة', tone: 'from-slate-500 to-slate-700' },
+  { key: 'timeline', view: 'timeline', icon: '📊', title: 'الخط الزمني', description: 'تسلسل الأحداث والنتائج', tone: 'from-stone-500 to-slate-700' },
+  { key: 'export', view: 'export', icon: '📤', title: 'التصدير', description: 'نسخ ومشاركة البيانات', tone: 'from-purple-500 to-fuchsia-600' },
+  { key: 'users', view: 'users', icon: '👤', title: 'المستخدمون', description: 'الحسابات والصلاحيات', tone: 'from-neutral-500 to-slate-700' },
+  { key: 'settings', view: 'settings', icon: '⚙️', title: 'الإعدادات', description: 'تهيئة المنصة', tone: 'from-gray-500 to-slate-700' },
+  { key: 'helpCenter', view: 'helpCenter', icon: '❓', title: 'مركز المساعدة', description: 'الدعم والإرشادات', tone: 'from-indigo-500 to-blue-700' },
+]
+
+function DashboardView({ stats, onNavigate, selectedCommune, canSeeAllCommunes, onRetry, selectedYear, territoryFilter, useTerritoryFilter }: { stats: Statistics | null; onNavigate: (v: ViewType) => void; selectedCommune: CommuneType | 'ALL'; canSeeAllCommunes: boolean; onRetry?: () => void; selectedYear?: string; territoryFilter: TerritoryFilter; useTerritoryFilter: boolean }) {
   // Previous year stats for trend comparison
   const [prevStats, setPrevStats] = useState<Pick<Statistics, 'total' | 'byType'> | null>(null)
   // Weather state
-  const [weather, setWeather] = useState<WeatherData | null>(null)
-  const [weatherLoading, setWeatherLoading] = useState(true)
-  const { language } = useAppStore()
+  const { setSelectedType, user } = useAppStore()
+  const isCommuneScopedAccount = Boolean(user?.commune && user.commune !== 'ALL')
+  const managedCommunes = user?.managedCommunes?.length
+    ? Array.from(new Set(user.managedCommunes))
+    : (user?.commune && user.commune !== 'ALL' ? [user.commune] : [])
+  const isCommuneGroupAccount = managedCommunes.length > 1
+  // Territory catalog — used to display the scope label in the commune distribution card
+  const [territoryCatalog, setTerritoryCatalog] = useState<{ regions: unknown[]; provinces: unknown[]; communes: unknown[] } | null>(null)
+  const territoryScopeLabel = useTerritoryFilter
+    ? territoryFilterLabel(territoryFilter, territoryCatalog as never)
+    : null
+  const hasTerritoryScope = Boolean(territoryScopeLabel)
+  const distributionCommuneKeys = managedCommunes.length
+    ? managedCommunes
+    : Object.keys(stats?.byCommune || {})
+  const distributionTotal = distributionCommuneKeys.reduce(
+    (total, commune) => total + (stats?.byCommune?.[commune]?.total || 0),
+    0,
+  )
+  const shouldShowCommuneDistribution = Boolean(stats?.byCommune) && (
+    managedCommunes.length > 0 || (canSeeAllCommunes && selectedCommune === 'ALL') ||
+    // General manager with territory scope active — show even before catalog loads
+    (useTerritoryFilter && canSeeAllCommunes)
+  )
+  const distributionTitle = isCommuneGroupAccount
+    ? `التوزيع داخل ${user?.communeGroupName || 'مجموعة الجماعات'}`
+    : hasTerritoryScope
+      ? `التوزيع حسب الجماعة — ${territoryScopeLabel}`
+      : 'التوزيع حسب الجماعة'
+  const distributionDescription = isCommuneGroupAccount
+    ? 'تفصيل مشترك للتدخلات في جماعات الحساب'
+    : managedCommunes.length === 1
+      ? `تفصيل تدخلات ${COMMUNE_LABELS[managedCommunes[0]] || `جماعة ${managedCommunes[0]}`}`
+      : hasTerritoryScope
+        ? `تفصيل التدخلات لكل جماعة ضمن ${territoryScopeLabel}`
+        : 'تفصيل التدخلات لكل جماعة ترابية'
   // Live clock state
   const [currentTime, setCurrentTime] = useState(new Date())
   // Agents for leaderboard
   const [agents, setAgents] = useState<{ id: string; nom: string; prenom: string; commune: string; fonction: string; actif: boolean }[]>([])
+  const [overview, setOverview] = useState<DashboardOverview | null>(null)
+  const [overviewLoading, setOverviewLoading] = useState(true)
 
   // Live clock
   useEffect(() => {
@@ -94,6 +206,7 @@ function DashboardView({ stats, onNavigate, selectedCommune, canSeeAllCommunes, 
       try {
         const params = new URLSearchParams()
         if (selectedCommune !== 'ALL') params.set('commune', selectedCommune)
+        if (useTerritoryFilter) appendTerritoryParams(params, territoryFilter)
         const res = await fetch(`/api/agents?${params.toString()}`)
         if (res.ok) {
           const data = await res.json()
@@ -102,26 +215,35 @@ function DashboardView({ stats, onNavigate, selectedCommune, canSeeAllCommunes, 
       } catch { /* ignore */ }
     }
     fetchAgents()
-  }, [selectedCommune])
+  }, [selectedCommune, territoryFilter, useTerritoryFilter])
 
-  // Fetch weather data
   useEffect(() => {
-    const fetchWeather = async () => {
-      setWeatherLoading(true)
-      try {
-        const res = await fetch('/api/weather')
-        if (res.ok) {
-          const data = await res.json()
-          setWeather(data)
-        }
-      } catch { /* ignore */ }
-      setWeatherLoading(false)
-    }
-    fetchWeather()
-    // Auto-refresh every 30 minutes
-    const interval = setInterval(fetchWeather, 30 * 60 * 1000)
-    return () => clearInterval(interval)
-  }, [])
+    const controller = new AbortController()
+    const params = new URLSearchParams()
+    if (selectedYear) params.set('year', selectedYear)
+    if (selectedCommune !== 'ALL') params.set('commune', selectedCommune)
+    if (useTerritoryFilter) appendTerritoryParams(params, territoryFilter)
+    const loadingTimer = window.setTimeout(() => setOverviewLoading(true), 0)
+    fetch(`/api/dashboard/overview?${params.toString()}`, { signal: controller.signal, cache: 'no-store' })
+      .then((res) => res.ok ? res.json() : null)
+      .then((data) => {
+        if (data?.sections && data?.totals) setOverview(data as DashboardOverview)
+        else setOverview(null)
+      })
+      .catch((error) => {
+        if (error?.name !== 'AbortError') setOverview(null)
+      })
+      .finally(() => setOverviewLoading(false))
+    return () => { controller.abort(); window.clearTimeout(loadingTimer) }
+  }, [selectedYear, selectedCommune, territoryFilter, useTerritoryFilter])
+
+  // Load territory catalog (for scope label in the commune distribution card)
+  useEffect(() => {
+    if (!useTerritoryFilter) return
+    let active = true
+    loadTerritoryCatalog().then((cat) => { if (active && cat) setTerritoryCatalog(cat as never) })
+    return () => { active = false }
+  }, [useTerritoryFilter])
 
   useEffect(() => {
     if (!selectedYear) return
@@ -131,6 +253,7 @@ function DashboardView({ stats, onNavigate, selectedCommune, canSeeAllCommunes, 
     const params = new URLSearchParams()
     params.set('year', prevYear.toString())
     if (selectedCommune !== 'ALL') params.set('commune', selectedCommune)
+    if (useTerritoryFilter) appendTerritoryParams(params, territoryFilter)
     fetch(`/api/statistics?${params.toString()}`)
       .then(res => res.ok ? res.json() : null)
       .then(data => {
@@ -141,7 +264,7 @@ function DashboardView({ stats, onNavigate, selectedCommune, canSeeAllCommunes, 
         }
       })
       .catch(() => setPrevStats(null))
-  }, [selectedYear, selectedCommune])
+  }, [selectedYear, selectedCommune, territoryFilter, useTerritoryFilter])
 
   // Clear previous stats when year is not selected
   const effectivePrevStats = selectedYear ? prevStats : null
@@ -223,32 +346,41 @@ function DashboardView({ stats, onNavigate, selectedCommune, canSeeAllCommunes, 
       </div>
     )
   }
-  const completionRate = stats.total > 0 ? Math.round(((stats.byStatut.TERMINEE || 0) / stats.total) * 100) : 0
-  const inProgressRate = stats.total > 0 ? Math.round(((stats.byStatut.EN_COURS || 0) / stats.total) * 100) : 0
+  const safeByStatut = stats.byStatut ?? {}
+  const safeByType = stats.byType ?? {}
+  const safeByQuartier = Array.isArray(stats.byQuartier) ? stats.byQuartier : []
+  const safeMonthly = stats.monthly ?? {}
+  const safeRecent = Array.isArray(stats.recent) ? stats.recent : []
+  const safeActivityLog = Array.isArray(overview?.activityLog) ? overview.activityLog : []
+  const safeByCommune = stats.byCommune ?? {}
+  const safeByCommuneStatus = stats.byCommuneStatus ?? {}
+
+  const completionRate = stats.total > 0 ? Math.round(((safeByStatut.TERMINEE || 0) / stats.total) * 100) : 0
+  const inProgressRate = stats.total > 0 ? Math.round(((safeByStatut.EN_COURS || 0) / stats.total) * 100) : 0
 
   // Prepare chart data
-  const monthlyChartData = Object.entries(stats.monthly).sort(([a], [b]) => a.localeCompare(b)).map(([month, data]) => ({
+  const monthlyChartData = Object.entries(safeMonthly).sort(([a], [b]) => a.localeCompare(b)).map(([month, data]) => ({
     name: MONTH_NAMES_AR[parseInt(month.split('-')[1]) - 1],
     'مكافحة القوارض': data.DERATISATION || 0,
     'مكافحة الحشرات': data.DESINSECTISATION || 0,
     'التطهير والتعقيم': data.DESINFECTION || 0,
   }))
 
-  const statusPieData = Object.entries(stats.byStatut).map(([key, value]) => ({
+  const statusPieData = Object.entries(safeByStatut).map(([key, value]) => ({
     name: STATUT_LABELS[key], value, color: STATUT_COLORS[key],
   }))
 
-  const radarData = stats.byQuartier.slice(0, 6).map(q => ({
+  const radarData = safeByQuartier.slice(0, 6).map(q => ({
     quartier: q.quartier.replace('حي ', ''),
     تدخلات: q.count,
   }))
 
   // KPI cards with trend data
-  const kpiCards = [
-    { title: 'إجمالي التدخلات', value: stats.total, prevValue: effectivePrevStats?.total, icon: '📋', gradient: 'from-slate-700 to-slate-900', shadow: 'shadow-slate-300' },
-    { title: 'مكافحة القوارض', value: stats.byType.DERATISATION || 0, prevValue: effectivePrevStats?.byType?.DERATISATION, icon: '🐀', gradient: 'from-red-500 to-red-700', shadow: 'shadow-red-200' },
-    { title: 'مكافحة الحشرات', value: stats.byType.DESINSECTISATION || 0, prevValue: effectivePrevStats?.byType?.DESINSECTISATION, icon: '🦟', gradient: 'from-amber-500 to-amber-700', shadow: 'shadow-amber-200' },
-    { title: 'التطهير والتعقيم', value: stats.byType.DESINFECTION || 0, prevValue: effectivePrevStats?.byType?.DESINFECTION, icon: '🧴', gradient: 'from-emerald-500 to-emerald-700', shadow: 'shadow-emerald-200' },
+  const threeDKpiCards = [
+    { title: 'إجمالي التدخلات', value: stats.total, prevValue: effectivePrevStats?.total, icon: '📋', gradient: 'from-slate-700 to-slate-900', shadow: 'shadow-slate-300', type: 'ALL' as const },
+    { title: 'مكافحة القوارض', value: safeByType.DERATISATION || 0, prevValue: effectivePrevStats?.byType?.DERATISATION, icon: '🐀', gradient: 'from-red-500 to-red-700', shadow: 'shadow-red-200', type: 'DERATISATION' as const },
+    { title: 'مكافحة الحشرات', value: safeByType.DESINSECTISATION || 0, prevValue: effectivePrevStats?.byType?.DESINSECTISATION, icon: '🦟', gradient: 'from-amber-500 to-amber-700', shadow: 'shadow-amber-200', type: 'DESINSECTISATION' as const },
+    { title: 'التطهير والتعقيم', value: safeByType.DESINFECTION || 0, prevValue: effectivePrevStats?.byType?.DESINFECTION, icon: '🧴', gradient: 'from-emerald-500 to-emerald-700', shadow: 'shadow-emerald-200', type: 'DESINFECTION' as const },
   ]
 
   return (
@@ -259,8 +391,8 @@ function DashboardView({ stats, onNavigate, selectedCommune, canSeeAllCommunes, 
           <h2 className="text-2xl font-bold text-slate-800">لوحة القيادة</h2>
           <p className="text-slate-500 text-sm mt-1">
             {selectedCommune === 'ALL'
-              ? 'نظرة عامة على عمليات 3D — حسب الجماعة'
-              : `نظرة عامة على عمليات 3D — ${COMMUNE_LABELS[selectedCommune]}`}
+              ? 'نظرة عامة شاملة على جميع أقسام المنصة — حسب الجماعة'
+              : `نظرة عامة شاملة على أقسام المنصة — ${COMMUNE_LABELS[selectedCommune]}`}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -273,12 +405,46 @@ function DashboardView({ stats, onNavigate, selectedCommune, canSeeAllCommunes, 
             </motion.span>
           )}
           <button
-            onClick={() => window.print()}
+            onClick={() => {
+              document.body.classList.add('classic-print-active')
+              window.print()
+              setTimeout(() => {
+                document.body.classList.remove('classic-print-active')
+              }, 100)
+            }}
             className="no-print inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white border border-slate-200 text-sm font-medium text-slate-600 hover:bg-emerald-50 hover:text-emerald-600 hover:border-emerald-200 transition-all shadow-sm"
           >
             <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5 4v3H4a2 2 0 00-2 2v3a2 2 0 002 2h1v2a2 2 0 002 2h6a2 2 0 002-2v-2h1a2 2 0 002-2V9a2 2 0 00-2-2h-1V4a2 2 0 00-2-2H7a2 2 0 00-2 2zm8 0H7v3h6V4zm0 8H7v4h6v-4z" clipRule="evenodd" /></svg>
             طباعة التقرير
           </button>
+        </div>
+      </motion.div>
+
+      <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}
+        className="bg-gradient-to-l from-emerald-600 via-teal-600 to-cyan-600 rounded-2xl p-5 shadow-lg shadow-emerald-200/40 relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full translate-x-8 -translate-y-8" />
+        <div className="absolute bottom-0 left-0 w-20 h-20 bg-white/5 rounded-full -translate-x-4 translate-y-4" />
+        <div className="relative z-10">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-white font-bold text-base flex items-center gap-2"><span>📊</span> ملخص اليوم لجميع الأقسام</h3>
+          </div>
+          <div className="grid grid-cols-3 gap-3">
+            {(() => {
+              const today = overview?.today
+              return [
+                { icon: '📚', label: 'سجلات اليوم', value: today?.total || 0, color: 'bg-white/20', view: 'reports' as ViewType },
+                { icon: '🧴', label: 'عمليات 3D اليوم', value: today?.interventions || 0, color: 'bg-white/20', view: 'interventions' as ViewType },
+                { icon: '📢', label: 'شكايات اليوم', value: today?.complaints || 0, color: 'bg-white/20', view: 'complaints' as ViewType },
+                { icon: '🧭', label: 'عمليات الأقسام اليوم', value: (today?.workOrders || 0) + (today?.inspections || 0) + (today?.fieldOperations || 0), color: 'bg-white/20', view: 'operations' as ViewType },
+              ].map((item, idx) => (
+                <button key={idx} onClick={() => onNavigate(item.view)} className={`${item.color} rounded-xl p-3 text-center backdrop-blur-sm hover:bg-white/30 transition-colors`}>
+                  <span className="text-lg">{item.icon}</span>
+                  <div className="text-2xl font-extrabold text-white mt-1">{item.value}</div>
+                  <div className="text-[10px] text-white/70 font-medium">{item.label}</div>
+                </button>
+              ))
+            })()}
+          </div>
         </div>
       </motion.div>
 
@@ -307,161 +473,128 @@ function DashboardView({ stats, onNavigate, selectedCommune, canSeeAllCommunes, 
         </div>
       </motion.div>
 
-      {/* KPI Cards with YoY Trends */}
+      {/* مؤشرات المنصة الموحدة */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {kpiCards.map((card, i) => {
-          const trend = getTrendBadge(card.value, card.prevValue)
-          return (
-            <motion.div key={card.title} variants={cardVariants} initial="initial" animate="animate" whileHover="hover"
+        {[
+          { title: 'إجمالي سجلات المنصة', value: overview?.totals.records || 0, icon: '📚', gradient: 'from-slate-700 to-slate-900', view: 'reports' as ViewType },
+          { title: 'الأعوان النشطون', value: overview?.totals.activeAgents || 0, icon: '👥', gradient: 'from-amber-500 to-orange-600', view: 'agents' as ViewType },
+          { title: 'تنبيهات تحتاج متابعة', value: overview?.sections.alerts || 0, icon: '⚠️', gradient: 'from-rose-500 to-red-700', view: 'alerts' as ViewType },
+          { title: 'أقسام بها بيانات', value: Object.values(overview?.sections || {}).filter((value) => value > 0).length, icon: '🏢', gradient: 'from-emerald-500 to-teal-700', view: 'reports' as ViewType },
+        ].map((card, i) => (
+            <motion.button key={card.title} onClick={() => onNavigate(card.view)} variants={cardVariants} initial="initial" animate="animate" whileHover="hover"
               transition={{ delay: i * 0.08 }}
-              className={`bg-gradient-to-br ${card.gradient} text-white rounded-2xl p-5 ${card.shadow} shadow-lg relative overflow-hidden`}>
+              className={`bg-gradient-to-br ${card.gradient} text-white rounded-2xl p-5 shadow-lg relative overflow-hidden text-right cursor-pointer`}>
               <div className="absolute top-0 left-0 w-24 h-24 bg-white/10 rounded-full -translate-x-8 -translate-y-8" />
               <div className="absolute bottom-0 right-0 w-16 h-16 bg-white/5 rounded-full translate-x-4 translate-y-4" />
               <div className="relative z-10">
                 <span className="text-3xl opacity-90">{card.icon}</span>
-                <div className="text-3xl lg:text-4xl font-bold mt-3 tracking-tight">{card.value}</div>
+                <div className="text-3xl lg:text-4xl font-bold mt-3 tracking-tight">{overviewLoading ? '—' : card.value}</div>
                 <div className="text-sm opacity-80 mt-1 font-medium">{card.title}</div>
-                {/* Trend badge */}
-                {trend && (
-                  <div className="mt-2 inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-bold backdrop-blur-sm"
-                    style={{ color: trend.color, backgroundColor: trend.bg }}>
-                    {trend.text}
-                  </div>
-                )}
               </div>
-            </motion.div>
-          )
-        })}
+            </motion.button>
+        ))}
       </div>
 
-      {/* ===== ملخص اليوم (Today's Summary) ===== */}
-      <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}
-        className="bg-gradient-to-l from-emerald-600 via-teal-600 to-cyan-600 rounded-2xl p-5 shadow-lg shadow-emerald-200/40 relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full translate-x-8 -translate-y-8" />
-        <div className="absolute bottom-0 left-0 w-20 h-20 bg-white/5 rounded-full -translate-x-4 translate-y-4" />
-        <div className="relative z-10">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="text-white font-bold text-base flex items-center gap-2">
-              <span>📊</span> ملخص اليوم
-            </h3>
-            <div className="flex items-center gap-2 text-white/80 text-sm">
-              <span>{weather ? weather.icon : '🌤️'}</span>
-              {weather && <span className="font-bold">{weather.temperature}°C</span>}
-            </div>
+      <motion.section initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }}
+        className="space-y-4" aria-labelledby="dashboard-overview-title">
+        <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h3 id="dashboard-overview-title" className="font-bold text-slate-800">📊 ملخص شامل لجميع الأقسام</h3>
+            <p className="text-xs text-slate-400">النتائج المسجلة خلال سنة {overview?.year || selectedYear || new Date().getFullYear()} حسب نطاق الحساب الحالي</p>
           </div>
-          <div className="grid grid-cols-3 gap-3">
-            {(() => {
-              const today = new Date()
-              const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
-              const todayInterventions = stats.recent.filter(i => i.date && i.date.startsWith(todayStr))
-              const scheduledToday = todayInterventions.filter(i => i.statut === 'PLANIFIEE' || i.statut === 'EN_COURS').length
-              const completedToday = todayInterventions.filter(i => i.statut === 'TERMINEE').length
-              const complaintsToday = 0 // We don't have complaints data in dashboard stats
-              return [
-                { icon: '📅', label: 'تدخلات مبرمجة', value: scheduledToday, color: 'bg-white/20' },
-                { icon: '✅', label: 'تدخلات منجزة', value: completedToday, color: 'bg-white/20' },
-                { icon: '📢', label: 'شكايات واردة', value: complaintsToday, color: 'bg-white/20' },
-              ].map((item, idx) => (
-                <div key={idx} className={`${item.color} rounded-xl p-3 text-center backdrop-blur-sm`}>
-                  <span className="text-lg">{item.icon}</span>
-                  <div className="text-2xl font-extrabold text-white mt-1">{item.value}</div>
-                  <div className="text-[10px] text-white/70 font-medium">{item.label}</div>
-                </div>
-              ))
-            })()}
-          </div>
+          {overviewLoading && <span className="text-xs text-emerald-600 animate-pulse">جارٍ تحديث المؤشرات…</span>}
+          {!overviewLoading && overview && <span className="text-[11px] font-semibold text-slate-500 bg-slate-100 px-2.5 py-1 rounded-full">{overview.totals.records} سجل موحّد</span>}
         </div>
-      </motion.div>
 
-      {/* Weather Widget */}
-      <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
-        className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-        <div className="bg-gradient-to-l from-sky-500 to-blue-600 text-white px-5 py-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <span className="text-lg">🌤️</span>
-              <span className="font-bold text-sm">{language === 'ar' ? 'الطقس — سلا' : 'Météo — Salé'}</span>
-            </div>
-            <button
-              onClick={async () => {
-                setWeatherLoading(true)
-                try {
-                  const res = await fetch('/api/weather')
-                  if (res.ok) { const data = await res.json(); setWeather(data) }
-                } catch { /* ignore */ }
-                setWeatherLoading(false)
-              }}
-              className="p-1.5 hover:bg-white/20 rounded-lg transition-all"
-              title={language === 'ar' ? 'تحديث' : 'Actualiser'}
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" className={`h-4 w-4 ${weatherLoading ? 'animate-spin' : ''}`} viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clipRule="evenodd" />
-              </svg>
-            </button>
-          </div>
-        </div>
-        <div className="p-4">
-          {weatherLoading && !weather ? (
-            <div className="flex items-center justify-center py-4">
-              <div className="w-6 h-6 border-2 border-sky-500 border-t-transparent rounded-full animate-spin" />
-            </div>
-          ) : weather ? (
-            <div className="flex items-center gap-4">
-              <div className="text-4xl">{weather.icon}</div>
-              <div className="flex-1 grid grid-cols-2 gap-x-6 gap-y-2">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm">🌡️</span>
-                  <span className="text-sm text-slate-500">{language === 'ar' ? 'درجة الحرارة' : 'Température'}</span>
-                  <span className="text-sm font-bold text-slate-800">{weather.temperature}°C</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-sm">💧</span>
-                  <span className="text-sm text-slate-500">{language === 'ar' ? 'الرطوبة' : 'Humidité'}</span>
-                  <span className="text-sm font-bold text-slate-800">{weather.humidity}%</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-sm">💨</span>
-                  <span className="text-sm text-slate-500">{language === 'ar' ? 'الرياح' : 'Vent'}</span>
-                  <span className="text-sm font-bold text-slate-800">{weather.windSpeed} km/h</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-sm">📍</span>
-                  <span className="text-sm font-bold text-sky-600">{language === 'ar' ? weather.descriptionAr : weather.description}</span>
-                </div>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          {[
+            { label: 'كل السجلات', value: overview?.totals.records || 0, icon: '📚', tone: 'bg-slate-800 text-white' },
+            { label: 'الأعوان النشطون', value: overview?.totals.activeAgents || 0, icon: '👥', tone: 'bg-amber-50 text-amber-800' },
+            { label: 'تنبيهات المخزون', value: overview?.totals.lowStock || 0, icon: '⚠️', tone: 'bg-red-50 text-red-700' },
+            { label: 'مواد تنتهي خلال 30 يوماً', value: overview?.totals.expiringStock || 0, icon: '⏳', tone: 'bg-orange-50 text-orange-700' },
+          ].map((item) => (
+            <div key={item.label} className={`rounded-2xl p-4 border border-white/70 shadow-sm ${item.tone}`}>
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xl">{item.icon}</span>
+                <span className="text-2xl font-black">{overviewLoading ? '—' : item.value}</span>
               </div>
+              <p className="text-xs font-semibold mt-2 opacity-80">{item.label}</p>
             </div>
-          ) : (
-            <div className="text-center py-3 text-sm text-slate-400">
-              {language === 'ar' ? 'غير متاح' : 'Indisponible'}
-            </div>
-          )}
+          ))}
         </div>
-      </motion.div>
 
-      {/* Commune Breakdown - Only show for admin users viewing ALL communes */}
-      {canSeeAllCommunes && selectedCommune === 'ALL' && stats.byCommune && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+          {OVERVIEW_SECTION_CARDS.map((card) => {
+            const total = overview?.sections[card.key] || 0
+            const details = overview?.details[card.key] || {}
+            const open = card.key === 'complaints'
+              ? (overview?.statuses.complaints.EN_ATTENTE || 0) + (overview?.statuses.complaints.EN_COURS || 0)
+              : card.key === 'workOrders'
+                ? (overview?.statuses.workOrders.NOUVEAU || 0) + (overview?.statuses.workOrders.EN_COURS || 0) + (overview?.statuses.workOrders.ASSIGNE || 0)
+                : card.key === 'interventions'
+                  ? (overview?.statuses.interventions.TERMINEE || 0)
+                  : card.key === 'inventory'
+                    ? overview?.totals.lowStock || 0
+                    : 0
+            const resultLabel = card.key === 'interventions' ? 'منجزة'
+              : card.key === 'inventory' ? 'تنبيهات'
+                : card.key === 'complaints' || card.key === 'workOrders' ? 'مفتوحة'
+                  : 'تفاصيل'
+            const detailItems = getSectionDetailItems(card.key, details)
+            return (
+              <motion.button key={card.key} onClick={() => onNavigate(card.view)} whileHover={{ y: -2 }} whileTap={{ scale: 0.99 }}
+                className="bg-white rounded-2xl border border-slate-100 p-4 text-right shadow-sm hover:shadow-md hover:border-emerald-200 transition-all group">
+                <div className="flex items-start gap-3">
+                  <div className={`w-11 h-11 shrink-0 rounded-xl bg-gradient-to-br ${card.tone} text-white flex items-center justify-center text-xl shadow-sm`}>{card.icon}</div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center justify-between gap-2">
+                      <h4 className="font-bold text-sm text-slate-800 truncate group-hover:text-emerald-700">{card.title}</h4>
+                      <span className="text-2xl font-black text-slate-800">{overviewLoading ? '—' : total}</span>
+                    </div>
+                    <p className="text-[11px] text-slate-400 mt-1 truncate">{card.description}</p>
+                    <div className="flex items-center gap-2 mt-3 text-[10px]">
+                      <span className="px-2 py-1 rounded-full bg-slate-100 text-slate-600">{resultLabel}: <strong>{overviewLoading ? '—' : (card.key === 'interventions' || card.key === 'complaints' || card.key === 'workOrders' || card.key === 'inventory' ? open : detailItems.length)}</strong></span>
+                      {detailItems.slice(0, 2).map((item) => <span key={item} className="px-2 py-1 rounded-full bg-teal-50 text-teal-700">{item}</span>)}
+                      <span className="text-emerald-600 font-semibold">فتح القسم ←</span>
+                    </div>
+                  </div>
+                </div>
+              </motion.button>
+            )
+          })}
+        </div>
+      </motion.section>
+
+      {/* Commune Breakdown - restricted to the account's assigned commune(s) */}
+      {shouldShowCommuneDistribution && stats?.byCommune && (
         <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}
           className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
           <div className="bg-gradient-to-l from-teal-600 to-emerald-600 text-white px-6 py-4">
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="font-bold text-base">🏛️ التوزيع حسب الجماعة</h3>
-                <p className="text-emerald-100 text-xs mt-0.5">تفصيل التدخلات لكل جماعة ترابية</p>
+                <h3 className="font-bold text-base">🏛️ {distributionTitle}</h3>
+                <p className="text-emerald-100 text-xs mt-0.5">{distributionDescription}</p>
               </div>
-              <div className="text-2xl font-extrabold">{stats.total}</div>
+              <div className="text-2xl font-extrabold">{distributionTotal}</div>
             </div>
           </div>
           <div className="p-4">
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              {(['سلا', 'سيدي أبي القنادل', 'عامر'] as const).map((communeKey, i) => {
-                const data = stats.byCommune?.[communeKey]
-                const color = COMMUNE_COLORS[communeKey]
-                const label = COMMUNE_LABELS[communeKey]
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+              {distributionCommuneKeys.map((communeKey, i) => {
+                const data = safeByCommune?.[communeKey]
+                const color = COMMUNE_COLORS[communeKey] || ['#059669', '#7c3aed', '#d97706', '#0ea5e9'][i % 4]
+                const label = COMMUNE_LABELS[communeKey] || `جماعة ${communeKey}`
                 const total = data?.total || 0
-                const pct = stats.total > 0 ? Math.round((total / stats.total) * 100) : 0
+                const pct = distributionTotal > 0 ? Math.round((total / distributionTotal) * 100) : 0
                 const derat = data?.DERATISATION || 0
                 const desins = data?.DESINSECTISATION || 0
                 const desinf = data?.DESINFECTION || 0
+                // Status breakdown (planned / in-progress / done / cancelled)
+                const communeStatus = safeByCommuneStatus?.[communeKey]
+                const sPlanifiee = communeStatus?.byStatut?.PLANIFIEE || 0
+                const sEnCours = communeStatus?.byStatut?.EN_COURS || 0
+                const sTerminee = communeStatus?.byStatut?.TERMINEE || 0
+                const sAnnulee = communeStatus?.byStatut?.ANNULEE || 0
 
                 return (
                   <motion.div key={communeKey} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
@@ -526,20 +659,45 @@ function DashboardView({ stats, onNavigate, selectedCommune, canSeeAllCommunes, 
                         )}
                       </div>
                     </div>
+                    {/* Status breakdown pills */}
+                    {total > 0 && (sPlanifiee + sEnCours + sTerminee + sAnnulee) > 0 && (
+                      <div className="px-4 pb-3 flex items-center gap-1.5 flex-wrap">
+                        {sTerminee > 0 && (
+                          <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full text-white" style={{ backgroundColor: STATUT_COLORS.TERMINEE }}>
+                            ✓ {sTerminee} منجز
+                          </span>
+                        )}
+                        {sEnCours > 0 && (
+                          <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full text-white" style={{ backgroundColor: STATUT_COLORS.EN_COURS }}>
+                            ⟳ {sEnCours} جار
+                          </span>
+                        )}
+                        {sPlanifiee > 0 && (
+                          <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full text-white" style={{ backgroundColor: STATUT_COLORS.PLANIFIEE }}>
+                            ◷ {sPlanifiee} مبرمج
+                          </span>
+                        )}
+                        {sAnnulee > 0 && (
+                          <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full text-white" style={{ backgroundColor: STATUT_COLORS.ANNULEE }}>
+                            ✕ {sAnnulee} ملغى
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </motion.div>
                 )
               })}
             </div>
-            {/* Commune comparison chart - Only for admin users */}
-            {canSeeAllCommunes && stats.byCommune && Object.keys(stats.byCommune).length > 0 && (
+            {/* Commune comparison chart - only across the account's assigned communes */}
+            {distributionCommuneKeys.length > 1 && (
               <div className="mt-4 h-48">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={
-                    (['سلا', 'سيدي أبي القنادل', 'عامر'] as const).map(key => ({
-                      name: key === 'سلا' ? 'سلا' : key === 'سيدي أبي القنادل' ? 'أبي القنادل' : 'عامر',
-                      'مكافحة القوارض': stats.byCommune?.[key]?.DERATISATION || 0,
-                      'مكافحة الحشرات': stats.byCommune?.[key]?.DESINSECTISATION || 0,
-                      'التطهير والتعقيم': stats.byCommune?.[key]?.DESINFECTION || 0,
+                    distributionCommuneKeys.map(key => ({
+                      name: (COMMUNE_LABELS[key] || key).replace('جماعة ', ''),
+                      'مكافحة القوارض': safeByCommune?.[key]?.DERATISATION || 0,
+                      'مكافحة الحشرات': safeByCommune?.[key]?.DESINSECTISATION || 0,
+                      'التطهير والتعقيم': safeByCommune?.[key]?.DESINFECTION || 0,
                     }))
                   } barGap={3}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
@@ -587,10 +745,10 @@ function DashboardView({ stats, onNavigate, selectedCommune, canSeeAllCommunes, 
           </div>
           <div className="mt-4 space-y-2">
             {[
-              { label: 'منجزة', val: stats.byStatut.TERMINEE || 0, color: 'bg-emerald-500', pct: completionRate },
-              { label: 'جارية', val: stats.byStatut.EN_COURS || 0, color: 'bg-amber-500', pct: inProgressRate },
-              { label: 'مبرمجة', val: stats.byStatut.PLANIFIEE || 0, color: 'bg-blue-500', pct: stats.total > 0 ? Math.round(((stats.byStatut.PLANIFIEE || 0) / stats.total) * 100) : 0 },
-              { label: 'ملغاة', val: stats.byStatut.ANNULEE || 0, color: 'bg-slate-300', pct: stats.total > 0 ? Math.round(((stats.byStatut.ANNULEE || 0) / stats.total) * 100) : 0 },
+              { label: 'منجزة', val: safeByStatut.TERMINEE || 0, color: 'bg-emerald-500', pct: completionRate },
+              { label: 'جارية', val: safeByStatut.EN_COURS || 0, color: 'bg-amber-500', pct: inProgressRate },
+              { label: 'مبرمجة', val: safeByStatut.PLANIFIEE || 0, color: 'bg-blue-500', pct: stats.total > 0 ? Math.round(((safeByStatut.PLANIFIEE || 0) / stats.total) * 100) : 0 },
+              { label: 'ملغاة', val: safeByStatut.ANNULEE || 0, color: 'bg-slate-300', pct: stats.total > 0 ? Math.round(((safeByStatut.ANNULEE || 0) / stats.total) * 100) : 0 },
             ].map(s => (
               <div key={s.label} className="flex items-center gap-3">
                 <div className={`w-2 h-2 rounded-full ${s.color}`} />
@@ -646,7 +804,7 @@ function DashboardView({ stats, onNavigate, selectedCommune, canSeeAllCommunes, 
               className="text-xs text-emerald-600 hover:text-emerald-700 font-semibold hover:underline">عرض الكل →</button>
           </div>
           <div className="space-y-2 max-h-72 overflow-y-auto">
-            {stats.recent.slice(0, 8).map((intervention, i) => (
+            {safeRecent.slice(0, 8).map((intervention, i) => (
               <motion.div key={intervention.id} initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: i * 0.05 }}
                 className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-slate-50 transition-colors cursor-pointer group">
@@ -668,13 +826,41 @@ function DashboardView({ stats, onNavigate, selectedCommune, canSeeAllCommunes, 
         </motion.div>
       </div>
 
+      {/* مكتب 04 — عمليات 3D */}
+      <motion.section initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.28 }}
+        className="space-y-3" aria-labelledby="three-d-dashboard-title">
+        <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h3 id="three-d-dashboard-title" className="font-bold text-slate-800">🧴 مؤشرات عمليات 3D</h3>
+            <p className="text-xs text-slate-400">تفصيل خاص بمكافحة القوارض والحشرات والتطهير، ضمن الملخص العام للمنصة</p>
+          </div>
+          <button onClick={() => onNavigate('interventions')} className="text-xs font-bold text-emerald-600 hover:underline">فتح إدارة التدخلات ←</button>
+        </div>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          {threeDKpiCards.map((card, i) => {
+            const trend = getTrendBadge(card.value, card.prevValue)
+            return (
+              <motion.button key={card.title} onClick={() => { setSelectedType(card.type); onNavigate('interventions') }} variants={cardVariants} initial="initial" animate="animate" whileHover="hover"
+                transition={{ delay: i * 0.06 }} className={`bg-gradient-to-br ${card.gradient} text-white rounded-2xl p-4 ${card.shadow} shadow-md relative overflow-hidden text-right`}>
+                <div className="relative z-10">
+                  <span className="text-2xl">{card.icon}</span>
+                  <div className="text-2xl font-black mt-2">{card.value}</div>
+                  <div className="text-xs opacity-80 mt-1">{card.title}</div>
+                  {trend && <span className="mt-2 inline-flex rounded-md bg-white px-2 py-0.5 text-[10px] font-bold" style={{ color: trend.color }}>{trend.text}</span>}
+                </div>
+              </motion.button>
+            )
+          })}
+        </div>
+      </motion.section>
+
       {/* Monthly Chart - Recharts */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}
         className="bg-white rounded-2xl border border-slate-100 p-6 shadow-sm">
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h3 className="font-bold text-slate-800">التدخلات الشهرية</h3>
-            <p className="text-xs text-slate-400">التوزيع الشهري حسب نوع التدخل</p>
+            <h3 className="font-bold text-slate-800">التدخلات الشهرية — 3D</h3>
+            <p className="text-xs text-slate-400">التوزيع الشهري حسب نوع التدخل في المكتب 04</p>
           </div>
           <div className="flex gap-3">
             {Object.entries(TYPE_LABELS).map(([k, v]) => (
@@ -754,12 +940,12 @@ function DashboardView({ stats, onNavigate, selectedCommune, canSeeAllCommunes, 
               <span className="text-lg">🏆</span>
               <h3 className="font-bold text-sm">لوحة المتصدرين — الأعوان</h3>
             </div>
-            <span className="text-[10px] text-white/70 font-medium">{agents.filter(a => a.actif).length} عون نشط</span>
+            <button onClick={() => onNavigate('agents')} className="text-[10px] text-white/70 font-medium hover:text-white hover:underline">{agents.filter(a => a.actif).length} عون نشط</button>
           </div>
         </div>
         <div className="p-4 max-h-72 overflow-y-auto">
           {agents.filter(a => a.actif).slice(0, 10).map((agent, i) => {
-            const agentInterventions = stats.recent.filter(inv => inv.agentNom === `${agent.prenom} ${agent.nom}`.trim() || inv.agentNom === agent.nom)
+            const agentInterventions = safeRecent.filter(inv => inv.agentNom === `${agent.nom} ${agent.prenom}`.trim() || inv.agentNom === agent.nom)
             const completedCount = agentInterventions.filter(inv => inv.statut === 'TERMINEE').length
             const rank = i + 1
             const medal = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : ''
@@ -795,9 +981,9 @@ function DashboardView({ stats, onNavigate, selectedCommune, canSeeAllCommunes, 
           </div>
         </div>
         {(() => {
-          const completionPct = stats.total > 0 ? ((stats.byStatut.TERMINEE || 0) / stats.total) * 100 : 0
-          const cancelPct = stats.total > 0 ? ((stats.byStatut.ANNULEE || 0) / stats.total) * 100 : 0
-          const inProgressPct = stats.total > 0 ? ((stats.byStatut.EN_COURS || 0) / stats.total) * 100 : 0
+          const completionPct = stats.total > 0 ? ((safeByStatut.TERMINEE || 0) / stats.total) * 100 : 0
+          const cancelPct = stats.total > 0 ? ((safeByStatut.ANNULEE || 0) / stats.total) * 100 : 0
+          const inProgressPct = stats.total > 0 ? ((safeByStatut.EN_COURS || 0) / stats.total) * 100 : 0
           const qualityScore = Math.min(100, Math.max(0, Math.round(completionPct - cancelPct * 2 + inProgressPct * 0.5)))
           const qualityLevel = qualityScore >= 90 ? { label: 'ممتاز', color: '#10b981', icon: '🌟' } 
             : qualityScore >= 70 ? { label: 'جيد', color: '#3b82f6', icon: '👍' }
@@ -852,9 +1038,9 @@ function DashboardView({ stats, onNavigate, selectedCommune, canSeeAllCommunes, 
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <span className="text-lg">🕐</span>
-              <h3 className="font-bold text-sm">سجل النشاط الأخير</h3>
+              <h3 className="font-bold text-sm">سجل النشاط الأخير — جميع الأقسام</h3>
             </div>
-            <button onClick={() => onNavigate('interventions')}
+            <button onClick={() => onNavigate('activityLog')}
               className="text-[11px] text-slate-300 hover:text-white font-medium hover:underline transition-colors">عرض الكل</button>
           </div>
         </div>
@@ -863,52 +1049,53 @@ function DashboardView({ stats, onNavigate, selectedCommune, canSeeAllCommunes, 
             {/* Timeline line */}
             <div className="absolute right-[15px] top-2 bottom-2 w-0.5 bg-slate-100" />
             <div className="space-y-0">
-              {stats.recent.slice(0, 10).map((intervention, i) => {
-                const typeColor = TYPE_COLORS[intervention.type] || '#64748b'
-                const typeIcon = TYPE_ICONS[intervention.type] || '📋'
-                const typeLabel = TYPE_LABELS[intervention.type] || intervention.type
-                const statutLabel = STATUT_LABELS[intervention.statut] || intervention.statut
-                const statutColor = STATUT_COLORS[intervention.statut] || '#64748b'
+              {safeActivityLog.slice(0, 10).map((activity, i) => {
+                const entityMeta: Record<string, { label: string; icon: string; color: string }> = {
+                  INTERVENTION: { label: 'تدخل 3D', icon: '🧴', color: '#10b981' },
+                  COMPLAINT: { label: 'شكاية', icon: '📢', color: '#f43f5e' },
+                  WORK_ORDER: { label: 'أمر عمل', icon: '🧭', color: '#0891b2' },
+                  ESTABLISHMENT: { label: 'منشأة', icon: '🏪', color: '#65a30d' },
+                  INSPECTION: { label: 'تفتيش', icon: '🔎', color: '#16a34a' },
+                  ENVIRONMENTAL_DOSSIER: { label: 'ملف بيئي', icon: '🌿', color: '#059669' },
+                  FOOD_REPORT: { label: 'بلاغ غذائي', icon: '🍽️', color: '#f97316' },
+                  STRAY_REPORT: { label: 'حيوان شارد', icon: '🐕', color: '#06b6d4' },
+                }
+                const meta = entityMeta[activity.entityType] || { label: activity.entityType || 'نشاط', icon: '📝', color: '#64748b' }
+                const actionLabel: Record<string, string> = { CREATE: 'إنشاء', UPDATE: 'تحديث', DELETE: 'حذف', STATUS_CHANGE: 'تغيير الحالة' }
                 return (
-                  <motion.div key={intervention.id}
+                  <motion.div key={activity.id}
                     initial={{ opacity: 0, x: -15 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ delay: i * 0.04 }}
                     className="flex items-start gap-3 relative pb-3 last:pb-0"
                   >
-                    {/* Timeline dot */}
-                    <div className="relative z-10 shrink-0 mt-1">
-                      <div className="w-[32px] h-[32px] rounded-full flex items-center justify-center text-sm border-2 border-white shadow-sm"
-                        style={{ backgroundColor: typeColor + '18' }}>
-                        {typeIcon}
+                      {/* Timeline dot */}
+                      <div className="relative z-10 shrink-0 mt-1">
+                        <div className="w-[32px] h-[32px] rounded-full flex items-center justify-center text-sm border-2 border-white shadow-sm"
+                        style={{ backgroundColor: meta.color + '18' }}>
+                        {meta.icon}
                       </div>
                     </div>
                     {/* Content */}
                     <div className="flex-1 min-w-0 bg-slate-50/70 rounded-xl px-3 py-2.5 hover:bg-slate-100/80 transition-colors">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-sm font-bold text-slate-700 truncate">{intervention.quartier}</span>
-                        <span className="text-[9px] px-1.5 py-0.5 rounded-full font-bold"
-                          style={{ backgroundColor: typeColor + '15', color: typeColor }}>
-                          {typeLabel}
-                        </span>
-                        <span className="text-[9px] px-1.5 py-0.5 rounded-full font-bold"
-                          style={{ backgroundColor: statutColor + '15', color: statutColor }}>
-                          {statutLabel}
-                        </span>
+                        <span className="text-sm font-bold text-slate-700 truncate">{meta.label}</span>
+                        <span className="text-[9px] px-1.5 py-0.5 rounded-full font-bold" style={{ backgroundColor: meta.color + '15', color: meta.color }}>{meta.label}</span>
+                        <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-600 font-bold">{actionLabel[activity.action] || activity.action}</span>
                       </div>
                       <div className="flex items-center gap-3 mt-1">
-                        <span className="text-[11px] text-slate-400 font-mono">{intervention.reference}</span>
+                        <span className="text-[11px] text-slate-400 font-mono">{activity.entityType || 'سجل'}</span>
                         <span className="text-[10px] text-slate-300">•</span>
-                        <span className="text-[11px] text-slate-400">{intervention.agentNom}</span>
+                        <span className="text-[11px] text-slate-400">{activity.userName || 'النظام'}{activity.commune ? ` · ${activity.commune}` : ''}</span>
                       </div>
-                      <span className="text-[10px] text-slate-300 mt-0.5 block">{formatRelativeTime(intervention.createdAt)}</span>
+                      <span className="text-[10px] text-slate-300 mt-0.5 block">{formatRelativeTime(activity.createdAt)}</span>
                     </div>
                   </motion.div>
                 )
               })}
             </div>
           </div>
-          {stats.recent.length === 0 && (
+          {safeActivityLog.length === 0 && (
             <div className="text-center py-6 text-slate-400 text-sm">لا توجد أنشطة حديثة</div>
           )}
         </div>

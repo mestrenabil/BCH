@@ -280,7 +280,7 @@ export default function KpiView() {
     const csd = stats.byCommuneStatus?.[communeKey]
     if (!cd) return null
     const cTotal = cd.total || 1
-    const cQuartiers = (stats.quartiers || []).filter(q => q.commune === communeKey)
+    const cQuartiers = (stats.quartiers || []).filter((q: { id: string; nom: string; latitude: number; longitude: number; commune?: string }) => (q as any).commune === communeKey)
     const cQuartiersWithInterventions = (stats.byQuartier || []).filter(q =>
       cQuartiers.some(cq => cq.nom === q.quartier) && q.count > 0
     ).length

@@ -1,58 +1,64 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { getCommuneFilter, isAdmin, requireAuth } from '@/lib/auth'
 
-// POST /api/interventions/bulk - Perform bulk actions on interventions
+const allowedStatuses = new Set(['PLANIFIEE', 'EN_COURS', 'TERMINEE', 'ANNULEE'])
+
 export async function POST(request: NextRequest) {
   try {
+    const authResult = await requireAuth()
+    if ('error' in authResult) return authResult.error
+    const { user } = authResult
+
     const body = await request.json()
     const { action, ids, data } = body
+    const selectedIds = Array.isArray(ids)
+      ? [...new Set(ids.filter((id: unknown): id is string => typeof id === 'string'))].slice(0, 200)
+      : []
 
-    if (!action || !ids || !Array.isArray(ids) || ids.length === 0) {
-      return NextResponse.json({ error: 'Action and ids array are required' }, { status: 400 })
+    if (!action || selectedIds.length === 0) {
+      return NextResponse.json({ error: 'الإجراء ومعرفات التدخلات مطلوبان' }, { status: 400 })
     }
 
-    let result
+    const communeFilter = getCommuneFilter(user)
+    const where = isAdmin(user) || !communeFilter
+      ? { id: { in: selectedIds } }
+      : { id: { in: selectedIds }, commune: communeFilter }
 
     switch (action) {
-      case 'delete':
-        result = await db.intervention.deleteMany({
-          where: { id: { in: ids } },
-        })
-        break
-
-      case 'updateStatus':
-        if (!data?.statut) {
-          return NextResponse.json({ error: 'Status is required for updateStatus action' }, { status: 400 })
+      case 'delete': {
+        const result = await db.intervention.deleteMany({ where })
+        return NextResponse.json({ success: true, affected: result.count })
+      }
+      case 'updateStatus': {
+        if (!allowedStatuses.has(data?.statut)) {
+          return NextResponse.json({ error: 'حالة التدخل غير صالحة' }, { status: 400 })
         }
-        result = await db.intervention.updateMany({
-          where: { id: { in: ids } },
-          data: { statut: data.statut },
-        })
-        break
-
-      case 'updateCommune':
-        if (!data?.commune) {
-          return NextResponse.json({ error: 'Commune is required for updateCommune action' }, { status: 400 })
+        const result = await db.intervention.updateMany({ where, data: { statut: data.statut } })
+        return NextResponse.json({ success: true, affected: result.count })
+      }
+      case 'updateCommune': {
+        if (!isAdmin(user)) {
+          return NextResponse.json({ error: 'تغيير الجماعة متاح للمسؤول العام فقط' }, { status: 403 })
         }
-        result = await db.intervention.updateMany({
-          where: { id: { in: ids } },
-          data: { commune: data.commune },
-        })
-        break
-
-      case 'export':
+        if (!data?.commune || data.commune === 'ALL') {
+          return NextResponse.json({ error: 'الجماعة غير صالحة' }, { status: 400 })
+        }
+        const result = await db.intervention.updateMany({ where, data: { commune: data.commune } })
+        return NextResponse.json({ success: true, affected: result.count })
+      }
+      case 'export': {
         const interventions = await db.intervention.findMany({
-          where: { id: { in: ids } },
+          where,
           include: { materials: true, documents: true, photos: true },
         })
         return NextResponse.json({ interventions })
-
+      }
       default:
-        return NextResponse.json({ error: 'Unknown action' }, { status: 400 })
+        return NextResponse.json({ error: 'الإجراء غير مدعوم' }, { status: 400 })
     }
-
-    return NextResponse.json({ success: true, affected: result?.count || 0 })
   } catch (error) {
-    return NextResponse.json({ error: 'Failed to perform bulk action' }, { status: 500 })
+    console.error('Bulk intervention action error:', error)
+    return NextResponse.json({ error: 'فشل تنفيذ الإجراء الجماعي' }, { status: 500 })
   }
 }

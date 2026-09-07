@@ -1,6 +1,7 @@
 import { db } from '@/lib/db'
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAuth, getCommuneFilter } from '@/lib/auth'
+import { requireAuth, getScopedCommuneFilter, resolveRecordCommune } from '@/lib/auth'
+import { getTerritoryFilterFromValue, isCommuneInTerritoryScope } from '@/lib/territory-scope'
 
 export async function GET(request: NextRequest) {
   try {
@@ -11,12 +12,11 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url)
     const categorie = searchParams.get('categorie')
-    const requestedCommune = searchParams.get('commune')
     const search = searchParams.get('search')
     const alerteOnly = searchParams.get('alerte') === 'true'
 
     // Enforce commune filter based on user's role
-    const communeFilter = getCommuneFilter(user, requestedCommune)
+    const communeFilter = getScopedCommuneFilter(user, searchParams)
 
     // Build where clause with proper AND/OR combinations
     const andConditions: Record<string, unknown>[] = []
@@ -88,14 +88,19 @@ export async function POST(request: NextRequest) {
     const { user } = authResult
 
     const body = await request.json()
-    const { nom, categorie, commune, unite, quantiteStock, seuilAlerte, prixUnitaire, fournisseur, description, dateExpiration } = body
+    const { nom, categorie, commune, unite, quantiteStock, seuilAlerte, prixUnitaire, fournisseur, description, dateExpiration, territoryFilter } = body
 
     if (!nom || !categorie) {
       return NextResponse.json({ error: 'يرجى ملء جميع الحقول المطلوبة' }, { status: 400 })
     }
 
-    // Enforce commune: non-admin users can only add products for their own commune
-    const enforcedCommune = user.commune !== 'ALL' ? user.commune : (commune || '')
+    const enforcedCommune = resolveRecordCommune(user, commune)
+    if (!enforcedCommune) {
+      return NextResponse.json({ error: 'يرجى تحديد الجماعة قبل إضافة المنتج' }, { status: 400 })
+    }
+    if (user.commune === 'ALL' && !isCommuneInTerritoryScope(enforcedCommune, getTerritoryFilterFromValue(territoryFilter))) {
+      return NextResponse.json({ error: 'الجماعة المختارة خارج النطاق الترابي المحدد' }, { status: 403 })
+    }
 
     // Generate reference
     const prefix = categorie === 'DERATISATION' ? 'PR-DR' : categorie === 'DESINSECTISATION' ? 'PR-DI' : categorie === 'DESINFECTION' ? 'PR-DF' : 'PR-GN'

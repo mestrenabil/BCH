@@ -78,12 +78,14 @@ const COMMUNE_LABELS: Record<string, string> = {
   'سلا': 'جماعة سلا',
   'سيدي أبي القنادل': 'جماعة سيدي أبي القنادل',
   'عامر': 'جماعة عامر',
+  'السهول': 'جماعة السهول',
 }
 
 const COMMUNE_COLORS: Record<string, string> = {
   'سلا': '#059669',
   'سيدي أبي القنادل': '#7c3aed',
   'عامر': '#d97706',
+  'السهول': '#0ea5e9',
 }
 
 // Time slots for week view (6:00 to 20:00)

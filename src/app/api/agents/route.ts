@@ -1,6 +1,7 @@
 import { db } from '@/lib/db'
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAuth, getCommuneFilter } from '@/lib/auth'
+import { requireAuth, getScopedCommuneFilter, resolveRecordCommune } from '@/lib/auth'
+import { getTerritoryFilterFromValue, isCommuneInTerritoryScope } from '@/lib/territory-scope'
 
 export async function GET(request: NextRequest) {
   try {
@@ -10,11 +11,9 @@ export async function GET(request: NextRequest) {
     const { user } = authResult
 
     const { searchParams } = new URL(request.url)
-    const requestedCommune = searchParams.get('commune')
     const actif = searchParams.get('actif')
 
-    // Enforce commune filter based on user's role
-    const communeFilter = getCommuneFilter(user, requestedCommune)
+    const communeFilter = getScopedCommuneFilter(user, searchParams)
 
     const where: Record<string, unknown> = {}
     if (communeFilter) where.commune = communeFilter
@@ -22,6 +21,7 @@ export async function GET(request: NextRequest) {
 
     const agents = await db.agent.findMany({
       where,
+      include: { team: { select: { id: true, name: true, office: true, mission: true, color: true, commune: true, actif: true } } },
       orderBy: { nom: 'asc' },
     })
 
@@ -40,14 +40,27 @@ export async function POST(request: NextRequest) {
     const { user } = authResult
 
     const body = await request.json()
-    const { nom, prenom, telephone, commune, fonction, actif } = body
+    const { nom, prenom, telephone, commune, fonction, actif, teamId, territoryFilter } = body
 
     if (!nom) {
       return NextResponse.json({ error: 'يرجى إدخال اسم العون' }, { status: 400 })
     }
 
-    // Enforce commune: non-admin users can only add agents for their own commune
-    const enforcedCommune = user.commune !== 'ALL' ? user.commune : (commune || '')
+    const enforcedCommune = resolveRecordCommune(user, commune)
+    if (!enforcedCommune) {
+      return NextResponse.json({ error: 'يرجى تحديد الجماعة قبل إضافة العون' }, { status: 400 })
+    }
+
+    if (user.commune === 'ALL' && !isCommuneInTerritoryScope(enforcedCommune, getTerritoryFilterFromValue(territoryFilter))) {
+      return NextResponse.json({ error: 'الجماعة المختارة خارج النطاق الترابي الحالي' }, { status: 403 })
+    }
+
+    if (teamId) {
+      const team = await db.team.findUnique({ where: { id: teamId }, select: { commune: true } })
+      if (!team || team.commune !== enforcedCommune) {
+        return NextResponse.json({ error: 'الفريق المختار لا ينتمي إلى الجماعة المحددة' }, { status: 400 })
+      }
+    }
 
     const agent = await db.agent.create({
       data: {
@@ -57,6 +70,7 @@ export async function POST(request: NextRequest) {
         commune: enforcedCommune,
         fonction: fonction || 'عون صحية',
         actif: actif !== undefined ? actif : true,
+        teamId: teamId || null,
       },
     })
 

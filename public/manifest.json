@@ -1,7 +1,7 @@
 {
-  "name": "عمالة سلا — نظام 3D",
-  "short_name": "3D سلا",
-  "description": "نظام تدبير عمليات 3D — مكافحة الجرذان • مكافحة الحشرات • التطهير",
+  "name": "المنصة المندمجة لتدبير قسم الوقاية وحفظ الصحة",
+  "short_name": "الوقاية وحفظ الصحة",
+  "description": "المنصة المندمجة لتدبير ومتابعة أعمال قسم الوقاية وحفظ الصحة",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#064e3b",
@@ -9,14 +9,10 @@
   "orientation": "any",
   "icons": [
     {
-      "src": "/icon-192.png",
-      "sizes": "192x192",
-      "type": "image/png"
-    },
-    {
-      "src": "/icon-512.png",
-      "sizes": "512x512",
-      "type": "image/png"
+      "src": "/logo.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
     }
   ]
 }

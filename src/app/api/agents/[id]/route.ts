@@ -1,6 +1,7 @@
 import { db } from '@/lib/db'
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAuth } from '@/lib/auth'
+import { canAccessCommune, getManagedCommunes, requireAuth } from '@/lib/auth'
+import { getTerritoryFilterFromSearchParams, getTerritoryFilterFromValue, isCommuneInTerritoryScope } from '@/lib/territory-scope'
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -9,12 +10,16 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const { user } = authResult
 
     const { id } = await params
+    const territorialFilter = getTerritoryFilterFromSearchParams(new URL(request.url).searchParams)
     const agent = await db.agent.findUnique({ where: { id } })
     if (!agent) return NextResponse.json({ error: 'العون غير موجود' }, { status: 404 })
 
     // Non-admin users can only view agents from their own commune
-    if (user.commune !== 'ALL' && agent.commune !== user.commune) {
+    if (!canAccessCommune(user, agent.commune)) {
       return NextResponse.json({ error: 'ليس لديك صلاحية الوصول لهذا العون' }, { status: 403 })
+    }
+    if (user.commune === 'ALL' && !isCommuneInTerritoryScope(agent.commune, territorialFilter)) {
+      return NextResponse.json({ error: 'العون خارج النطاق الترابي الحالي' }, { status: 403 })
     }
 
     return NextResponse.json(agent)
@@ -35,15 +40,29 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     // Check the agent belongs to user's commune
     const existing = await db.agent.findUnique({ where: { id } })
     if (!existing) return NextResponse.json({ error: 'العون غير موجود' }, { status: 404 })
-    if (user.commune !== 'ALL' && existing.commune !== user.commune) {
+    if (!canAccessCommune(user, existing.commune)) {
       return NextResponse.json({ error: 'ليس لديك صلاحية تعديل هذا العون' }, { status: 403 })
     }
 
     const body = await request.json()
-    const { nom, prenom, telephone, commune, fonction, actif } = body
+    const { nom, prenom, telephone, commune, fonction, actif, teamId, territoryFilter } = body
 
     // Non-admin users cannot change the commune
-    const enforcedCommune = user.commune !== 'ALL' ? user.commune : (commune !== undefined ? commune : existing.commune)
+    const managedCommunes = getManagedCommunes(user)
+    const enforcedCommune = user.commune !== 'ALL'
+      ? (managedCommunes.length === 1 ? managedCommunes[0] : existing.commune)
+      : (commune !== undefined ? commune : existing.commune)
+
+    if (user.commune === 'ALL' && (!isCommuneInTerritoryScope(existing.commune, getTerritoryFilterFromValue(territoryFilter)) || !isCommuneInTerritoryScope(enforcedCommune, getTerritoryFilterFromValue(territoryFilter)))) {
+      return NextResponse.json({ error: 'العون أو الجماعة المختارة خارج النطاق الترابي الحالي' }, { status: 403 })
+    }
+
+    if (teamId !== undefined && teamId !== null && teamId !== '') {
+      const team = await db.team.findUnique({ where: { id: teamId }, select: { commune: true } })
+      if (!team || team.commune !== enforcedCommune) {
+        return NextResponse.json({ error: 'الفريق المختار لا ينتمي إلى الجماعة المحددة' }, { status: 400 })
+      }
+    }
 
     const agent = await db.agent.update({
       where: { id },
@@ -54,6 +73,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         commune: enforcedCommune,
         ...(fonction !== undefined && { fonction }),
         ...(actif !== undefined && { actif }),
+        ...(teamId !== undefined && { teamId: teamId || null }),
       },
     })
 
@@ -71,12 +91,16 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     const { user } = authResult
 
     const { id } = await params
+    const territorialFilter = getTerritoryFilterFromSearchParams(new URL(request.url).searchParams)
 
     // Check the agent belongs to user's commune
     const existing = await db.agent.findUnique({ where: { id } })
     if (!existing) return NextResponse.json({ error: 'العون غير موجود' }, { status: 404 })
-    if (user.commune !== 'ALL' && existing.commune !== user.commune) {
+    if (!canAccessCommune(user, existing.commune)) {
       return NextResponse.json({ error: 'ليس لديك صلاحية حذف هذا العون' }, { status: 403 })
+    }
+    if (user.commune === 'ALL' && !isCommuneInTerritoryScope(existing.commune, territorialFilter)) {
+      return NextResponse.json({ error: 'العون خارج النطاق الترابي الحالي' }, { status: 403 })
     }
 
     await db.agent.delete({ where: { id } })

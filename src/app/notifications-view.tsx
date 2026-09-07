@@ -43,7 +43,7 @@ interface Notification {
   timestamp: Date
   commune: string
   actionLabel: string
-  actionType: 'product' | 'intervention' | 'document'
+  actionType: 'product' | 'intervention' | 'document' | 'workOrder'
   actionId: string
 }
 
@@ -88,16 +88,29 @@ interface DocumentRecord {
   updatedAt: string
 }
 
+interface OperationalAlert {
+  id: string
+  workOrderId: string
+  reference: string
+  title: string
+  commune: string
+  priority: string
+  dueAt: string
+  kind: 'OVERDUE' | 'DUE_SOON' | 'UNASSIGNED'
+}
+
 // ===== CONSTANTS =====
 const COMMUNE_LABELS: Record<string, string> = {
   'سلا': 'جماعة سلا',
   'سيدي أبي القنادل': 'جماعة سيدي أبي القنادل',
   'عامر': 'جماعة عامر',
+  'السهول': 'جماعة السهول',
 }
 const COMMUNE_COLORS: Record<string, string> = {
   'سلا': '#059669',
   'سيدي أبي القنادل': '#7c3aed',
   'عامر': '#d97706',
+  'السهول': '#0ea5e9',
 }
 
 const TYPE_LABELS: Record<string, string> = {
@@ -194,19 +207,22 @@ export default function NotificationsView() {
       const params = new URLSearchParams()
       if (effectiveCommune && effectiveCommune !== 'ALL') params.set('commune', effectiveCommune)
 
-      const [productsRes, interventionsRes, documentsRes] = await Promise.all([
+      const [productsRes, interventionsRes, documentsRes, operationsRes] = await Promise.all([
         fetch(`/api/products?${params.toString()}`).catch(() => null),
         fetch(`/api/interventions?${params.toString()}&limit=100`).catch(() => null),
         fetch(`/api/documents?${params.toString()}`).catch(() => null),
+        fetch(`/api/operations?${params.toString()}`).catch(() => null),
       ])
 
       const productsData = productsRes?.ok ? await productsRes.json() : { products: [] }
       const interventionsData = interventionsRes?.ok ? await interventionsRes.json() : { interventions: [] }
       const documentsData = documentsRes?.ok ? await documentsRes.json() : { documents: [] }
+      const operationsData = operationsRes?.ok ? await operationsRes.json() : { alerts: [] }
 
       const products: ProductRecord[] = productsData.products || []
       const interventions: InterventionRecord[] = interventionsData.interventions || []
       const documents: DocumentRecord[] = documentsData.documents || []
+      const operationalAlerts: OperationalAlert[] = operationsData.alerts || []
 
       const generated: Notification[] = []
       const now = new Date()
@@ -346,6 +362,55 @@ export default function NotificationsView() {
           })
         })
 
+      if (notifSettings.overdueAlerts) {
+        operationalAlerts.filter((alert) => alert.kind === 'OVERDUE').forEach((alert) => {
+          generated.push({
+            id: `work-order-${alert.id}`,
+            category: 'urgent',
+            icon: '⏰',
+            title: 'أمر عمل متأخر',
+            description: `${alert.reference} — ${alert.title}`,
+            timestamp: new Date(alert.dueAt),
+            commune: alert.commune,
+            actionLabel: 'عرض أوامر العمل',
+            actionType: 'workOrder',
+            actionId: alert.workOrderId,
+          })
+        })
+      }
+
+      if (notifSettings.upcomingReminders) {
+        operationalAlerts.filter((alert) => alert.kind === 'DUE_SOON').forEach((alert) => {
+          generated.push({
+            id: `work-order-${alert.id}`,
+            category: 'warning',
+            icon: '⌛',
+            title: 'أمر عمل قريب الاستحقاق',
+            description: `${alert.reference} — ${alert.title}`,
+            timestamp: new Date(alert.dueAt),
+            commune: alert.commune,
+            actionLabel: 'عرض أوامر العمل',
+            actionType: 'workOrder',
+            actionId: alert.workOrderId,
+          })
+        })
+      }
+
+      operationalAlerts.filter((alert) => alert.kind === 'UNASSIGNED').forEach((alert) => {
+        generated.push({
+          id: `work-order-${alert.id}`,
+          category: 'warning',
+          icon: '👤',
+          title: 'أمر عمل غير مسند',
+          description: `${alert.reference} — ${alert.title}`,
+          timestamp: new Date(alert.dueAt),
+          commune: alert.commune,
+          actionLabel: 'عرض أوامر العمل',
+          actionType: 'workOrder',
+          actionId: alert.workOrderId,
+        })
+      })
+
       // Sort by timestamp descending
       generated.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())
       setNotifications(generated)
@@ -442,6 +507,8 @@ export default function NotificationsView() {
       setCurrentView('interventions')
     } else if (notif.actionType === 'document') {
       setCurrentView('documents')
+    } else if (notif.actionType === 'workOrder') {
+      setCurrentView('workOrders')
     }
     // Mark as read on action
     toggleRead(notif.id)

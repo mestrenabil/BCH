@@ -1,6 +1,13 @@
 import { db } from '@/lib/db'
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAuth, getCommuneFilter } from '@/lib/auth'
+import { getManagedCommunes, requireAuth, getScopedCommuneFilter, resolveRecordCommune } from '@/lib/auth'
+import { getTerritoryFilterFromValue, isCommuneInTerritoryScope } from '@/lib/territory-scope'
+import { isCoordinateInCommune } from '@/lib/commune-boundaries'
+
+const GIS_LAYER_KEYS = new Set([
+  'interventions', 'deratisation', 'desinsectisation', 'desinfection', 'complaints', 'establishments', 'waterPoints', 'pollution', 'waste',
+  'sites', 'animals', 'sanitation', 'biteCases', 'foodReports', 'workOrders', 'dossiers',
+])
 
 export async function GET(request: NextRequest) {
   try {
@@ -13,15 +20,13 @@ export async function GET(request: NextRequest) {
     const type = searchParams.get('type')
     const statut = searchParams.get('statut')
     const quartier = searchParams.get('quartier')
-    const requestedCommune = searchParams.get('commune')
     const from = searchParams.get('from')
     const to = searchParams.get('to')
     const search = searchParams.get('search')
     const page = parseInt(searchParams.get('page') || '1')
     const limit = parseInt(searchParams.get('limit') || '50')
 
-    // Enforce commune filter based on user's role
-    const communeFilter = getCommuneFilter(user, requestedCommune)
+    const communeFilter = getScopedCommuneFilter(user, searchParams)
 
     const where: Record<string, unknown> = {}
 
@@ -45,48 +50,48 @@ export async function GET(request: NextRequest) {
       ]
     }
 
-    const [interventions, total] = await Promise.all([
-      db.intervention.findMany({
-        where,
-        orderBy: { date: 'desc' },
-        skip: (page - 1) * limit,
-        take: limit,
-        include: {
-          materials: {
-            include: {
-              product: { select: { id: true, nom: true, unite: true, quantiteStock: true } }
-            }
-          },
-          documents: {
-            include: {
-              document: {
-                select: {
-                  id: true,
-                  titre: true,
-                  nomFichier: true,
-                  typeFichier: true,
-                  tailleFichier: true,
-                  cheminFichier: true,
-                  categorie: true,
-                  commune: true,
+    const lightweight = searchParams.get('select') === 'agentNom'
+
+    const query = { where, orderBy: { date: 'desc' as const }, skip: (page - 1) * limit, take: limit }
+    const interventions = lightweight
+      ? await db.intervention.findMany({ ...query, select: { id: true, agentNom: true, commune: true } })
+      : await db.intervention.findMany({
+          ...query,
+          include: {
+                materials: {
+                  include: {
+                    product: { select: { id: true, nom: true, unite: true, quantiteStock: true } }
+                  }
+                },
+                documents: {
+                  include: {
+                    document: {
+                      select: {
+                        id: true,
+                        titre: true,
+                        nomFichier: true,
+                        typeFichier: true,
+                        tailleFichier: true,
+                        cheminFichier: true,
+                        categorie: true,
+                        commune: true,
+                      }
+                    }
+                  }
+                },
+                photos: {
+                  select: {
+                    id: true,
+                    interventionId: true,
+                    url: true,
+                    caption: true,
+                    type: true,
+                    createdAt: true,
+                  }
                 }
-              }
-            }
-          },
-          photos: {
-            select: {
-              id: true,
-              interventionId: true,
-              url: true,
-              caption: true,
-              type: true,
-              createdAt: true,
-            }
-          }
-        }
-      }),
-      db.intervention.count({ where }),
-    ])
+              },
+        })
+    const total = await db.intervention.count({ where })
 
     return NextResponse.json({
       interventions,
@@ -114,6 +119,7 @@ export async function POST(request: NextRequest) {
       superficie, nombrePrestations, observations,
       coutMainOeuvre, coutMateriaux, coutTotal,
       materials, // Array of { productId, quantity }
+      campagneId, territoryFilter, gisLayer,
     } = body
 
     // Validate required fields
@@ -121,8 +127,20 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'يرجى ملء جميع الحقول المطلوبة' }, { status: 400 })
     }
 
-    // Enforce commune: non-admin users can only create interventions for their own commune
-    const enforcedCommune = user.commune !== 'ALL' ? user.commune : (commune || '')
+    const enforcedCommune = resolveRecordCommune(user, commune)
+    if (!enforcedCommune) {
+      return NextResponse.json({ error: 'يرجى تحديد الجماعة قبل إنشاء التدخل' }, { status: 400 })
+    }
+
+    if (user.commune === 'ALL' && !isCommuneInTerritoryScope(enforcedCommune, getTerritoryFilterFromValue(territoryFilter))) {
+      return NextResponse.json({ error: 'الجماعة المختارة خارج النطاق الترابي الحالي' }, { status: 403 })
+    }
+    if (getManagedCommunes(user).length > 0) {
+      const isWithinCommune = await isCoordinateInCommune(enforcedCommune, Number(latitude), Number(longitude))
+      if (isWithinCommune === false) {
+        return NextResponse.json({ error: 'إحداثيات التدخل خارج حدود الجماعة المختارة' }, { status: 403 })
+      }
+    }
 
     // Validate materials stock availability
     if (materials && Array.isArray(materials) && materials.length > 0) {
@@ -180,6 +198,7 @@ export async function POST(request: NextRequest) {
     const intervention = await db.intervention.create({
       data: {
         type,
+        gisLayer: typeof gisLayer === 'string' && GIS_LAYER_KEYS.has(gisLayer) ? gisLayer : 'interventions',
         date: new Date(date),
         quartier,
         adresse: adresse || '',
@@ -198,6 +217,7 @@ export async function POST(request: NextRequest) {
         coutMateriaux: coutMateriaux ? parseFloat(coutMateriaux) : null,
         coutTotal: coutTotal ? parseFloat(coutTotal) : null,
         reference,
+        campagneId: campagneId || null,
         materials: {
           create: materialsCreate,
         },
@@ -217,6 +237,12 @@ export async function POST(request: NextRequest) {
         where: { id: mat.productId },
         data: { quantiteStock: { decrement: mat.quantity } }
       })
+    }
+
+    // Keep linked campagne coutReel in sync
+    if (campagneId) {
+      const agg = await db.intervention.aggregate({ where: { campagneId }, _sum: { coutTotal: true } })
+      await db.campagne.update({ where: { id: campagneId }, data: { coutReel: agg._sum.coutTotal ?? 0 } })
     }
 
     return NextResponse.json(intervention, { status: 201 })

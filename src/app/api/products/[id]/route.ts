@@ -1,6 +1,9 @@
+import { unlink } from 'fs/promises'
 import { db } from '@/lib/db'
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAuth } from '@/lib/auth'
+import { canAccessCommune, requireAuth, resolveRecordCommune } from '@/lib/auth'
+import { getTerritoryFilterFromValue, isCommuneInTerritoryScope } from '@/lib/territory-scope'
+import { getProductImagePath } from '@/lib/product-image-storage'
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -13,7 +16,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     if (!product) return NextResponse.json({ error: 'المنتج غير موجود' }, { status: 404 })
 
     // Non-admin users can only view products from their own commune or shared products
-    if (user.commune !== 'ALL' && product.commune !== '' && product.commune !== 'ALL' && product.commune !== user.commune) {
+    if (!canAccessCommune(user, product.commune)) {
       return NextResponse.json({ error: 'ليس لديك صلاحية الوصول لهذا المنتج' }, { status: 403 })
     }
 
@@ -35,17 +38,21 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     // Check product belongs to user's commune
     const existing = await db.product.findUnique({ where: { id } })
     if (!existing) return NextResponse.json({ error: 'المنتج غير موجود' }, { status: 404 })
-    if (user.commune !== 'ALL' && existing.commune !== '' && existing.commune !== 'ALL' && existing.commune !== user.commune) {
+    if (!canAccessCommune(user, existing.commune)) {
       return NextResponse.json({ error: 'ليس لديك صلاحية تعديل هذا المنتج' }, { status: 403 })
     }
 
     const body = await request.json()
-    const { nom, categorie, commune, unite, quantiteStock, seuilAlerte, prixUnitaire, fournisseur, description, dateExpiration } = body
+    const { nom, categorie, commune, unite, quantiteStock, seuilAlerte, prixUnitaire, fournisseur, description, dateExpiration, territoryFilter } = body
 
     // Non-admin users cannot change the commune to a different commune
-    const enforcedCommune = user.commune !== 'ALL'
-      ? user.commune
-      : (commune !== undefined ? commune : existing.commune)
+    const enforcedCommune = resolveRecordCommune(user, commune !== undefined ? commune : existing.commune)
+    if (!enforcedCommune) {
+      return NextResponse.json({ error: 'يرجى تحديد جماعة ضمن نطاق الحساب' }, { status: 400 })
+    }
+    if (user.commune === 'ALL' && !isCommuneInTerritoryScope(enforcedCommune, getTerritoryFilterFromValue(territoryFilter))) {
+      return NextResponse.json({ error: 'الجماعة المختارة خارج النطاق الترابي المحدد' }, { status: 403 })
+    }
 
     const product = await db.product.update({
       where: { id },
@@ -81,11 +88,16 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     // Check product belongs to user's commune
     const existing = await db.product.findUnique({ where: { id } })
     if (!existing) return NextResponse.json({ error: 'المنتج غير موجود' }, { status: 404 })
-    if (user.commune !== 'ALL' && existing.commune !== '' && existing.commune !== 'ALL' && existing.commune !== user.commune) {
+    if (!canAccessCommune(user, existing.commune)) {
       return NextResponse.json({ error: 'ليس لديك صلاحية حذف هذا المنتج' }, { status: 403 })
     }
 
     await db.product.delete({ where: { id } })
+    // Best-effort cleanup of the product image file if one was attached.
+    if (existing.imagePath) {
+      const imagePath = getProductImagePath(existing.imagePath)
+      if (imagePath) await unlink(imagePath).catch(() => undefined)
+    }
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error('DELETE product error:', error)

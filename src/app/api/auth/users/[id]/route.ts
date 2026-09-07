@@ -1,6 +1,21 @@
 import { db } from '@/lib/db'
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAuth, hashPassword } from '@/lib/auth'
+import { hashPassword, normalizeManagedCommunes, requireAdmin } from '@/lib/auth'
+import { areCommunesInSameProvince, getTerritoryFilterFromValue, isCommuneInTerritoryScope } from '@/lib/territory-scope'
+import { normalizeNavVisibilityJson } from '@/lib/user-nav-settings'
+
+function normalizeRole(role: unknown): 'admin' | 'responsable' | 'agent' {
+  if (role === 'admin') return 'admin'
+  if (role === 'agent') return 'agent'
+  return 'responsable'
+}
+
+const ALLOWED_NAV_KEYS = [
+  'dashboard', 'map', 'interventions', 'agents', 'inventory', 'documents', 'calendar', 'complaints', 'workOrders', 'campagnes',
+  'csvr', 'food', 'dossiers', 'sanitary', 'water', 'vector', 'funeral', 'environment', 'vigilance', 'authorizations', 'gis',
+  'reportsOffice', 'calendarUnified', 'reports', 'operations', 'kpi', 'alerts', 'export', 'notifications', 'activityLog', 'timeline',
+  'users', 'settings', 'helpCenter',
+]
 
 // GET /api/auth/users/[id] — Get a single user
 export async function GET(
@@ -8,9 +23,8 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const authResult = await requireAuth()
+    const authResult = await requireAdmin()
     if ('error' in authResult) return authResult.error
-    const { user: authUser } = authResult
     const { id } = await params
 
     const user = await db.user.findUnique({
@@ -20,7 +34,12 @@ export async function GET(
         username: true,
         nom: true,
         commune: true,
+        managedCommunes: true,
+        communeGroupName: true,
+        navVisibilityJson: true,
         role: true,
+        agentId: true,
+        agent: { select: { id: true, nom: true, prenom: true, commune: true } },
         actif: true,
         lastLogin: true,
         createdAt: true,
@@ -29,11 +48,6 @@ export async function GET(
 
     if (!user) {
       return NextResponse.json({ error: 'المستخدم غير موجود' }, { status: 404 })
-    }
-
-    // Non-admin users can only view users from their own commune
-    if (authUser.commune !== 'ALL' && user.commune !== authUser.commune) {
-      return NextResponse.json({ error: 'غير مصرح لك بالوصول' }, { status: 403 })
     }
 
     return NextResponse.json({ user })
@@ -49,7 +63,7 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const authResult = await requireAuth()
+    const authResult = await requireAdmin()
     if ('error' in authResult) return authResult.error
     const { user: authUser } = authResult
     const { id } = await params
@@ -59,13 +73,9 @@ export async function PUT(
       return NextResponse.json({ error: 'المستخدم غير موجود' }, { status: 404 })
     }
 
-    // Non-admin users can only edit users from their own commune
-    if (authUser.commune !== 'ALL' && existingUser.commune !== authUser.commune) {
-      return NextResponse.json({ error: 'غير مصرح لك بتعديل هذا المستخدم' }, { status: 403 })
-    }
-
     const body = await request.json()
-    const { nom, password, commune, role, actif } = body
+    const { nom, password, commune, role, actif, agentId, territoryFilter, managedCommunes, communeGroupName, navVisibilityJson } = body
+    const allowOutsideTerritory = body.allowOutsideTerritory === true && authUser.role === 'admin' && authUser.commune === 'ALL'
 
     const updateData: Record<string, unknown> = {}
 
@@ -73,20 +83,68 @@ export async function PUT(
 
     // Handle password change
     if (password && password.length > 0) {
-      if (password.length < 4) {
-        return NextResponse.json({ error: 'كلمة المرور يجب أن تكون 4 أحرف على الأقل' }, { status: 400 })
+      if (password.length < 12) {
+        return NextResponse.json({ error: 'كلمة المرور يجب أن تكون 12 حرفاً على الأقل' }, { status: 400 })
       }
       updateData.password = hashPassword(password)
     }
 
-    // Only admin can change commune and role
-    if (authUser.role === 'admin') {
-      if (commune !== undefined) updateData.commune = commune
-      if (role !== undefined) updateData.role = role
+    const nextRole = role === undefined ? normalizeRole(existingUser.role) : normalizeRole(role)
+    let nextCommune = nextRole === 'admin' ? 'ALL' : (commune === undefined ? existingUser.commune : String(commune).trim())
+    let nextAgentId: string | null = null
+    let nextManagedCommunes = nextRole === 'responsable'
+      ? normalizeManagedCommunes(managedCommunes === undefined ? existingUser.managedCommunes : managedCommunes)
+      : []
+    let nextGroupName: string | null = null
+
+    if (nextManagedCommunes.length > 1) {
+      if (!areCommunesInSameProvince(nextManagedCommunes)) {
+        return NextResponse.json({ error: 'يجب أن تنتمي جماعات المجموعة إلى نفس الإقليم أو العمالة' }, { status: 400 })
+      }
+      nextGroupName = typeof communeGroupName === 'string'
+        ? communeGroupName.trim().slice(0, 120) || null
+        : existingUser.communeGroupName
+      if (!nextGroupName) return NextResponse.json({ error: 'يرجى إدخال اسم مجموعة الجماعات' }, { status: 400 })
+      nextCommune = nextManagedCommunes[0]
+    } else if (nextManagedCommunes.length === 1) {
+      nextCommune = nextManagedCommunes[0]
     }
 
-    // Toggle active status
+    if (nextRole === 'responsable' && (!nextCommune || nextCommune === 'ALL')) {
+      return NextResponse.json({ error: 'يجب تحديد جماعة صالحة للمسؤول المحلي' }, { status: 400 })
+    }
+
+    if (nextRole === 'agent') {
+      const requestedAgentId = agentId === undefined ? existingUser.agentId : (typeof agentId === 'string' ? agentId.trim() : '')
+      if (!requestedAgentId) return NextResponse.json({ error: 'يجب ربط الحساب بعون ميداني' }, { status: 400 })
+      const agent = await db.agent.findUnique({ where: { id: requestedAgentId }, include: { user: true } })
+      if (!agent || !agent.actif) return NextResponse.json({ error: 'العون المختار غير نشط أو غير موجود' }, { status: 400 })
+      if (agent.user && agent.user.id !== existingUser.id) {
+        return NextResponse.json({ error: 'هذا العون مرتبط بحساب آخر بالفعل' }, { status: 409 })
+      }
+      nextAgentId = agent.id
+      nextCommune = agent.commune
+      nextManagedCommunes = []
+      nextGroupName = null
+    }
+
+    const territoryScope = getTerritoryFilterFromValue(territoryFilter)
+    if (authUser.commune === 'ALL' && nextRole !== 'admin' && !allowOutsideTerritory && ![nextCommune, ...nextManagedCommunes].every((targetCommune) => isCommuneInTerritoryScope(targetCommune, territoryScope))) {
+      return NextResponse.json({ error: 'الجماعة المختارة خارج النطاق الترابي المحدد' }, { status: 403 })
+    }
+
+    updateData.role = nextRole
+    updateData.commune = nextCommune
+    updateData.managedCommunes = JSON.stringify(nextManagedCommunes)
+    updateData.communeGroupName = nextGroupName
+    updateData.navVisibilityJson = normalizeNavVisibilityJson(navVisibilityJson ?? existingUser.navVisibilityJson, ALLOWED_NAV_KEYS)
+    updateData.agentId = nextAgentId
+
     if (actif !== undefined) updateData.actif = actif
+
+    if (existingUser.id === authUser.id && actif === false) {
+      return NextResponse.json({ error: 'لا يمكنك تعطيل حسابك الخاص' }, { status: 400 })
+    }
 
     const updatedUser = await db.user.update({
       where: { id },
@@ -96,7 +154,12 @@ export async function PUT(
         username: true,
         nom: true,
         commune: true,
+        managedCommunes: true,
+        communeGroupName: true,
+        navVisibilityJson: true,
         role: true,
+        agentId: true,
+        agent: { select: { id: true, nom: true, prenom: true, commune: true } },
         actif: true,
         lastLogin: true,
         createdAt: true,
@@ -116,7 +179,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const authResult = await requireAuth()
+    const authResult = await requireAdmin()
     if ('error' in authResult) return authResult.error
     const { user: authUser } = authResult
     const { id } = await params
@@ -126,14 +189,15 @@ export async function DELETE(
       return NextResponse.json({ error: 'المستخدم غير موجود' }, { status: 404 })
     }
 
-    // Non-admin users can only delete users from their own commune
-    if (authUser.commune !== 'ALL' && existingUser.commune !== authUser.commune) {
-      return NextResponse.json({ error: 'غير مصرح لك بحذف هذا المستخدم' }, { status: 403 })
-    }
-
-    // Prevent deleting yourself
     if (existingUser.id === authUser.id) {
       return NextResponse.json({ error: 'لا يمكنك حذف حسابك الخاص' }, { status: 400 })
+    }
+
+    if (existingUser.role === 'admin') {
+      const activeAdmins = await db.user.count({ where: { role: 'admin', actif: true } })
+      if (activeAdmins <= 1) {
+        return NextResponse.json({ error: 'لا يمكن حذف آخر مسؤول عام نشط' }, { status: 400 })
+      }
     }
 
     // Delete user's sessions first

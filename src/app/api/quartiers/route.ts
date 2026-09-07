@@ -1,6 +1,7 @@
 import { db } from '@/lib/db'
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAuth, getCommuneFilter } from '@/lib/auth'
+import { requireAuth, getScopedCommuneFilter, resolveRecordCommune } from '@/lib/auth'
+import { getTerritoryFilterFromValue, isCommuneInTerritoryScope } from '@/lib/territory-scope'
 
 export async function GET(request: NextRequest) {
   try {
@@ -10,10 +11,7 @@ export async function GET(request: NextRequest) {
     const { user } = authResult
 
     const { searchParams } = new URL(request.url)
-    const requestedCommune = searchParams.get('commune')
-
-    // Enforce commune filter based on user's role
-    const communeFilter = getCommuneFilter(user, requestedCommune)
+    const communeFilter = getScopedCommuneFilter(user, searchParams)
 
     const where: Record<string, unknown> = {}
     if (communeFilter) where.commune = communeFilter
@@ -38,14 +36,19 @@ export async function POST(request: NextRequest) {
     const { user } = authResult
 
     const body = await request.json()
-    const { nom, commune, latitude, longitude } = body
+    const { nom, commune, latitude, longitude, territoryFilter } = body
 
     if (!nom) {
       return NextResponse.json({ error: 'يرجى إدخال اسم الحي' }, { status: 400 })
     }
 
-    // Enforce commune: non-admin users can only add quartiers for their own commune
-    const enforcedCommune = user.commune !== 'ALL' ? user.commune : (commune || '')
+    const enforcedCommune = resolveRecordCommune(user, commune)
+    if (!enforcedCommune) {
+      return NextResponse.json({ error: 'يرجى تحديد الجماعة قبل إضافة الحي' }, { status: 400 })
+    }
+    if (user.commune === 'ALL' && !isCommuneInTerritoryScope(enforcedCommune, getTerritoryFilterFromValue(territoryFilter))) {
+      return NextResponse.json({ error: 'الجماعة المختارة خارج النطاق الترابي المحدد' }, { status: 403 })
+    }
 
     // Check if quartier with same name exists in the same commune
     const existing = await db.quartier.findFirst({ where: { nom, commune: enforcedCommune } })

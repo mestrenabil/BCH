@@ -10,11 +10,13 @@ const COMMUNE_LABELS: Record<string, string> = {
   'سلا': 'جماعة سلا',
   'سيدي أبي القنادل': 'جماعة سيدي أبي القنادل',
   'عامر': 'جماعة عامر',
+  'السهول': 'جماعة السهول',
 }
 const COMMUNE_NAMES_FR: Record<string, string> = {
   'سلا': 'Commune de Salé',
   'سيدي أبي القنادل': 'Commune de Sidi Bouknadel',
   'عامر': 'Commune Rurale d\'Ameur',
+  'السهول': 'Commune de Shoul',
 }
 const TYPE_LABELS: Record<string, string> = {
   DERATISATION: 'مكافحة القوارض', DESINSECTISATION: 'مكافحة الحشرات', DESINFECTION: 'التطهير والتعقيم',
@@ -195,6 +197,7 @@ export default function PrintDocument({
     'سلا': 'SAL',
     'سيدي أبي القنادل': 'SBN',
     'عامر': 'AMR',
+    'السهول': 'SHL',
   }
   const docReference = `BCH/${filterCommune !== 'ALL' ? (COMMUNE_REF_CODES[filterCommune] || filterCommune.substring(0, 3)) : 'ALL'}/${new Date().getFullYear()}/${String(Date.now()).slice(-5)}`
   const docDate = new Date().toLocaleDateString('ar-MA', { year: 'numeric', month: 'long', day: 'numeric' })
@@ -260,52 +263,41 @@ export default function PrintDocument({
     const planifiee = interventions.filter(i => i.statut === 'PLANIFIEE').length
     const annulee = interventions.filter(i => i.statut === 'ANNULEE').length
 
-    // Split interventions into pages (max 20 rows per page)
-    const pageSize = 20
+    // Maximum rows per page based on available space
+    const MAX_ROWS_PER_PAGE = 35
+    
+    // Calculate pages with simple fixed-size approach
     const pages: InterventionRow[][] = []
-    for (let i = 0; i < interventions.length; i += pageSize) {
-      pages.push(interventions.slice(i, i + pageSize))
+    for (let i = 0; i < interventions.length; i += MAX_ROWS_PER_PAGE) {
+      pages.push(interventions.slice(i, i + MAX_ROWS_PER_PAGE))
     }
 
     // Generate data table pages HTML
     const dataTablePages = pages.map((pageRows, pageIdx) => {
       const tableRows = pageRows.map((int, i) => {
-        const globalIdx = pageIdx * pageSize + i
+        const globalIdx = pageIdx * MAX_ROWS_PER_PAGE + i
         const dateFormatted = new Date(int.date).toLocaleDateString('fr-FR')
         const typeBgColor = '#374151'
         const statutBgColor = '#6b7280'
         return `<tr style="border-bottom:1px solid #e2e8f0;">
-          <td style="padding:6px 8px;text-align:center;font-size:10px;color:#64748b;">${globalIdx + 1}</td>
-          <td style="padding:6px 8px;text-align:center;font-size:10px;font-family:monospace;color:#334155;"><span class="bidi-ref" style="font-size:10px;">${int.reference}</span></td>
-          <td style="padding:6px 8px;text-align:center;"><span style="background:${typeBgColor};color:white;padding:1px 6px;border-radius:3px;font-size:9px;font-weight:700;">${TYPE_LABELS[int.type] || int.type}</span></td>
-          <td style="padding:6px 8px;text-align:center;font-size:10px;color:#334155;">${dateFormatted}</td>
-          <td style="padding:6px 8px;text-align:right;font-size:10px;color:#334155;">${int.quartier}</td>
-          <td style="padding:6px 8px;text-align:right;font-size:10px;color:#334155;">${int.adresse}</td>
-          <td style="padding:6px 8px;text-align:center;"><span style="background:${statutBgColor};color:white;padding:1px 6px;border-radius:3px;font-size:9px;font-weight:700;">${STATUT_LABELS[int.statut] || int.statut}</span></td>
-          <td style="padding:6px 8px;text-align:right;font-size:10px;color:#334155;">${int.agentNom}</td>
-          <td style="padding:6px 8px;text-align:center;font-size:10px;color:#334155;">${int.superficie}</td>
-          <td style="padding:6px 8px;text-align:right;font-size:10px;color:#334155;">${int.materials || int.produitUtilise || '—'}</td>
+          <td style="padding:8px 10px;text-align:center;font-size:11px;color:#64748b;">${globalIdx + 1}</td>
+          <td style="padding:8px 10px;text-align:center;font-size:11px;font-family:monospace;color:#334155;"><span class="bidi-ref" style="font-size:11px;">${int.reference}</span></td>
+          <td style="padding:8px 10px;text-align:center;"><span style="background:${typeBgColor};color:white;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;">${TYPE_LABELS[int.type] || int.type}</span></td>
+          <td style="padding:8px 10px;text-align:center;font-size:11px;color:#334155;">${dateFormatted}</td>
+          <td style="padding:8px 10px;text-align:right;font-size:11px;color:#334155;">${int.quartier}</td>
+          <td style="padding:8px 10px;text-align:right;font-size:11px;color:#334155;">${int.adresse}</td>
+          <td style="padding:8px 10px;text-align:center;"><span style="background:${statutBgColor};color:white;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;">${STATUT_LABELS[int.statut] || int.statut}</span></td>
+          <td style="padding:8px 10px;text-align:right;font-size:11px;color:#334155;">${int.agentNom}</td>
+          <td style="padding:8px 10px;text-align:center;font-size:11px;color:#334155;">${int.superficie}</td>
+          <td style="padding:8px 10px;text-align:right;font-size:11px;color:#334155;">${int.materials || int.produitUtilise || '—'}</td>
         </tr>`
       }).join('')
 
+      const isLastPage = pageIdx === pages.length - 1
+
       return `<div class="page">
-        <!-- Repeated mini header -->
-        <div class="mini-header">
-          <table cellpadding="0" cellspacing="0" style="width:100%;"><tr>
-            <td style="text-align:right;width:33%;">
-              <span style="font-size:10px;font-weight:700;color:#1f2937;">المملكة المغربية</span><br>
-              <span style="font-size:9px;color:#6b7280;">عمالة سلا — قسم حفظ الصحة</span>
-            </td>
-            <td style="text-align:center;width:34%;">
-              <span style="font-size:11px;font-weight:800;color:#1f2937;">مكتب حفظ الصحة الجماعي</span><br>
-              <span style="font-size:8px;color:#9ca3af;font-style:italic;">Bureau Communal de l'Hygiène</span>
-            </td>
-            <td style="text-align:left;width:33%;">
-              <span class="bidi-fr" style="font-size:9px;color:#6b7280;">${communeNameFr}</span><br>
-              <span class="bidi-ref" style="font-size:8px;color:#9ca3af;">${docReference}</span>
-            </td>
-          </tr></table>
-        </div>
+        <!-- En-tête uniquement sur la page de couverture (Page 1) -->
+        <!-- Pas de mini-header sur les pages de données -->
 
         <div style="font-size:11px;font-weight:700;color:#1f2937;margin:10px 0;">📋 تفصيل التدخلات — ${pageIdx === 0 ? `${totalInterventions} تدخل` : `تتمة (${pageIdx + 1}/${pages.length})`}</div>
         <table class="data-table">
@@ -326,14 +318,15 @@ export default function PrintDocument({
           <tbody>${tableRows}</tbody>
         </table>
 
-        ${pageIdx === pages.length - 1 ? buildSignatureBlock(presidentName, responsableName, chefServiceName) : ''}
+        <!-- Signature block - Only on the very last page of data -->
+        ${isLastPage ? buildSignatureBlock(presidentName, responsableName, chefServiceName) : ''}
 
-        <!-- Page footer -->
+        <!-- Page footer with page numbers -->
         <div class="page-footer">
           <table style="width:100%;"><tr>
             <td style="text-align:right;font-size:7px;color:#9ca3af;"><span class="bidi-fr">${communeNameFr}</span> — <span class="bidi-ar">مكتب حفظ الصحة الجماعي</span></td>
             <td style="text-align:center;font-size:7px;color:#9ca3af;"><span class="bidi-ref" style="font-size:7px;">${docReference}</span></td>
-            <td class="bidi-fr" style="text-align:left;font-size:7px;color:#9ca3af;">Page ${pageIdx + 2}/${pages.length + 1}</td>
+            <td class="bidi-fr" style="text-align:left;font-size:7px;color:#9ca3af;">صفحة ${pageIdx + 2}/${pages.length + 1}</td>
           </tr></table>
         </div>
       </div>`
@@ -366,16 +359,16 @@ export default function PrintDocument({
   <title>${getReportTitle()} — ${communeDisplay}</title>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Arabic:wght@300;400;500;600;700;800;900&family=Amiri:wght@400;700&display=swap');
-    @page {
-      size: A4;
-      margin: 14mm 10mm 20mm 10mm;
-    }
+  @page {
+    size: A4;
+    margin: 15mm 15mm 20mm 15mm;
+  }
     * { margin:0; padding:0; box-sizing:border-box; }
     body {
       font-family: 'Noto Sans Arabic', 'Segoe UI', Tahoma, sans-serif;
       direction: rtl;
       color: #1e293b;
-      line-height: 1.5;
+      line-height: 1.6;
       font-size: 11px;
     }
 
@@ -614,63 +607,68 @@ export default function PrintDocument({
     /* ===== REPORT TITLE SECTION ===== */
     .report-title-section {
       text-align: center;
-      margin-bottom: 16px;
-      padding: 14px 16px;
-      background: linear-gradient(135deg, #f3f4f6, #f9fafb);
-      border-radius: 10px;
-      border: 1.5px solid #d1d5db;
+      margin-bottom: 20px;
+      padding: 20px 24px;
+      background: linear-gradient(135deg, #059669 0%, #047857 100%);
+      border-radius: 12px;
+      border: 2px solid #065f46;
       position: relative;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
     }
     .report-title-section::before {
       content: '';
       position: absolute;
       top: 0; right: 0; bottom: 0; left: 0;
-      border-radius: 10px;
+      border-radius: 12px;
       background: repeating-linear-gradient(
         45deg,
         transparent,
         transparent 10px,
-        rgba(31,41,55,0.02) 10px,
-        rgba(31,41,55,0.02) 11px
+        rgba(255,255,255,0.03) 10px,
+        rgba(255,255,255,0.03) 11px
       );
     }
     .report-title-ar {
-      font-size: 18px;
+      font-size: 22px;
       font-weight: 900;
-      color: #1f2937;
-      margin-bottom: 2px;
+      color: white;
+      margin-bottom: 4px;
       position: relative;
+      text-shadow: 0 2px 4px rgba(0,0,0,0.1);
     }
     .report-title-fr {
-      font-size: 11px;
-      color: #6b7280;
+      font-size: 12px;
+      color: rgba(255,255,255,0.85);
       font-style: italic;
       position: relative;
+      font-weight: 500;
     }
     .report-commune {
-      font-size: 13px;
+      font-size: 14px;
       font-weight: 700;
-      color: #374151;
-      margin-top: 6px;
-      padding: 3px 16px;
+      color: #064e3b;
+      margin-top: 12px;
+      padding: 6px 20px;
       background: white;
-      border-radius: 20px;
+      border-radius: 25px;
       display: inline-block;
-      border: 1.5px solid #d1d5db;
+      border: 2px solid #065f46;
       position: relative;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     }
     .report-filters {
-      margin-top: 6px;
-      font-size: 9px;
-      color: #6b7280;
+      margin-top: 10px;
+      font-size: 10px;
+      color: rgba(255,255,255,0.9);
       position: relative;
+      font-weight: 500;
     }
     .report-filters span {
-      background: white;
-      padding: 1px 6px;
-      border-radius: 3px;
-      margin: 0 2px;
-      border: 1px solid #e2e8f0;
+      background: rgba(255,255,255,0.2);
+      padding: 2px 8px;
+      border-radius: 4px;
+      margin: 0 3px;
+      border: 1px solid rgba(255,255,255,0.3);
     }
 
     /* ===== OBJECT LINE ===== */
@@ -720,7 +718,8 @@ export default function PrintDocument({
       display: grid;
       grid-template-columns: repeat(4, 1fr);
       gap: 8px;
-      margin-bottom: 14px;
+      margin-bottom: 16px;
+      page-break-inside: avoid;
     }
     .summary-card {
       border: 1px solid #e2e8f0;
@@ -729,6 +728,11 @@ export default function PrintDocument({
       text-align: center;
       position: relative;
       overflow: hidden;
+      min-height: 60px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
     }
     .summary-card-value {
       font-size: 20px;
@@ -746,27 +750,41 @@ export default function PrintDocument({
     .data-table {
       width: 100%;
       border-collapse: collapse;
-      border: 1px solid #e2e8f0;
-      border-radius: 6px;
+      border: 2px solid #1f2937;
+      border-radius: 8px;
       overflow: hidden;
       margin-bottom: 12px;
-      font-size: 10px;
+      font-size: 11px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.05);
     }
     .data-table thead tr {
-      background: linear-gradient(135deg, #1f2937, #374151);
+      background: linear-gradient(135deg, #1f2937 0%, #374151 100%);
+      border-bottom: 2px solid #1f2937;
     }
     .data-table thead th {
-      padding: 7px 6px;
+      padding: 10px 8px;
       color: white;
-      font-size: 9px;
-      font-weight: 700;
+      font-size: 10px;
+      font-weight: 800;
       text-align: right;
       white-space: nowrap;
-      border-left: 1px solid rgba(255,255,255,0.15);
+      border-left: 1px solid rgba(255,255,255,0.1);
+      letter-spacing: 0.3px;
     }
     .data-table thead th:first-child { border-left: none; }
+    .data-table tbody tr { 
+      border-bottom: 1px solid #e2e8f0; 
+      transition: background-color 0.2s;
+    }
     .data-table tbody tr:nth-child(even) { background: #f8fafc; }
-    .data-table tbody tr:hover { background: #f3f4f6; }
+    .data-table tbody tr:hover { 
+      background: linear-gradient(90deg, #f0fdf4 0%, #f0fdf4 10%, white 90%, #f0fdf4 100%);
+      background-color: #f0fdf4;
+    }
+    .data-table tbody td {
+      padding: 8px 7px;
+      vertical-align: middle;
+    }
 
     /* ===== COMMUNE STATS TABLE ===== */
     .stats-table {
@@ -800,16 +818,134 @@ export default function PrintDocument({
 
     /* ===== ENHANCED SIGNATURE BLOCK ===== */
     .signature-section {
-      margin-top: 40px;
-      padding-top: 16px;
+      margin-top: 70px;
+      padding-top: 30px;
+      margin-bottom: 50px;
       position: relative;
+      page-break-inside: avoid;
     }
     .signature-decorative-border {
       border: 2px solid #d1d5db;
       border-radius: 12px;
-      padding: 18px 16px 14px;
+      padding: 30px 24px 26px;
       background: linear-gradient(180deg, #fafafa 0%, #f9fafb 100%);
       position: relative;
+      min-height: 200px;
+    }
+  ------- SEARCH
+    .signature-title-center {
+      text-align: center;
+      margin-bottom: 22px;
+    }
+    .signature-grid {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+    }
+    .signature-box {
+      flex: 1;
+      text-align: center;
+      border: 1.5px solid #e2e8f0;
+      border-radius: 10px;
+      padding: 14px 10px 10px;
+      background: #ffffff;
+      position: relative;
+    }
+    .signature-title-center {
+      text-align: center;
+      margin-bottom: 35px;
+    }
+    .signature-grid {
+      display: flex;
+      justify-content: space-between;
+      gap: 20px;
+    }
+    .signature-box {
+      flex: 1;
+      text-align: center;
+      border: 1.5px solid #e2e8f0;
+      border-radius: 10px;
+      padding: 25px 16px 20px;
+      background: #ffffff;
+      position: relative;
+      min-height: 120px;
+    }
+  ------- SEARCH
+    .signature-role {
+      font-size: 11px;
+      font-weight: 800;
+      color: #1f2937;
+      margin-bottom: 1px;
+      letter-spacing: 0.3px;
+    }
+    .signature-role-fr {
+      font-size: 8.5px;
+      color: #9ca3af;
+      font-style: italic;
+      margin-bottom: 8px;
+    }
+    .signature-line {
+      border-top: 1px solid #374151;
+      margin-top: 12px;
+      width: 80%;
+      margin-left: auto;
+      margin-right: auto;
+    }
+    .signature-name {
+      font-size: 10px;
+      font-weight: 700;
+      color: #1e293b;
+      margin-top: 4px;
+    }
+    .signature-date {
+      font-size: 8px;
+      color: #94a3b8;
+      margin-top: 3px;
+    }
+    .signature-date-line {
+      display: inline-block;
+      min-width: 80px;
+      border-bottom: 1px dotted #cbd5e1;
+      margin-right: 4px;
+    }
+    .signature-role {
+      font-size: 12px;
+      font-weight: 800;
+      color: #1f2937;
+      margin-bottom: 2px;
+      letter-spacing: 0.3px;
+    }
+    .signature-role-fr {
+      font-size: 9px;
+      color: #9ca3af;
+      font-style: italic;
+      margin-bottom: 15px;
+    }
+    .signature-line {
+      border-top: 2px solid #374151;
+      margin-top: 25px;
+      width: 85%;
+      margin-left: auto;
+      margin-right: auto;
+    }
+    .signature-name {
+      font-size: 11px;
+      font-weight: 700;
+      color: #1e293b;
+      margin-top: 12px;
+      min-height: 20px;
+    }
+    .signature-date {
+      font-size: 9px;
+      color: #94a3b8;
+      margin-top: 8px;
+    }
+    .signature-date-line {
+      display: inline-block;
+      min-width: 120px;
+      border-bottom: 1px dotted #cbd5e1;
+      margin-right: 6px;
+      height: 18px;
     }
     .signature-decorative-border::before {
       content: '';
@@ -906,9 +1042,21 @@ export default function PrintDocument({
       bottom: 0;
       left: 0;
       right: 0;
-      padding: 5px 10mm;
-      border-top: 1px solid #e2e8f0;
+      padding: 8px 12mm;
+      border-top: 2px solid #d1d5db;
       background: white;
+      z-index: 100;
+      margin-top: 20px;
+    }
+    .page-footer table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 0;
+      padding: 0;
+    }
+    .page-footer td {
+      padding: 4px 0;
+      vertical-align: middle;
     }
 
     /* ===== PRINT STYLES ===== */
@@ -920,6 +1068,39 @@ export default function PrintDocument({
       .signature-box, .summary-card, .report-title-section, .doc-info-bar, .contact-bar,
       .signature-decorative-border {
         -webkit-print-color-adjust: exact; print-color-adjust: exact;
+      }
+      
+      /* Prevent table rows from breaking across pages */
+      .data-table tbody tr {
+        page-break-inside: avoid;
+        page-break-after: auto;
+      }
+      .data-table thead {
+        page-break-inside: avoid;
+        page-break-after: auto;
+        display: table-header-group;
+      }
+      
+      /* Optimize table layout for printing */
+      .data-table {
+        page-break-inside: auto;
+        width: 100%;
+      }
+      
+      /* Prevent orphans and widows */
+      p, .summary-card, .signature-box {
+        orphans: 3;
+        widows: 3;
+      }
+      
+      /* Avoid breaking signature section */
+      .signature-section {
+        page-break-inside: avoid;
+      }
+      
+      /* Minimize white space at bottom of pages */
+      .data-table tbody tr:last-child {
+        margin-bottom: 0;
       }
     }
   </style>
@@ -938,8 +1119,8 @@ export default function PrintDocument({
             <td class="header-right">
               <div class="kingdom-badge-ar">المملكة المغربية</div>
               <div class="wilaya-name">عمالة سلا</div>
-              <div class="dept-name">قسم حفظ الصحة والبيئة</div>
-              <div class="dept-name" style="font-size:8px;color:#9ca3af;font-style:italic;">Préfecture de Salé — Service d'Hygiène</div>
+              <div class="dept-name">قسم الوقاية وحفظ الصحة</div>
+              <div class="dept-name" style="font-size:8px;color:#9ca3af;font-style:italic;">Préfecture de Salé — Service de prévention et d'hygiène</div>
             </td>
             <td class="header-center">
               <div class="logo-section">
@@ -952,8 +1133,8 @@ export default function PrintDocument({
             <td class="header-left">
               <div class="kingdom-badge-fr">Royaume du Maroc</div>
               <div class="wilaya-name" style="color:#475569;">Préfecture de Salé</div>
-              <div class="dept-name">Service d'Hygiène et Environnement</div>
-              <div class="dept-name" style="font-size:8px;color:#9ca3af;">قسم حفظ الصحة والبيئة</div>
+              <div class="dept-name">Service de prévention et d'hygiène</div>
+              <div class="dept-name" style="font-size:8px;color:#9ca3af;">قسم الوقاية وحفظ الصحة</div>
             </td>
           </tr>
         </table>
@@ -1077,9 +1258,6 @@ export default function PrintDocument({
     </div>
     ` : ''}
 
-    <!-- SIGNATURE BLOCK -->
-    ${buildSignatureBlock(presidentName, responsableName, chefServiceName)}
-
     <!-- Page footer -->
     <div class="page-footer">
       <table style="width:100%;"><tr>
@@ -1150,7 +1328,7 @@ export default function PrintDocument({
                   <div className="text-right">
                     <div className="inline-block bg-emerald-600 text-white text-[8px] font-bold px-2 py-0.5 rounded shadow-sm">المملكة المغربية</div>
                     <div className="text-[11px] font-bold text-emerald-700 mt-1">عمالة سلا</div>
-                    <div className="text-[9px] text-slate-500">قسم حفظ الصحة والبيئة</div>
+                    <div className="text-[9px] text-slate-500">قسم الوقاية وحفظ الصحة</div>
                     <div className="text-[7px] text-slate-400 italic">Préfecture de Salé — Service d&apos;Hygiène</div>
                   </div>
                   <div className="text-center">
@@ -1165,7 +1343,7 @@ export default function PrintDocument({
                     <div className="inline-block bg-slate-600 text-white text-[8px] font-bold px-2 py-0.5 rounded shadow-sm">Royaume du Maroc</div>
                     <div className="text-[11px] font-bold text-slate-600 mt-1">Préfecture de Salé</div>
                     <div className="text-[9px] text-slate-400">Service d&apos;Hygiène</div>
-                    <div className="text-[7px] text-slate-400">قسم حفظ الصحة والبيئة</div>
+                    <div className="text-[7px] text-slate-400">قسم الوقاية وحفظ الصحة</div>
                   </div>
                 </div>
                 {/* Contact bar */}
@@ -1429,17 +1607,6 @@ export default function PrintDocument({
           >
             إغلاق
           </button>
-          <motion.button
-            onClick={handleClassicPrint}
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-            className="px-5 py-2.5 rounded-xl font-bold border-2 border-slate-200 bg-white text-slate-600 hover:bg-slate-50 flex items-center gap-2 text-sm transition-all"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-              <path fillRule="evenodd" d="M5 4v3H4a2 2 0 00-2 2v3a2 2 0 002 2h1v2a2 2 0 002 2h6a2 2 0 002-2v-2h1a2 2 0 002-2V9a2 2 0 00-2-2h-1V4a2 2 0 00-2-2H7a2 2 0 00-2 2zm8 0H7v3h6V4zm0 8H7v4h6v-4z" clipRule="evenodd" />
-            </svg>
-            طباعة كلاسيكية
-          </motion.button>
           <motion.button
             onClick={handlePrint}
             whileHover={{ scale: 1.02 }}

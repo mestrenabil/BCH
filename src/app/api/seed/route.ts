@@ -1,6 +1,6 @@
 import { db } from '@/lib/db'
 import { NextResponse } from 'next/server'
-import { hashPassword, requireAuth } from '@/lib/auth'
+import { hashPassword, requireAdmin } from '@/lib/auth'
 
 // Quartiers for each commune with realistic coordinates
 const quartiersByCommune = {
@@ -44,12 +44,35 @@ const quartiersByCommune = {
     { nom: 'الدوار الجديد', latitude: 34.0960, longitude: -6.6380 },
     { nom: 'حي السلام', latitude: 34.0850, longitude: -6.6580 },
   ],
+  'السهول': [
+    { nom: 'مركز السهول', latitude: 33.8250, longitude: -6.7800 },
+    { nom: 'قطاع السهول الشمالي', latitude: 33.8950, longitude: -6.8050 },
+    { nom: 'قطاع السهول الجنوبي', latitude: 33.7550, longitude: -6.7800 },
+  ],
 }
 
-const agentsByCommune: Record<string, string[]> = {
-  'سلا': ['أحمد بنعلي', 'محمد العلوي', 'خالد السعدي', 'يوسف الإدريسي'],
-  'سيدي أبي القنادل': ['عبد الرحمن الفاسي', 'حسن المكناسي', 'عمر الرباطي'],
-  'عامر': ['سعيد البيضاوي', 'مصطفى المراكشي', 'إبراهيم الفكيكي'],
+const agentsByCommune: Record<string, { nom: string; prenom: string; fonction?: string }[]> = {
+  'سلا': [
+    { nom: 'أحمد', prenom: 'بنعلي' },
+    { nom: 'محمد', prenom: 'العلوي' },
+    { nom: 'خالد', prenom: 'السعدي' },
+    { nom: 'يوسف', prenom: 'الإدريسي' },
+  ],
+  'سيدي أبي القنادل': [
+    { nom: 'عبد الرحمن', prenom: 'الفاسي' },
+    { nom: 'حسن', prenom: 'المكناسي' },
+    { nom: 'عمر', prenom: 'الرباطي' },
+  ],
+  'عامر': [
+    { nom: 'سعيد', prenom: 'البيضاوي' },
+    { nom: 'مصطفى', prenom: 'المراكشي' },
+    { nom: 'إبراهيم', prenom: 'الفكيكي' },
+  ],
+  'السهول': [
+    { nom: 'أيوب', prenom: 'السهولي' },
+    { nom: 'سلمى', prenom: 'الزهراء', fonction: 'مراقب' },
+    { nom: 'ياسين', prenom: 'العمراني' },
+  ],
 }
 
 const produits: Record<string, string[]> = {
@@ -75,7 +98,11 @@ function generateReference(index: number, type: string, year: number): string {
 }
 
 export async function POST() {
-  const authResult = await requireAuth()
+  if (process.env.ALLOW_DEMO_SEED !== 'true') {
+    return NextResponse.json({ error: 'إدخال البيانات التجريبية معطل' }, { status: 403 })
+  }
+
+  const authResult = await requireAdmin()
   if ('error' in authResult) return authResult.error
 
   try {
@@ -90,6 +117,7 @@ export async function POST() {
       { username: 'sla', password: hashPassword('sla2025'), nom: 'مسؤول جماعة سلا', commune: 'سلا', role: 'responsable' },
       { username: 'bouknadel', password: hashPassword('bouknadel2025'), nom: 'مسؤول جماعة سيدي أبي القنادل', commune: 'سيدي أبي القنادل', role: 'responsable' },
       { username: 'ameur', password: hashPassword('ameur2025'), nom: 'مسؤول جماعة عامر', commune: 'عامر', role: 'responsable' },
+      { username: 'sehoul', password: hashPassword('sehoul2025'), nom: 'مسؤول جماعة السهول', commune: 'السهول', role: 'responsable' },
     ]
     for (const u of usersSeed) {
       const existing = await db.user.findUnique({ where: { username: u.username } })
@@ -129,6 +157,11 @@ export async function POST() {
       { nom: 'ديكلورفوس', categorie: 'DESINSECTISATION', commune: 'عامر', unite: 'لتر', quantiteStock: 20, seuilAlerte: 8, prixUnitaire: 70, fournisseur: 'مختبرات كيميد', description: 'مبيد حشري فسفوري عضوي' },
       { nom: 'كلورهيكسيدين', categorie: 'DESINFECTION', commune: 'عامر', unite: 'لتر', quantiteStock: 40, seuilAlerte: 12, prixUnitaire: 40, fournisseur: 'شركة الكلور المغرب', description: 'مطهر واسع الطيف' },
 
+      // Products for السهول
+      { nom: 'رودينال السهول', categorie: 'DERATISATION', commune: 'السهول', unite: 'كيلوغرام', quantiteStock: 25, seuilAlerte: 6, prixUnitaire: 120, fournisseur: 'شركة باير المغرب', description: 'مادة لمكافحة القوارض' },
+      { nom: 'ديلتميثرين السهول', categorie: 'DESINSECTISATION', commune: 'السهول', unite: 'لتر', quantiteStock: 30, seuilAlerte: 8, prixUnitaire: 85, fournisseur: 'شركة سينجنتا المغرب', description: 'مبيد حشري للرش' },
+      { nom: 'هيبوكلوريت السهول', categorie: 'DESINFECTION', commune: 'السهول', unite: 'لتر', quantiteStock: 50, seuilAlerte: 15, prixUnitaire: 15, fournisseur: 'شركة الكلور المغرب', description: 'محلول مطهر' },
+
       // Shared products (no commune assignment)
       { nom: 'أقنعة واقية', categorie: 'GENERAL', commune: '', unite: 'وحدة', quantiteStock: 200, seuilAlerte: 50, prixUnitaire: 8, fournisseur: 'مستلزمات السلامة المغرب', description: 'أقنعة FFP2 للحماية' },
       { nom: 'قفازات مطاطية', categorie: 'GENERAL', commune: '', unite: 'علبة', quantiteStock: 30, seuilAlerte: 10, prixUnitaire: 25, fournisseur: 'مستلزمات السلامة المغرب', description: 'قفازات نيتريل - علبة 100 قطعة' },
@@ -144,14 +177,15 @@ export async function POST() {
 
     // Seed agents for all communes
     for (const [commune, agents] of Object.entries(agentsByCommune)) {
-      for (const agentNom of agents) {
-        const existing = await db.agent.findFirst({ where: { nom: agentNom } })
+      for (const agent of agents) {
+        const existing = await db.agent.findFirst({ where: { nom: agent.nom, prenom: agent.prenom, commune } })
         if (!existing) {
           await db.agent.create({
             data: {
-              nom: agentNom,
+              nom: agent.nom,
+              prenom: agent.prenom,
               commune,
-              fonction: 'عون صحية',
+              fonction: agent.fonction || 'عون صحية',
               actif: true,
             }
           })
@@ -160,7 +194,13 @@ export async function POST() {
     }
 
     // Seed interventions for all communes
-    const interventions = []
+    const interventions: Array<{
+      type: string; date: Date; quartier: string; adresse: string
+      commune: string; latitude: number; longitude: number; statut: string
+      description: string; agentNom: string; produitUtilise: string
+      quantite: string; superficie: string; nombrePrestations: number
+      observations: string; reference: string
+    }> = []
     let refIndex = 1
 
     for (const [commune, quartiers] of Object.entries(quartiersByCommune)) {
@@ -189,7 +229,7 @@ export async function POST() {
               longitude: quartier.longitude + lngOffset,
               statut: year === 2024 ? randomItem(['TERMINEE', 'TERMINEE', 'TERMINEE', 'ANNULEE']) : randomItem(statuts),
               description: `${type === 'DERATISATION' ? 'عملية مكافحة القوارض' : type === 'DESINSECTISATION' ? 'عملية مكافحة الحشرات' : 'عملية تطهير وتعقيم'} بحي ${quartier.nom} — ${commune}`,
-              agentNom: randomItem(agents),
+              agentNom: (() => { const a = randomItem(agents); return `${a.nom} ${a.prenom}`.trim() })(),
               produitUtilise: produit,
               quantite: `${randomInt(1, 20)} ${type === 'DESINFECTION' ? 'لتر' : 'كيلوغرام'}`,
               superficie: `${randomInt(50, 5000)} متر مربع`,

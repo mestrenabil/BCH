@@ -1,17 +1,41 @@
 import { create } from 'zustand'
+import { DEFAULT_TERRITORY_FILTER, type TerritoryFilter } from '@/lib/geography'
 import { type Language } from './i18n'
 
-export type ViewType = 'dashboard' | 'map' | 'interventions' | 'inventory' | 'reports' | 'documents' | 'users' | 'settings' | 'agents' | 'calendar' | 'kpi' | 'alerts' | 'export' | 'notifications' | 'complaints' | 'activityLog' | 'timeline'
+export type ViewType = 'dashboard' | 'map' | 'interventions' | 'inventory' | 'reports' | 'documents' | 'users' | 'settings' | 'agents' | 'calendar' | 'kpi' | 'alerts' | 'export' | 'notifications' | 'complaints' | 'workOrders' | 'operations' | 'activityLog' | 'timeline' | 'campagnes' | 'helpCenter' | 'csvr' | 'food' | 'dossiers' | 'sanitary' | 'water' | 'vector' | 'funeral' | 'environment' | 'vigilance' | 'authorizations' | 'gis' | 'geohealth' | 'reportsOffice' | 'calendarUnified'
+
+export const DEFAULT_NAV_ORDER: ViewType[] = [
+  'dashboard', 'map', 'interventions', 'agents', 'inventory', 'documents', 'calendar', 'complaints', 'workOrders', 'campagnes',
+  'csvr', 'food', 'dossiers', 'sanitary', 'water', 'vector', 'funeral', 'environment', 'vigilance', 'authorizations', 'gis', 'geohealth',
+  'reportsOffice', 'calendarUnified', 'reports', 'operations', 'kpi', 'alerts', 'export', 'notifications', 'activityLog', 'timeline',
+  'users', 'settings', 'helpCenter',
+]
+
+export type CsvrSubTab = 'dashboard' | 'alerts' | 'reports' | 'map' | 'missions' | 'animals' | 'care' | 'centers' | 'transport' | 'adoption' | 'health' | 'bites' | 'deaths' | 'hotspots' | 'partners' | 'identification' | 'photos' | 'campaigns' | 'followup' | 'exports' | 'settings'
+export type FoodSubTab = 'dashboard' | 'list' | 'map'
+export type DossierSubTab = 'list' | 'detail'
+export type SanitarySubTab = 'dashboard' | 'map' | 'establishments' | 'inspections' | 'healthCards' | 'samples' | 'settings'
+export type WaterSubTab = 'dashboard' | 'map' | 'points' | 'measurements' | 'samples' | 'inspections' | 'thresholds' | 'devices' | 'alerts' | 'reports' | 'actions' | 'pools' | 'sanitation' | 'disinfection' | 'assets' | 'emergency' | 'incidents' | 'laboratories' | 'programs' | 'planning' | 'settings'
+export type VectorSubTab = 'dashboard' | 'products' | 'bites'
+export type FuneralSubTab = 'dashboard' | 'deaths' | 'burials' | 'cemeteries' | 'transports' | 'exhumations'
+export type EnvironmentSubTab = 'dashboard' | 'map' | 'dossiers' | 'detail' | 'inspections' | 'programs' | 'followup' | 'complaints' | 'establishments' | 'pollution' | 'water' | 'waste' | 'sites' | 'vigilance' | 'campaigns' | 'settings'
+export type GisLayerFocus = string | null
+export type VigilanceSubTab = 'dashboard' | 'all' | 'byCategory'
+export type AuthSubTab = 'dashboard' | 'dossiers' | 'opinions' | 'visits'
 export type InterventionType = 'DERATISATION' | 'DESINSECTISATION' | 'DESINFECTION'
 export type StatutType = 'PLANIFIEE' | 'EN_COURS' | 'TERMINEE' | 'ANNULEE'
-export type CommuneType = 'سلا' | 'سيدي أبي القنادل' | 'عامر'
+export type CommuneType = string
 
 export interface AuthUser {
   id: string
   username: string
   nom: string
   commune: string
+  managedCommunes: string[]
+  communeGroupName: string | null
+  navVisibilityJson: string
   role: string
+  agentId: string | null
 }
 
 export type OverlaySectionKey =
@@ -52,6 +76,8 @@ export interface AppSettings {
   deadlineReminderDays: number
   fontSize: 'small' | 'medium' | 'large'
   compactMode: boolean
+  navVisibility: Record<ViewType, boolean>
+  navOrder: ViewType[]
   // Overlay section visibility
   overlaySectionVisibility: Record<OverlaySectionKey, boolean>
   // Print / Document settings
@@ -87,6 +113,7 @@ export interface MapClickCoords {
   latitude: number
   longitude: number
   commune: string | null
+  quartier: string | null
 }
 
 interface AppState {
@@ -99,12 +126,36 @@ interface AppState {
   // Navigation
   currentView: ViewType
   setCurrentView: (view: ViewType) => void
+  csvrSubTab: CsvrSubTab
+  setCsvrSubTab: (tab: CsvrSubTab) => void
+  foodSubTab: FoodSubTab
+  setFoodSubTab: (tab: FoodSubTab) => void
+  dossierSubTab: DossierSubTab
+  setDossierSubTab: (tab: DossierSubTab) => void
+  sanitarySubTab: SanitarySubTab
+  setSanitarySubTab: (tab: SanitarySubTab) => void
+  waterSubTab: WaterSubTab
+  setWaterSubTab: (tab: WaterSubTab) => void
+  vectorSubTab: VectorSubTab
+  setVectorSubTab: (tab: VectorSubTab) => void
+  funeralSubTab: FuneralSubTab
+  setFuneralSubTab: (tab: FuneralSubTab) => void
+  environmentSubTab: EnvironmentSubTab
+  setEnvironmentSubTab: (tab: EnvironmentSubTab) => void
+  gisFocusLayer: GisLayerFocus
+  setGisFocusLayer: (layer: GisLayerFocus) => void
+  vigilanceSubTab: VigilanceSubTab
+  setVigilanceSubTab: (tab: VigilanceSubTab) => void
+  authSubTab: AuthSubTab
+  setAuthSubTab: (tab: AuthSubTab) => void
   selectedType: InterventionType | 'ALL'
   setSelectedType: (type: InterventionType | 'ALL') => void
   selectedYear: string
   setSelectedYear: (year: string) => void
   selectedCommune: CommuneType | 'ALL'
   setSelectedCommune: (commune: CommuneType | 'ALL') => void
+  territoryFilter: TerritoryFilter
+  setTerritoryFilter: (filter: TerritoryFilter) => void
   searchQuery: string
   setSearchQuery: (query: string) => void
   isFormOpen: boolean
@@ -179,6 +230,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   deadlineReminderDays: 3,
   fontSize: 'medium',
   compactMode: false,
+  navVisibility: Object.fromEntries(DEFAULT_NAV_ORDER.map((view) => [view, true])) as Record<ViewType, boolean>,
+  navOrder: [...DEFAULT_NAV_ORDER],
   // Overlay section visibility — defaults from OVERLAY_SECTION_LABELS
   overlaySectionVisibility: Object.fromEntries(
     Object.entries(OVERLAY_SECTION_LABELS).map(([key, val]) => [key, val.defaultVisible])
@@ -217,19 +270,60 @@ export const useAppStore = create<AppState>((set, get) => {
   return {
   // Auth
   user: null,
-  setUser: (user) => set({ user, isAuthenticated: !!user }),
+  setUser: (user) => {
+    const normalizedUser = user
+      ? {
+          ...user,
+          managedCommunes: Array.isArray(user.managedCommunes) ? user.managedCommunes : [],
+          communeGroupName: user.communeGroupName ?? null,
+        }
+      : null
+
+    set({
+      user: normalizedUser,
+      isAuthenticated: !!normalizedUser,
+      selectedCommune: normalizedUser?.managedCommunes.length && normalizedUser.managedCommunes.length > 1
+        ? 'ALL'
+        : (normalizedUser?.commune && normalizedUser.commune !== 'ALL' ? normalizedUser.commune as CommuneType : 'ALL'),
+      territoryFilter: DEFAULT_TERRITORY_FILTER,
+    })
+  },
   isAuthenticated: false,
   isAuthLoading: true,
   setAuthLoading: (loading) => set({ isAuthLoading: loading }),
   // Navigation
   currentView: 'dashboard',
   setCurrentView: (view) => set({ currentView: view }),
+  csvrSubTab: 'dashboard',
+  setCsvrSubTab: (tab) => set({ csvrSubTab: tab }),
+  foodSubTab: 'dashboard',
+  setFoodSubTab: (tab) => set({ foodSubTab: tab }),
+  dossierSubTab: 'list',
+  setDossierSubTab: (tab) => set({ dossierSubTab: tab }),
+  sanitarySubTab: 'dashboard',
+  setSanitarySubTab: (tab) => set({ sanitarySubTab: tab }),
+  waterSubTab: 'dashboard',
+  setWaterSubTab: (tab) => set({ waterSubTab: tab }),
+  vectorSubTab: 'dashboard',
+  setVectorSubTab: (tab) => set({ vectorSubTab: tab }),
+  funeralSubTab: 'dashboard',
+  setFuneralSubTab: (tab) => set({ funeralSubTab: tab }),
+  environmentSubTab: 'dashboard',
+  setEnvironmentSubTab: (tab) => set({ environmentSubTab: tab }),
+  gisFocusLayer: null,
+  setGisFocusLayer: (layer) => set({ gisFocusLayer: layer }),
+  vigilanceSubTab: 'dashboard',
+  setVigilanceSubTab: (tab) => set({ vigilanceSubTab: tab }),
+  authSubTab: 'dashboard',
+  setAuthSubTab: (tab) => set({ authSubTab: tab }),
   selectedType: 'ALL',
   setSelectedType: (type) => set({ selectedType: type }),
   selectedYear: CURRENT_YEAR,
   setSelectedYear: (year) => set({ selectedYear: year }),
   selectedCommune: 'ALL',
   setSelectedCommune: (commune) => set({ selectedCommune: commune }),
+  territoryFilter: DEFAULT_TERRITORY_FILTER,
+  setTerritoryFilter: (territoryFilter) => set({ territoryFilter }),
   searchQuery: '',
   setSearchQuery: (query) => set({ searchQuery: query }),
   isFormOpen: false,

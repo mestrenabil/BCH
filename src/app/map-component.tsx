@@ -1,12 +1,29 @@
 'use client'
 
-import React, { useEffect, useRef } from 'react'
+import React, { useCallback, useEffect, useRef } from 'react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import 'leaflet.markercluster/dist/MarkerCluster.css'
 import 'leaflet.markercluster/dist/MarkerCluster.Default.css'
 import 'leaflet.markercluster'
+
+// Extend Leaflet types for marker cluster
+declare module 'leaflet' {
+  // Add MarkerCluster interface
+  interface MarkerCluster extends L.Marker {
+    getChildCount(): number
+    getAllLeafMarkers(): L.Marker[]
+  }
+  // Add MarkerClusterGroup interface
+  type MarkerClusterGroup = L.LayerGroup
+  // Add markerClusterGroup to L namespace
+  // eslint-disable-next-line no-var
+  var markerClusterGroup: (options?: any) => L.MarkerClusterGroup
+}
 import COMMUNES_GEOJSON from './communes-data'
+import { ALL_TERRITORIES, DEFAULT_TERRITORY_FILTER, appendTerritoryParams, type TerritoryFilter } from '@/lib/geography'
+import type { MapClickCoords } from '@/lib/store'
+import { communeNamesMatch, findMatchingCommune } from '@/lib/commune-names'
 
 interface InterventionProduct {
   id: string; nom: string; unite: string; quantiteStock: number
@@ -30,7 +47,23 @@ interface Intervention {
   createdAt?: string; updatedAt?: string
 }
 
-interface Quartier { id: string; nom: string; latitude: number; longitude: number }
+interface Quartier { id: string; nom: string; commune: string; latitude: number; longitude: number }
+
+interface ComplaintMapPoint {
+  id: string
+  reference: string
+  nomCitoyen: string
+  commune: string
+  quartier: string | null
+  type: string
+  description: string
+  priorite: string
+  statut: string
+  latitude: number | null
+  longitude: number | null
+  dateReception: string
+  source?: string
+}
 
 const TYPE_LABELS: Record<string, string> = {
   DERATISATION: 'مكافحة القوارض', DESINSECTISATION: 'مكافحة الحشرات', DESINFECTION: 'التطهير والتعقيم',
@@ -45,31 +78,59 @@ const TYPE_COLORS: Record<string, string> = {
   DERATISATION: '#ef4444', DESINSECTISATION: '#f59e0b', DESINFECTION: '#10b981',
 }
 const TYPE_ICONS: Record<string, string> = { DERATISATION: '🐀', DESINSECTISATION: '🦟', DESINFECTION: '🧴' }
+const COMPLAINT_TYPE_LABELS: Record<string, string> = {
+  DERATISATION: 'مكافحة القوارض', DESINSECTISATION: 'مكافحة الحشرات', DESINFECTION: 'التطهير والتعقيم', FOOD: 'سلامة غذائية', ANIMAL: 'حيوان شارد',
+}
+const COMPLAINT_STATUS_LABELS: Record<string, string> = {
+  EN_ATTENTE: 'في الانتظار', EN_COURS: 'قيد المعالجة', TRAITEE: 'تمت معالجتها', REJETEE: 'مرفوضة',
+}
 
 const COMMUNE_NAME_MAP: Record<string, string> = {
   'سلا': 'جماعة سلا',
   'سيدي أبي القنادل': 'جماعة سيدي أبي القنادل',
   'عامر': 'جماعة عامر',
+  'السهول': 'جماعة السهول',
 }
 
 // Point-in-polygon (ray casting algorithm)
 // GeoJSON coordinates: [longitude, latitude] = [x, y]
 // test point: lat = y, lng = x
-function isPointInPolygon(lat: number, lng: number, polygon: number[][]): boolean {
+function isPointInRing(lat: number, lng: number, ring: ReadonlyArray<ReadonlyArray<number>>): boolean {
   let inside = false
-  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
-    const xi = polygon[i][0], yi = polygon[i][1] // x=lng, y=lat
-    const xj = polygon[j][0], yj = polygon[j][1]
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const xi = ring[i][0], yi = ring[i][1]
+    const xj = ring[j][0], yj = ring[j][1]
     const intersect = ((yi > lat) !== (yj > lat)) && (lng < (xj - xi) * (lat - yi) / (yj - yi) + xi)
     if (intersect) inside = !inside
   }
   return inside
 }
 
-function getCommuneForPoint(lat: number, lng: number): string | null {
+function isPointInPolygon(lat: number, lng: number, polygon: ReadonlyArray<ReadonlyArray<ReadonlyArray<number>>>): boolean {
+  return polygon.length > 0 && isPointInRing(lat, lng, polygon[0]) && !polygon.slice(1).some((ring) => isPointInRing(lat, lng, ring))
+}
+
+function isPointInGeometry(lat: number, lng: number, geometry: GeoJSON.Geometry | null): boolean {
+  if (!geometry) return false
+  if (geometry.type === 'Polygon') return isPointInPolygon(lat, lng, geometry.coordinates)
+  if (geometry.type === 'MultiPolygon') return geometry.coordinates.some((polygon) => isPointInPolygon(lat, lng, polygon))
+  return false
+}
+
+function getCommuneForPoint(lat: number, lng: number, territorialBoundaries?: TerritorialBoundaryData | null): string | null {
+  const canonicalSaleFeature = COMMUNES_GEOJSON.features.find((feature) => feature.properties.name === COMMUNE_NAME_MAP['سلا'])
+  if (canonicalSaleFeature && isPointInGeometry(lat, lng, canonicalSaleFeature.geometry)) return 'سلا'
+
+  const nationalCommunes = territorialBoundaries?.commune.features ?? []
+  for (const feature of nationalCommunes) {
+    if (isPointInGeometry(lat, lng, feature.geometry)) {
+      const properties = feature.properties as { name?: string; nameAr?: string; nameFr?: string } | null
+      return properties?.nameAr || properties?.name || properties?.nameFr || null
+    }
+  }
+
   for (const feature of COMMUNES_GEOJSON.features) {
-    const coords = feature.geometry.coordinates[0]
-    if (isPointInPolygon(lat, lng, coords)) {
+    if (isPointInGeometry(lat, lng, feature.geometry)) {
       for (const [key, fullName] of Object.entries(COMMUNE_NAME_MAP)) {
         if (feature.properties.name === fullName) return key
       }
@@ -77,6 +138,103 @@ function getCommuneForPoint(lat: number, lng: number): string | null {
     }
   }
   return null
+}
+
+function getLegacyCommuneForPoint(lat: number, lng: number): string | null {
+  for (const feature of COMMUNES_GEOJSON.features) {
+    if (!isPointInGeometry(lat, lng, feature.geometry)) continue
+    return Object.entries(COMMUNE_NAME_MAP).find(([, name]) => name === feature.properties.name)?.[0] || null
+  }
+  return null
+}
+
+function distanceInMeters(firstLat: number, firstLng: number, secondLat: number, secondLng: number): number {
+  const earthRadius = 6_371_000
+  const latitudeDelta = (secondLat - firstLat) * Math.PI / 180
+  const longitudeDelta = (secondLng - firstLng) * Math.PI / 180
+  const latitudeFactor = Math.sin(latitudeDelta / 2)
+  const longitudeFactor = Math.sin(longitudeDelta / 2)
+  const value = latitudeFactor * latitudeFactor + Math.cos(firstLat * Math.PI / 180) * Math.cos(secondLat * Math.PI / 180) * longitudeFactor * longitudeFactor
+  return 2 * earthRadius * Math.atan2(Math.sqrt(value), Math.sqrt(1 - value))
+}
+
+function findNearbyQuartier(lat: number, lng: number, commune: string | null, quartiers: Quartier[]): string | null {
+  const candidates = commune ? quartiers.filter((quartier) => quartier.commune === commune) : quartiers
+  if (!candidates.length) return null
+  let nearest: Quartier | null = null
+  let nearestDistance = Number.POSITIVE_INFINITY
+
+  for (const quartier of candidates) {
+    const distance = distanceInMeters(lat, lng, quartier.latitude, quartier.longitude)
+    if (distance < nearestDistance) {
+      nearest = quartier
+      nearestDistance = distance
+    }
+  }
+
+  // Always return the nearest quartier, regardless of distance
+  return nearest ? nearest.nom : null
+}
+
+type TerritorialLevel = 'region' | 'province' | 'commune'
+
+type TerritorialFeature = GeoJSON.Feature<GeoJSON.Geometry, {
+  code: string
+  name: string
+  nameAr?: string
+  nameFr?: string
+  regionCode: string
+  provinceCode?: string | null
+  population?: number | null
+  households?: number | null
+  foreigners?: number | null
+  level: TerritorialLevel
+}>
+
+type TerritorialBoundaryData = Record<TerritorialLevel, GeoJSON.FeatureCollection>
+
+function canonicalCommuneGeometry(feature: GeoJSON.Feature, level: TerritorialLevel): GeoJSON.Feature {
+  if (level !== 'commune') return feature
+  const properties = feature.properties as { name?: string; nameAr?: string; nameFr?: string } | null
+  const isSale = [properties?.nameAr, properties?.name, properties?.nameFr].some((name) => name && communeNamesMatch(name, 'سلا'))
+  if (!isSale) return feature
+
+  const canonicalSaleFeature = COMMUNES_GEOJSON.features.find((candidate) => candidate.properties.name === COMMUNE_NAME_MAP['سلا'])
+  return canonicalSaleFeature ? { ...feature, geometry: canonicalSaleFeature.geometry } as GeoJSON.Feature : feature
+}
+
+const TERRITORIAL_LAYER_STYLES: Record<TerritorialLevel, L.PathOptions> = {
+  region: { color: '#1d4ed8', weight: 3.2, opacity: 0.95, fillColor: '#3b82f6', fillOpacity: 0.025 },
+  province: { color: '#7c3aed', weight: 1.6, opacity: 0.8, fillColor: '#8b5cf6', fillOpacity: 0.015, dashArray: '5, 4' },
+  commune: { color: '#0f766e', weight: 0.65, opacity: 0.7, fillColor: '#14b8a6', fillOpacity: 0.005 },
+}
+
+function territorialFeatureMatches(feature: GeoJSON.Feature, level: TerritorialLevel, filter: TerritoryFilter): boolean {
+  const properties = feature.properties as TerritorialFeature['properties']
+  if (level === 'region') return filter.regionCode === ALL_TERRITORIES || properties.code === filter.regionCode
+  if (level === 'province') {
+    if (filter.provinceCode !== ALL_TERRITORIES) return properties.code === filter.provinceCode
+    return filter.regionCode === ALL_TERRITORIES || properties.regionCode === filter.regionCode
+  }
+  if (filter.communeCode !== ALL_TERRITORIES) return properties.code === filter.communeCode
+  if (filter.provinceCode !== ALL_TERRITORIES) return properties.provinceCode === filter.provinceCode
+  return filter.regionCode === ALL_TERRITORIES || properties.regionCode === filter.regionCode
+}
+
+function formatTerritoryNumber(value: number | null | undefined): string {
+  return typeof value === 'number' ? value.toLocaleString('ar-MA') : 'غير متاح'
+}
+
+function escapeHtml(value: string): string {
+  return value.replace(/[&<>'"]/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[character] || character)
+}
+
+function territorialPopup(feature: GeoJSON.Feature, level: TerritorialLevel): string {
+  const properties = feature.properties as TerritorialFeature['properties']
+  const levelLabel = level === 'region' ? 'الجهة' : level === 'province' ? 'الإقليم أو العمالة' : 'الجماعة'
+  const households = level === 'commune' ? `<div>الأسر: <strong>${formatTerritoryNumber(properties.households)}</strong></div>` : ''
+  const foreigners = level === 'commune' && properties.foreigners != null ? `<div>الأجانب: <strong>${formatTerritoryNumber(properties.foreigners)}</strong></div>` : ''
+  return `<div dir="rtl" style="font-family:system-ui,sans-serif;min-width:190px"><strong>${properties.name}</strong><div style="color:#64748b;margin:5px 0">${levelLabel}</div><div>السكان: <strong>${formatTerritoryNumber(properties.population)}</strong></div>${households}${foreigners}<div style="color:#94a3b8;font-size:11px;margin-top:6px">${properties.code}</div></div>`
 }
 
 function createInterventionIcon(type: string, statut?: string): L.DivIcon {
@@ -112,6 +270,35 @@ function createQuartierIcon(): L.DivIcon {
     "></div>`,
     className: '', iconSize: [16, 16], iconAnchor: [8, 8],
   })
+}
+
+function createComplaintIcon(statut: string): L.DivIcon {
+  const color = statut === 'TRAITEE' ? '#16a34a' : statut === 'EN_COURS' ? '#f59e0b' : '#dc2626'
+  return L.divIcon({
+    html: `<div style="width:32px;height:32px;border-radius:50%;background:${color};border:3px solid white;box-shadow:0 3px 12px rgba(127,29,29,.35);display:flex;align-items:center;justify-content:center;font-size:16px;">📢</div>`,
+    className: '', iconSize: [32, 32], iconAnchor: [16, 16], popupAnchor: [0, -18],
+  })
+}
+
+function buildComplaintPopup(complaint: ComplaintMapPoint): string {
+  const typeLabel = COMPLAINT_TYPE_LABELS[complaint.type] || complaint.type
+  const statusLabel = COMPLAINT_STATUS_LABELS[complaint.statut] || complaint.statut
+  const communeLabel = COMMUNE_NAME_MAP[complaint.commune] || complaint.commune
+  const date = complaint.dateReception ? new Date(complaint.dateReception).toLocaleDateString('ar-MA') : '—'
+  return `<div dir="rtl" style="font-family:system-ui,sans-serif;min-width:235px;line-height:1.7;">
+    <div style="background:linear-gradient(135deg,#991b1b,#dc2626);color:white;padding:10px 12px;border-radius:10px 10px 0 0;">
+      <div style="font-size:14px;font-weight:800;">📢 بلاغ ميداني</div>
+      <div style="font-size:10px;opacity:.85;margin-top:2px;">${escapeHtml(complaint.reference)}</div>
+    </div>
+    <div style="padding:10px 12px;color:#334155;">
+      <div style="font-weight:800;color:#0f172a;margin-bottom:5px;">${escapeHtml(typeLabel)}</div>
+      <div>🏛️ ${escapeHtml(communeLabel)}</div>
+      ${complaint.quartier ? `<div>🏘️ ${escapeHtml(complaint.quartier)}</div>` : ''}
+      <div>📅 ${escapeHtml(date)}</div>
+      <div style="margin-top:6px;padding:6px 8px;border-radius:8px;background:#fef2f2;color:#991b1b;font-weight:700;">الحالة: ${escapeHtml(statusLabel)}</div>
+      <div style="margin-top:7px;color:#64748b;font-size:11px;">${escapeHtml(complaint.description || 'بدون وصف')}</div>
+    </div>
+  </div>`
 }
 
 function createNewInterventionMarkerIcon(): L.DivIcon {
@@ -333,6 +520,7 @@ function buildCommunePopup(feat: GeoJSON.Feature, color: string, isBouknadel: bo
 
 // ===== QUARTIER POPUP =====
 function buildQuartierPopup(q: Quartier): string {
+  const communeLabel = COMMUNE_NAME_MAP[q.commune] || (q.commune ? `جماعة ${q.commune}` : 'الجماعة غير محددة')
   const headerContent = `
     <div style="display:flex;align-items:center;gap:10px;position:relative;z-index:1;">
       <div style="width:34px;height:34px;border-radius:10px;background:rgba(255,255,255,0.2);display:flex;align-items:center;justify-content:center;font-size:17px;backdrop-filter:blur(4px);">🏘️</div>
@@ -361,7 +549,7 @@ function buildQuartierPopup(q: Quartier): string {
     `
       <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:#64748b;">
         <span style="font-size:14px;">🏛️</span>
-        <span>بوقنادل سلا — <span style="color:#475569;font-weight:600;">عمالة سلا</span></span>
+        <span>${communeLabel}</span>
       </div>
     `,
     'margin-top:8px;'
@@ -540,19 +728,25 @@ const labelStyle = `
 const requiredStar = `<span style="color:#ef4444;font-size:11px;margin-right:2px;">*</span>`
 
 function buildNewInterventionPopup(lat: number, lng: number, commune: string | null, quartiers: Quartier[]): string {
-  const communeLabel = commune ? COMMUNE_NAME_MAP[commune] || commune : 'خارج حدود الجماعات'
-  const communeColor = commune === 'سيدي أبي القنادل' ? '#7c3aed' : commune === 'سلا' ? '#059669' : commune === 'عامر' ? '#d97706' : '#64748b'
+  const communeLabel = commune ? COMMUNE_NAME_MAP[commune] || (commune.startsWith('جماعة ') ? commune : `جماعة ${commune}`) : 'خارج حدود الجماعات'
+  const communeColor = commune === 'سيدي أبي القنادل' ? '#7c3aed' : commune === 'سلا' ? '#059669' : commune === 'عامر' ? '#d97706' : commune === 'السهول' ? '#0ea5e9' : '#64748b'
   const isOutsideCommune = !commune
   const today = new Date().toISOString().split('T')[0]
 
   const quartierOptions = quartiers.map(q => `<option value="${q.nom}">${q.nom}</option>`).join('')
 
   // Commune select options - auto-select detected commune
+  const knownCommunes = ['سلا', 'سيدي أبي القنادل', 'عامر', 'السهول']
+  const detectedCommuneOption = commune && !knownCommunes.includes(commune)
+    ? `<option value="${escapeHtml(commune)}" selected>${escapeHtml(communeLabel)}</option>`
+    : ''
   const communeSelectOptions = [
     `<option value="" ${!commune ? 'selected' : ''}>— اختر الجماعة —</option>`,
+    detectedCommuneOption,
     `<option value="سلا" ${commune === 'سلا' ? 'selected' : ''}>جماعة سلا</option>`,
     `<option value="سيدي أبي القنادل" ${commune === 'سيدي أبي القنادل' ? 'selected' : ''}>جماعة سيدي أبي القنادل</option>`,
     `<option value="عامر" ${commune === 'عامر' ? 'selected' : ''}>جماعة عامر</option>`,
+    `<option value="السهول" ${commune === 'السهول' ? 'selected' : ''}>جماعة السهول</option>`,
   ].join('')
 
   const headerContent = `
@@ -636,7 +830,9 @@ function buildNewInterventionPopup(lat: number, lng: number, commune: string | n
         </div>
         <div>
           <label style="${labelStyle}">${requiredStar}اسم العون</label>
-          <input type="text" name="agentNom" placeholder="اسم العون المكلف" style="${inputStyle}" required />
+          <select name="agentNom" id="popup-agent-select" style="${selectStyle}" required>
+            <option value="">— اختر العون —</option>
+          </select>
         </div>
       </div>
 
@@ -730,9 +926,9 @@ function buildNewInterventionPopup(lat: number, lng: number, commune: string | n
   `
 }
 
-export default function MapComponent({ interventions, quartiers, selectedCommune, onMapClick, mapClickEnabled, showCommunePopups, onInterventionCreated, centerOn, onInterventionClick, tileLayer: externalTileLayer, onMouseMove, measureMode, onMeasureResult, showQuartiers: externalShowQuartiers }: { 
+export default function MapComponent({ interventions, quartiers, selectedCommune, onMapClick, mapClickEnabled, showCommunePopups, onInterventionCreated, centerOn, onInterventionClick, tileLayer: externalTileLayer, onMouseMove, measureMode, onMeasureResult, showQuartiers: externalShowQuartiers, territoryFilter, nationalBoundariesVisible = false, enforcedCommune, enforcedCommunes }: {
   interventions: Intervention[]; quartiers: Quartier[]; selectedCommune: string;
-  onMapClick?: (lat: number, lng: number, commune: string | null) => void;
+  onMapClick?: (location: MapClickCoords) => void;
   mapClickEnabled?: boolean;
   showCommunePopups?: boolean;
   onInterventionCreated?: () => void;
@@ -743,6 +939,10 @@ export default function MapComponent({ interventions, quartiers, selectedCommune
   measureMode?: boolean;
   onMeasureResult?: (distance: number, points: { lat: number; lng: number }[]) => void;
   showQuartiers?: boolean;
+  territoryFilter?: TerritoryFilter;
+  nationalBoundariesVisible?: boolean;
+  enforcedCommune?: string;
+  enforcedCommunes?: string[];
 }) {
   const mapRef = useRef<L.Map | null>(null)
   const mapContainerRef = useRef<HTMLDivElement>(null)
@@ -751,6 +951,7 @@ export default function MapComponent({ interventions, quartiers, selectedCommune
   const communeLabelsRef = useRef<L.Marker[]>([])
   const communeLayerGroupRef = useRef<L.LayerGroup | null>(null)
   const clickMarkerRef = useRef<L.Marker | null>(null)
+  const singleClickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const onMapClickRef = useRef(onMapClick)
   const mapClickEnabledRef = useRef(mapClickEnabled ?? true)
   const showCommunePopupsRef = useRef(showCommunePopups ?? true)
@@ -767,6 +968,59 @@ export default function MapComponent({ interventions, quartiers, selectedCommune
   const measureMarkersRef = useRef<L.Marker[]>([])
   const measureLabelsRef = useRef<L.Marker[]>([])
   const compassControlRef = useRef<L.Control | null>(null)
+  const territorialLayerGroupRef = useRef<L.FeatureGroup | null>(null)
+  const territorialBoundaryDataRef = useRef<TerritorialBoundaryData | null>(null)
+  const territoryFilterRef = useRef<TerritoryFilter>(territoryFilter ?? DEFAULT_TERRITORY_FILTER)
+  const nationalBoundariesVisibleRef = useRef(nationalBoundariesVisible)
+  const enforcedCommuneRef = useRef(enforcedCommune)
+  const enforcedCommunesRef = useRef<string[]>(enforcedCommunes?.length ? enforcedCommunes : (enforcedCommune ? [enforcedCommune] : []))
+  const [complaints, setComplaints] = React.useState<ComplaintMapPoint[]>([])
+
+  useEffect(() => {
+    let active = true
+    const loadComplaints = async () => {
+      try {
+        const params = new URLSearchParams()
+        appendTerritoryParams(params, territoryFilter ?? DEFAULT_TERRITORY_FILTER)
+        const response = await fetch(`/api/complaints?${params.toString()}`)
+        if (!response.ok) return
+        const data = await response.json() as { complaints?: ComplaintMapPoint[] }
+        const locatedComplaints = (data.complaints || []).filter((complaint) => (
+          typeof complaint.latitude === 'number' && Number.isFinite(complaint.latitude) &&
+          typeof complaint.longitude === 'number' && Number.isFinite(complaint.longitude)
+        ))
+        if (active) setComplaints(locatedComplaints)
+      } catch {
+        if (active) setComplaints([])
+      }
+    }
+
+    void loadComplaints()
+    const refreshTimer = window.setInterval(loadComplaints, 60_000)
+    return () => {
+      active = false
+      window.clearInterval(refreshTimer)
+    }
+  }, [territoryFilter])
+
+  // Disambiguates single vs double click on the map / commune layers.
+  // A single click is delayed by ~280ms; if a second click arrives in that window,
+  // the pending single-click action is cancelled so Leaflet's native double-click
+  // zoom (toward the clicked point) can run undisturbed.
+  const SINGLE_CLICK_DELAY = 280
+  const scheduleSingleClick = useCallback((action: () => void) => {
+    if (singleClickTimerRef.current) {
+      // A second click arrived within the delay window → this is a double click.
+      // Cancel the pending single-click action and let Leaflet zoom normally.
+      clearTimeout(singleClickTimerRef.current)
+      singleClickTimerRef.current = null
+      return
+    }
+    singleClickTimerRef.current = setTimeout(() => {
+      singleClickTimerRef.current = null
+      action()
+    }, SINGLE_CLICK_DELAY)
+  }, [])
 
   // Keep the callback ref up-to-date
   useEffect(() => {
@@ -807,6 +1061,154 @@ export default function MapComponent({ interventions, quartiers, selectedCommune
   useEffect(() => {
     onMeasureResultRef.current = onMeasureResult
   }, [onMeasureResult])
+
+  useEffect(() => {
+    territoryFilterRef.current = territoryFilter ?? DEFAULT_TERRITORY_FILTER
+  }, [territoryFilter])
+
+  useEffect(() => {
+    nationalBoundariesVisibleRef.current = nationalBoundariesVisible
+  }, [nationalBoundariesVisible])
+
+  useEffect(() => {
+    enforcedCommuneRef.current = enforcedCommune
+  }, [enforcedCommune])
+
+  useEffect(() => {
+    enforcedCommunesRef.current = enforcedCommunes?.length ? enforcedCommunes : (enforcedCommune ? [enforcedCommune] : [])
+  }, [enforcedCommune, enforcedCommunes])
+
+  const renderTerritorialLayers = useCallback((filter: TerritoryFilter, visible: boolean, fitBounds = true) => {
+    const map = mapRef.current
+    const layerGroup = territorialLayerGroupRef.current
+    const boundaryData = territorialBoundaryDataRef.current
+    if (!map || !layerGroup || !boundaryData) return
+
+    layerGroup.clearLayers()
+    if (!visible) {
+      const managedCommunes = enforcedCommunesRef.current
+      if (managedCommunes.length > 1) {
+        const managedFeatures = boundaryData.commune.features.filter((feature) => {
+          const properties = feature.properties as { name?: string; nameAr?: string; nameFr?: string } | null
+          return [properties?.nameAr, properties?.name, properties?.nameFr].some((name) => name && managedCommunes.includes(name))
+        }).map((feature) => canonicalCommuneGeometry(feature, 'commune'))
+        if (managedFeatures.length > 0) {
+          const managedLayer = L.geoJSON({ type: 'FeatureCollection', features: managedFeatures } as GeoJSON.FeatureCollection, {
+            style: { ...TERRITORIAL_LAYER_STYLES.commune, weight: 4, fillOpacity: 0.15 },
+            onEachFeature: (feature, layer) => {
+              // Forward clicks to intervention form when click-to-add is enabled (no population popup)
+              // Single click opens the form; double click zooms in (native Leaflet).
+              layer.on('click', (e: L.LeafletMouseEvent) => {
+                if (!mapClickEnabledRef.current || measureModeRef.current) return
+                // Stop propagation immediately so the map-level handler doesn't cancel this timer.
+                L.DomEvent.stopPropagation(e)
+                const { lat, lng } = e.latlng
+                const detected = getCommuneForPoint(lat, lng, territorialBoundaryDataRef.current)
+                const legacy = getLegacyCommuneForPoint(lat, lng)
+                const detecteds = [detected, legacy].filter((c): c is string => Boolean(c))
+                if (!detecteds.length) return // outside any commune — ignore
+                const allowed = enforcedCommunesRef.current
+                // When a scope is enforced, the clicked commune must be among the allowed ones
+                let commune: string | null
+                if (allowed.length === 0) {
+                  commune = detecteds[0] || null
+                } else {
+                  const detectedAllowed = findMatchingCommune(allowed, detecteds)
+                  if (!detectedAllowed) return // outside scope → ignore
+                  commune = detectedAllowed
+                }
+                if (!commune) return
+                scheduleSingleClick(() => {
+                  if (mapClickEnabledRef.current && !measureModeRef.current) {
+                    onMapClickRef.current?.({ latitude: lat, longitude: lng, commune, quartier: findNearbyQuartier(lat, lng, commune, quartiers) })
+                  }
+                })
+              })
+            },
+          })
+          managedLayer.addTo(layerGroup)
+          const bounds = managedLayer.getBounds()
+          if (fitBounds && bounds.isValid()) map.fitBounds(bounds, { padding: [30, 30], maxZoom: 11 })
+          return
+        }
+      }
+      if (fitBounds) {
+        const scopedLayers = enforcedCommunesRef.current.map((commune) => communeLayersRef.current[commune]).filter((layer): layer is L.GeoJSON => Boolean(layer))
+        const scopedBounds = scopedLayers.length ? L.featureGroup(scopedLayers).getBounds() : undefined
+        if (scopedBounds?.isValid()) {
+          map.fitBounds(scopedBounds, { padding: [30, 30], maxZoom: 14 })
+        } else if (enforcedCommunesRef.current.length === 0) {
+          const fallbackBounds = L.geoJSON(boundaryData.region as GeoJSON.GeoJsonObject).getBounds()
+          if (fallbackBounds.isValid()) map.fitBounds(fallbackBounds, { padding: [30, 30], maxZoom: 6 })
+        }
+      }
+      return
+    }
+
+    const focusLevel: TerritorialLevel | null = filter.communeCode !== ALL_TERRITORIES
+      ? 'commune'
+      : filter.provinceCode !== ALL_TERRITORIES
+        ? 'province'
+        : filter.regionCode !== ALL_TERRITORIES
+          ? 'region'
+          : null
+    let focusBounds: L.LatLngBounds | null = null
+
+    const levelsToRender: TerritorialLevel[] = focusLevel === 'commune'
+      ? ['commune']
+      : ['region', 'province', 'commune']
+
+    for (const level of levelsToRender) {
+      const features = boundaryData[level].features
+        .filter((feature) => territorialFeatureMatches(feature, level, filter))
+        .map((feature) => canonicalCommuneGeometry(feature, level))
+      if (features.length === 0) return
+
+      const boundaryLayer = L.geoJSON({ type: 'FeatureCollection', features } as GeoJSON.FeatureCollection, {
+        style: TERRITORIAL_LAYER_STYLES[level],
+        onEachFeature: (feature, layer) => {
+          // Forward clicks to intervention form when click-to-add is enabled (no population popup)
+          // Single click opens the form; double click zooms in (native Leaflet).
+          layer.on('click', (e: L.LeafletMouseEvent) => {
+            if (!mapClickEnabledRef.current || measureModeRef.current) return
+            // Only respond at the commune level — region/province clicks do nothing
+            if (level !== 'commune') return
+            // Stop propagation immediately so the map-level handler doesn't cancel this timer.
+            L.DomEvent.stopPropagation(e)
+            const { lat, lng } = e.latlng
+            const detected = getCommuneForPoint(lat, lng, territorialBoundaryDataRef.current)
+            const legacy = getLegacyCommuneForPoint(lat, lng)
+            const detecteds = [detected, legacy].filter((c): c is string => Boolean(c))
+            if (!detecteds.length) return // outside any commune — ignore
+            const allowed = enforcedCommunesRef.current
+            // When a scope is enforced, the clicked commune must be among the allowed ones
+            let commune: string | null
+            if (allowed.length === 0) {
+              commune = detecteds[0] || null
+            } else {
+              const detectedAllowed = findMatchingCommune(allowed, detecteds)
+              if (!detectedAllowed) return // outside scope → ignore
+              commune = detectedAllowed
+            }
+            if (!commune) return
+            scheduleSingleClick(() => {
+              if (mapClickEnabledRef.current && !measureModeRef.current) {
+                onMapClickRef.current?.({ latitude: lat, longitude: lng, commune, quartier: findNearbyQuartier(lat, lng, commune, quartiers) })
+              }
+            })
+          })
+        },
+      })
+      if (level === focusLevel) focusBounds = boundaryLayer.getBounds()
+      boundaryLayer.addTo(layerGroup)
+    }
+
+    const bounds = focusBounds?.isValid() ? focusBounds : layerGroup.getBounds()
+    if (fitBounds && bounds.isValid()) {
+      const maximumZoom = filter.communeCode !== ALL_TERRITORIES ? 13 : filter.provinceCode !== ALL_TERRITORIES ? 10 : filter.regionCode !== ALL_TERRITORIES ? 8 : 6
+      map.fitBounds(bounds, { padding: [30, 30], maxZoom: maximumZoom })
+    }
+  }, [])
 
   // ===== SIG: onMouseMove coordinate tracking =====
   useEffect(() => {
@@ -995,8 +1397,8 @@ export default function MapComponent({ interventions, quartiers, selectedCommune
     // Double-click handler to finish measurement
     const handleMeasureDblClick = (e: L.LeafletMouseEvent) => {
       if (!measureModeRef.current) return
-      L.DomEvent.stopPropagation(e)
-      L.DomEvent.preventDefault(e)
+      L.DomEvent.stopPropagation(e.originalEvent)
+      L.DomEvent.preventDefault(e.originalEvent)
 
       const points = [...measurePointsRef.current]
       const totalDist = calcTotalDistance(points)
@@ -1066,8 +1468,22 @@ export default function MapComponent({ interventions, quartiers, selectedCommune
     if (!mapContainerRef.current || mapRef.current) return
 
     const map = L.map(mapContainerRef.current, {
-      center: [34.052, -6.735], zoom: 13, zoomControl: false,
+      center: [31.7917, -7.0926],
+      zoom: 5,
+      zoomControl: false,
+      scrollWheelZoom: 'center', // zoom to center of viewport, don't scroll page
     })
+
+    // Prevent wheel events over the map from scrolling the page.
+    // We listen on the capture phase with passive:false so we can stop the event
+    // before it reaches the document, while still letting Leaflet zoom normally.
+    const stopPageScroll = (e: WheelEvent) => {
+      // Only block page scroll when the cursor is over the map
+      e.stopPropagation()
+      // Prevent the document from scrolling
+      e.preventDefault()
+    }
+    mapContainerRef.current.addEventListener('wheel', stopPageScroll, { passive: false })
 
     L.control.zoom({ position: 'topleft' }).addTo(map)
 
@@ -1095,9 +1511,17 @@ export default function MapComponent({ interventions, quartiers, selectedCommune
 
     const communeLayerGroup = L.layerGroup().addTo(map)
     communeLayerGroupRef.current = communeLayerGroup
+    const territorialLayerGroup = L.featureGroup().addTo(map)
+    territorialLayerGroupRef.current = territorialLayerGroup
 
     // ===== ADD COMMUNE BOUNDARIES =====
-    COMMUNES_GEOJSON.features.forEach((feature) => {
+    const legacyFeatures = enforcedCommunesRef.current.length
+      ? COMMUNES_GEOJSON.features.filter((feature) => (
+        Object.entries(COMMUNE_NAME_MAP).some(([key, name]) => enforcedCommunesRef.current.includes(key) && name === feature.properties.name)
+      ))
+      : []
+
+    legacyFeatures.forEach((feature) => {
       const props = feature.properties
       const color = props.color || '#059669'
       const isBouknadel = props.nameFr?.includes('Kanadel') || props.nameAr?.includes('بوقنادل') || props.name?.includes('القنادل')
@@ -1112,7 +1536,8 @@ export default function MapComponent({ interventions, quartiers, selectedCommune
           dashArray: isBouknadel ? '0' : '6, 4',
         },
         onEachFeature: (feat, layer) => {
-          const bounds = layer.getBounds()
+          const geoJsonLayer = layer as L.GeoJSON
+          const bounds = geoJsonLayer.getBounds()
           const center = bounds.getCenter()
 
           // Commune name label with professional badge
@@ -1139,17 +1564,49 @@ export default function MapComponent({ interventions, quartiers, selectedCommune
           label.addTo(communeLayerGroup)
           communeLabelsRef.current.push(label)
 
-          // Professional popup (conditional)
-          if (showCommunePopupsRef.current) {
-            layer.bindPopup(buildCommunePopup(feat, color, isBouknadel), { maxWidth: 360, minWidth: 300 })
-          }
+          // Click handler: forward clicks inside the commune polygon to the intervention form.
+          // Only fires when the clicked point is inside one of the allowed (scoped) communes.
+          // A single click opens the intervention form; a double click zooms in (native Leaflet).
+          layer.on('click', (e: L.LeafletMouseEvent) => {
+            if (!mapClickEnabledRef.current || measureModeRef.current) return
+            // Stop propagation immediately so the map-level click handler doesn't also fire
+            // (which would cancel this layer's pending single-click timer).
+            L.DomEvent.stopPropagation(e)
+            const { lat, lng } = e.latlng
+            const detectedCommune = getCommuneForPoint(lat, lng, territorialBoundaryDataRef.current)
+            const legacyCommune = getLegacyCommuneForPoint(lat, lng)
+            const detectedCommunes = [detectedCommune, legacyCommune].filter((c): c is string => Boolean(c))
+            if (!detectedCommunes.length) return
+            const allowedCommunes = enforcedCommunesRef.current
+            // When a scope is enforced, the clicked commune must be among the allowed ones
+            let commune: string | null
+            if (allowedCommunes.length === 0) {
+              commune = detectedCommunes[0] || null
+            } else {
+              const detectedAllowedCommune = findMatchingCommune(allowedCommunes, detectedCommunes)
+              if (!detectedAllowedCommune) return // outside scope → ignore
+              commune = detectedAllowedCommune
+            }
+            if (!commune) return
+            // Defer so a double click cancels the form opening and lets the map zoom in.
+            scheduleSingleClick(() => {
+              if (mapClickEnabledRef.current && !measureModeRef.current) {
+                onMapClickRef.current?.({
+                  latitude: lat,
+                  longitude: lng,
+                  commune,
+                  quartier: findNearbyQuartier(lat, lng, commune, quartiers),
+                })
+              }
+            })
+          })
 
           // Hover effects
           layer.on('mouseover', () => {
-            layer.setStyle({ fillOpacity: isBouknadel ? 0.22 : 0.15, weight: isBouknadel ? 5 : 3.5 })
+            ;(layer as L.Path).setStyle({ fillOpacity: isBouknadel ? 0.22 : 0.15, weight: isBouknadel ? 5 : 3.5 })
           })
           layer.on('mouseout', () => {
-            layer.setStyle({ fillOpacity: isBouknadel ? 0.12 : 0.06, weight: isBouknadel ? 4 : 2.5 })
+            ;(layer as L.Path).setStyle({ fillOpacity: isBouknadel ? 0.12 : 0.06, weight: isBouknadel ? 4 : 2.5 })
           })
         },
       })
@@ -1162,7 +1619,7 @@ export default function MapComponent({ interventions, quartiers, selectedCommune
     // Layer control
     L.control.layers(
       { '🗺️ خريطة عادية': lightLayer, '🛰️ صورة ساتلية': satelliteLayer, '🌙 خريطة داكنة': darkLayer },
-      { '🏛️ الحدود الترابية': communeLayerGroup },
+      { '🏛️ الحدود الجماعية': communeLayerGroup, '🇲🇦 الجهات • الأقاليم • الجماعات': territorialLayerGroup },
       { position: 'bottomleft' }
     ).addTo(map)
 
@@ -1179,9 +1636,40 @@ export default function MapComponent({ interventions, quartiers, selectedCommune
       if (measureModeRef.current) return
 
       const { lat, lng } = e.latlng
-      
-      // Detect commune for clicked point
-      const commune = getCommuneForPoint(lat, lng)
+      const detectedCommune = getCommuneForPoint(lat, lng, territorialBoundaryDataRef.current)
+      const legacyCommune = getLegacyCommuneForPoint(lat, lng)
+      const detectedCommunes = [detectedCommune, legacyCommune].filter((commune): commune is string => Boolean(commune))
+      // Ignore clicks that fall outside any recognised commune boundary
+      if (!detectedCommunes.length) return
+      const allowedCommunes = enforcedCommunesRef.current
+      // When a scope is enforced, the clicked point MUST fall inside one of the allowed communes.
+      // Clicks inside any other commune (or outside the scope) are rejected — no form opens.
+      let commune: string | null
+      if (allowedCommunes.length === 0) {
+        // No scope enforced → accept whatever commune was detected
+        commune = detectedCommunes[0] || null
+      } else {
+        const detectedAllowedCommune = findMatchingCommune(allowedCommunes, detectedCommunes)
+        // If the clicked commune is NOT among the allowed ones, ignore the click entirely
+        if (!detectedAllowedCommune) return
+        commune = detectedAllowedCommune
+      }
+      if (!commune) return
+
+      // Defer the intervention form opening so a quick second click (double click)
+      // can be detected and Leaflet's native double-click zoom takes over instead.
+      scheduleSingleClick(() => {
+        const location: MapClickCoords = {
+          latitude: lat,
+          longitude: lng,
+          commune,
+          quartier: findNearbyQuartier(lat, lng, commune, quartiers),
+        }
+
+        if (onMapClickRef.current) {
+          onMapClickRef.current(location)
+          return
+        }
       
       // Remove previous click marker if exists
       if (clickMarkerRef.current) {
@@ -1212,6 +1700,61 @@ export default function MapComponent({ interventions, quartiers, selectedCommune
           fetch('/api/products/for-dropdown').then(r => r.json()).then(data => {
             popupProducts = data.products || []
           }).catch(() => {})
+
+          // --- Agent dropdown: load agents for the selected commune ---
+          // Pulls agents registered in the commune chosen in the popup's commune <select>.
+          function loadAgentsForCommune(commune: string) {
+            const agentSelect = document.getElementById('popup-agent-select') as HTMLSelectElement | null
+            if (!agentSelect) return
+            // Keep the placeholder, clear the rest
+            agentSelect.innerHTML = '<option value="">— اختر العون —</option>'
+            if (!commune) return
+            agentSelect.disabled = true
+            fetch(`/api/agents?commune=${encodeURIComponent(commune)}`)
+              .then(r => r.ok ? r.json() : { agents: [] })
+              .then(data => {
+                const agents: { id: string; nom: string; prenom: string; fonction: string; actif: boolean }[] = data.agents || []
+                // Prefer active agents, but show inactive ones greyed out at the end
+                const active = agents.filter(a => a.actif)
+                const inactive = agents.filter(a => !a.actif)
+                if (active.length === 0 && inactive.length === 0) {
+                  agentSelect.innerHTML = '<option value="">— لا يوجد أعوان —</option>'
+                  agentSelect.disabled = false
+                  return
+                }
+                let opts = '<option value="">— اختر العون —</option>'
+                for (const a of active) {
+                  const label = a.prenom ? `${a.nom} ${a.prenom}` : a.nom
+                  const fonction = a.fonction ? ` — ${a.fonction}` : ''
+                  opts += `<option value="${escapeHtml(label)}">${escapeHtml(label)}${escapeHtml(fonction)}</option>`
+                }
+                if (inactive.length > 0) {
+                  opts += '<option value="" disabled>—— غير نشطين ——</option>'
+                  for (const a of inactive) {
+                    const label = a.prenom ? `${a.nom} ${a.prenom}` : a.nom
+                    const fonction = a.fonction ? ` — ${a.fonction}` : ''
+                    opts += `<option value="${escapeHtml(label)}" style="color:#94a3b8;">${escapeHtml(label)}${escapeHtml(fonction)} (غير نشط)</option>`
+                  }
+                }
+                agentSelect.innerHTML = opts
+                agentSelect.disabled = false
+              })
+              .catch(() => {
+                agentSelect.innerHTML = '<option value="">— خطأ في التحميل —</option>'
+                agentSelect.disabled = false
+              })
+          }
+
+          // Initial load: use the auto-detected commune (the selected <option> in the commune select)
+          const communeSelectEl = document.getElementById('popup-commune-select') as HTMLSelectElement | null
+          loadAgentsForCommune(communeSelectEl?.value || commune || '')
+
+          // Reload agents whenever the user changes the commune in the popup
+          if (communeSelectEl) {
+            communeSelectEl.addEventListener('change', () => {
+              loadAgentsForCommune(communeSelectEl.value)
+            })
+          }
 
           // Helper: build product options for current type
           function getProductOptions(selectedId: string): string {
@@ -1416,6 +1959,7 @@ export default function MapComponent({ interventions, quartiers, selectedCommune
 
       // Open popup AFTER registering the event handler
       newMarker.openPopup()
+      }) // end scheduleSingleClick
     })
 
     mapRef.current = map
@@ -1478,11 +2022,53 @@ export default function MapComponent({ interventions, quartiers, selectedCommune
     compassControlRef.current = compassCtrl
 
     // Fit bounds
-    const allBounds = L.geoJSON(COMMUNES_GEOJSON as GeoJSON.GeoJsonObject).getBounds()
-    map.fitBounds(allBounds, { padding: [30, 30] })
+    const initialLayers = enforcedCommunesRef.current.length
+      ? enforcedCommunesRef.current.map((commune) => communeLayersRef.current[commune]).filter((layer): layer is L.GeoJSON => Boolean(layer))
+      : (selectedCommune !== 'ALL' && communeLayersRef.current[selectedCommune] ? [communeLayersRef.current[selectedCommune]] : [])
+    const initialBounds = initialLayers.length ? L.featureGroup(initialLayers).getBounds() : undefined
+    const fallbackBounds = legacyFeatures.length > 0
+      ? L.geoJSON({ type: 'FeatureCollection', features: legacyFeatures } as GeoJSON.FeatureCollection).getBounds()
+      : null
+    if (initialBounds?.isValid() || fallbackBounds?.isValid()) {
+      map.fitBounds(initialBounds?.isValid() ? initialBounds : fallbackBounds!, { padding: [30, 30], maxZoom: initialBounds?.isValid() ? 15 : 14 })
+    }
 
-    return () => { map.remove(); mapRef.current = null }
+    return () => {
+      mapContainerRef.current?.removeEventListener('wheel', stopPageScroll)
+      map.remove()
+      mapRef.current = null
+    }
   }, [])
+
+  useEffect(() => {
+    let cancelled = false
+
+    const loadTerritorialBoundaries = async () => {
+      try {
+        const responses = await Promise.all([
+          fetch('/geography/regions.geojson'),
+          fetch('/geography/provinces.geojson'),
+          fetch('/geography/communes.geojson'),
+        ])
+        if (responses.some((response) => !response.ok)) throw new Error('Unable to load territorial boundaries')
+
+        const [regions, provinces, communes] = await Promise.all(responses.map((response) => response.json()))
+        if (cancelled) return
+
+        territorialBoundaryDataRef.current = { region: regions, province: provinces, commune: communes }
+        renderTerritorialLayers(territoryFilterRef.current, nationalBoundariesVisibleRef.current)
+      } catch (error) {
+        console.error('Unable to load territorial boundaries:', error)
+      }
+    }
+
+    void loadTerritorialBoundaries()
+    return () => { cancelled = true }
+  }, [renderTerritorialLayers])
+
+  useEffect(() => {
+    renderTerritorialLayers(territoryFilter ?? DEFAULT_TERRITORY_FILTER, nationalBoundariesVisible)
+  }, [nationalBoundariesVisible, renderTerritorialLayers, territoryFilter])
 
   // ===== HANDLE COMMUNE FILTER CHANGE =====
   useEffect(() => {
@@ -1503,8 +2089,12 @@ export default function MapComponent({ interventions, quartiers, selectedCommune
         })
       })
       labels.forEach(label => { label.setOpacity(1) })
-      const allBounds = L.geoJSON(COMMUNES_GEOJSON as GeoJSON.GeoJsonObject).getBounds()
-      map.fitBounds(allBounds, { padding: [30, 30], maxZoom: 14 })
+      const territorialBounds = territorialLayerGroupRef.current?.getBounds()
+      const nationalBounds = territorialBoundaryDataRef.current
+        ? L.geoJSON(territorialBoundaryDataRef.current.region as GeoJSON.GeoJsonObject).getBounds()
+        : null
+      const allBounds = territorialBounds?.isValid() ? territorialBounds : nationalBounds
+      if (allBounds?.isValid()) map.fitBounds(allBounds, { padding: [30, 30], maxZoom: 6 })
     } else {
       Object.entries(communeLayers).forEach(([key, layer]) => {
         const isSelected = key === selectedCommune
@@ -1563,12 +2153,15 @@ export default function MapComponent({ interventions, quartiers, selectedCommune
     if (!mapRef.current || !markersLayerRef.current) return
     const markersLayer = markersLayerRef.current
     markersLayer.clearLayers()
+    const visibleCommunes = enforcedCommunes?.length ? enforcedCommunes : (enforcedCommune ? [enforcedCommune] : (selectedCommune !== 'ALL' ? [selectedCommune] : []))
 
     // Quartier markers (controlled by showQuartiers toggle)
     if (externalShowQuartiers !== false) {
       quartiers.forEach((q) => {
-      const pointCommune = getCommuneForPoint(q.latitude, q.longitude)
-      if (selectedCommune !== 'ALL' && pointCommune !== selectedCommune) return
+      const pointCommune = enforcedCommune
+        ? (getLegacyCommuneForPoint(q.latitude, q.longitude) || getCommuneForPoint(q.latitude, q.longitude))
+        : getCommuneForPoint(q.latitude, q.longitude)
+      if (visibleCommunes.length && (!pointCommune || !visibleCommunes.includes(pointCommune))) return
 
       const marker = L.marker([q.latitude, q.longitude], { icon: createQuartierIcon() })
       marker.bindPopup(buildQuartierPopup(q), { maxWidth: 280, minWidth: 220 })
@@ -1582,8 +2175,10 @@ export default function MapComponent({ interventions, quartiers, selectedCommune
 
     // Intervention markers with enhanced popups
     interventions.forEach((intervention) => {
-      const pointCommune = getCommuneForPoint(intervention.latitude, intervention.longitude)
-      if (selectedCommune !== 'ALL' && pointCommune !== selectedCommune) return
+      const pointCommune = enforcedCommune
+        ? (getLegacyCommuneForPoint(intervention.latitude, intervention.longitude) || getCommuneForPoint(intervention.latitude, intervention.longitude))
+        : getCommuneForPoint(intervention.latitude, intervention.longitude)
+      if (visibleCommunes.length && (!pointCommune || !visibleCommunes.includes(pointCommune))) return
 
       const marker = L.marker([intervention.latitude, intervention.longitude], {
         icon: createInterventionIcon(intervention.type, intervention.statut),
@@ -1604,7 +2199,27 @@ export default function MapComponent({ interventions, quartiers, selectedCommune
       })
       markersLayer.addLayer(marker)
     })
-  }, [interventions, quartiers, selectedCommune, externalShowQuartiers])
 
-  return <div ref={mapContainerRef} className="w-full h-full" style={{ minHeight: '400px', position: 'relative', zIndex: 1 }} />
+    // Public complaint markers with known GPS coordinates.
+    complaints.forEach((complaint) => {
+      if (complaint.latitude == null || complaint.longitude == null) return
+      const pointCommune = enforcedCommune
+        ? (getLegacyCommuneForPoint(complaint.latitude, complaint.longitude) || getCommuneForPoint(complaint.latitude, complaint.longitude) || complaint.commune)
+        : (getCommuneForPoint(complaint.latitude, complaint.longitude) || complaint.commune)
+      if (visibleCommunes.length && (!pointCommune || !visibleCommunes.some((commune) => communeNamesMatch(commune, pointCommune) || communeNamesMatch(commune, complaint.commune)))) return
+
+      const marker = L.marker([complaint.latitude, complaint.longitude], { icon: createComplaintIcon(complaint.statut) })
+      marker.bindPopup(buildComplaintPopup(complaint), { maxWidth: 300, minWidth: 235 })
+      marker.on('click', (event: L.LeafletMouseEvent) => L.DomEvent.stopPropagation(event))
+      markersLayer.addLayer(marker)
+    })
+  }, [complaints, enforcedCommune, enforcedCommunes, interventions, quartiers, selectedCommune, externalShowQuartiers])
+
+  return (
+    <div
+      ref={mapContainerRef}
+      className="w-full h-full"
+      style={{ minHeight: '400px', position: 'relative', zIndex: 1, touchAction: 'none', overscrollBehavior: 'contain' }}
+    />
+  )
 }

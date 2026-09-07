@@ -1,16 +1,59 @@
 'use client'
 
-import React, { useState, useCallback, useEffect } from 'react'
+import React, { useState, useCallback, useEffect, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { toast } from 'sonner'
-import { useAppStore, type AuthUser } from '@/lib/store'
+import { DEFAULT_NAV_ORDER, useAppStore, type AuthUser, type ViewType } from '@/lib/store'
+import { appendTerritoryParams, DEFAULT_TERRITORY_FILTER } from '@/lib/geography'
+import { territoryCommuneName, useTerritoryCommunes } from '@/hooks/use-territory-communes'
+import { parseNavVisibilityJson } from '@/lib/user-nav-settings'
 import {
   COMMUNE_LABELS, COMMUNE_COLORS, COMMUNE_USER_INFO,
 } from '@/lib/constants'
 
 // ===== USER MANAGEMENT SECTION =====
 interface ManagedUser {
-  id: string; username: string; nom: string; commune: string; role: string; actif: boolean; lastLogin: string | null; createdAt: string
+  id: string; username: string; nom: string; commune: string; managedCommunes: string; communeGroupName: string | null; navVisibilityJson: string; role: string; agentId: string | null; agent: { id: string; nom: string; prenom: string; commune: string } | null; actif: boolean; lastLogin: string | null; createdAt: string
+}
+
+interface AgentOption { id: string; nom: string; prenom: string; commune: string; actif: boolean }
+
+const USER_NAV_LABELS: Record<ViewType, string> = {
+  dashboard: 'لوحة القيادة',
+  map: 'الخريطة',
+  interventions: 'التدخلات',
+  agents: 'الفرق والأعوان',
+  inventory: 'المخزون',
+  documents: 'المستندات',
+  calendar: 'التقويم',
+  complaints: 'الشكايات',
+  workOrders: 'أوامر العمل',
+  campagnes: 'الحملات',
+  csvr: 'الحيوانات الشاردة',
+  food: 'السلامة الغذائية',
+  dossiers: 'الملفات',
+  sanitary: 'المراقبة الصحية',
+  water: 'الماء والتطهير',
+  vector: 'محاربة النواقل',
+  funeral: 'الجنائز والمقابر',
+  environment: 'البيئة',
+  vigilance: 'اليقظة الصحية',
+  authorizations: 'التراخيص',
+  gis: 'نظام المعلومات الجغرافية',
+  geohealth: 'BCH GeoHealth',
+  reportsOffice: 'التقارير والإحصائيات',
+  calendarUnified: 'التقويم الموحد',
+  reports: 'التقارير',
+  operations: 'العمليات',
+  kpi: 'مؤشرات الأداء',
+  alerts: 'التنبيهات',
+  export: 'التصدير',
+  notifications: 'الإشعارات',
+  activityLog: 'سجل النشاط',
+  timeline: 'الخط الزمني',
+  users: 'المستخدمون',
+  settings: 'الإعدادات',
+  helpCenter: 'مركز المساعدة',
 }
 
 // ===== USER ROW COMPONENT =====
@@ -27,7 +70,7 @@ function UserRow({ user, authUser, canSeeAllCommunes, onEdit, onToggleActive, on
     <div className="flex items-center gap-3 p-3 bg-white hover:bg-slate-50/80 transition-colors group relative">
       <div className="w-10 h-10 rounded-xl flex items-center justify-center text-lg"
         style={{ backgroundColor: (user.commune !== 'ALL' ? COMMUNE_COLORS[user.commune] || '#64748b' : '#475569') + '15' }}>
-        {user.role === 'admin' ? '🔐' : '👤'}
+        {user.role === 'admin' ? '🔐' : user.role === 'agent' ? '📱' : '👤'}
       </div>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
@@ -40,6 +83,8 @@ function UserRow({ user, authUser, canSeeAllCommunes, onEdit, onToggleActive, on
           <span dir="ltr">@{user.username}</span>
           <span className="text-slate-200">•</span>
           <span>{user.commune === 'ALL' ? 'مسؤول عام' : COMMUNE_LABELS[user.commune] || user.commune}</span>
+          {user.communeGroupName && <><span className="text-slate-200">•</span><span>👥 {user.communeGroupName}</span></>}
+          {user.agent && <><span className="text-slate-200">•</span><span>العون: {user.agent.nom} {user.agent.prenom}</span></>}
           {user.lastLogin && (
             <>
               <span className="text-slate-200">•</span>
@@ -52,8 +97,8 @@ function UserRow({ user, authUser, canSeeAllCommunes, onEdit, onToggleActive, on
         <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${user.actif ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
           {user.actif ? 'نشط' : 'معطل'}
         </span>
-        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${user.role === 'admin' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
-          {user.role === 'admin' ? 'مسؤول' : 'مسؤول جماعة'}
+        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${user.role === 'admin' ? 'bg-purple-100 text-purple-700' : user.role === 'agent' ? 'bg-violet-100 text-violet-700' : 'bg-blue-100 text-blue-700'}`}>
+          {user.role === 'admin' ? 'مسؤول' : user.role === 'agent' ? 'عون ميداني' : 'مسؤول جماعة'}
         </span>
       </div>
       {/* Actions dropdown */}
@@ -103,8 +148,17 @@ function UserRow({ user, authUser, canSeeAllCommunes, onEdit, onToggleActive, on
 }
 
 export function UserManagementSection() {
-  const { user: authUser } = useAppStore()
+  const { user: authUser, territoryFilter } = useAppStore()
+  const isGeneralManager = authUser?.role === 'admin' && authUser.commune === 'ALL'
+  const { communes: scopedCommunes } = useTerritoryCommunes(territoryFilter, isGeneralManager)
+  const { communes: allCommunes } = useTerritoryCommunes(DEFAULT_TERRITORY_FILTER, isGeneralManager)
+  const scopedCommuneNames = useMemo(
+    () => Array.from(new Set(scopedCommunes.map(territoryCommuneName).filter(Boolean)))
+      .sort((first, second) => first.localeCompare(second, 'ar')),
+    [scopedCommunes]
+  )
   const [users, setUsers] = useState<ManagedUser[]>([])
+  const [agents, setAgents] = useState<AgentOption[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [showAddForm, setShowAddForm] = useState(false)
   const [editingUser, setEditingUser] = useState<ManagedUser | null>(null)
@@ -115,29 +169,52 @@ export function UserManagementSection() {
 
   // Form state
   const [formData, setFormData] = useState({
-    username: '', password: '', nom: '', commune: 'سلا', role: 'responsable',
+    username: '', password: '', nom: '', commune: '', role: 'responsable', agentId: '', managedCommunes: [] as string[], communeGroupName: '',
   })
   const [editFormData, setEditFormData] = useState({
-    nom: '', commune: 'سلا', role: 'responsable', actif: true,
+    nom: '', commune: '', role: 'responsable', agentId: '', actif: true,
   })
+  const [editNavVisibility, setEditNavVisibility] = useState<Record<string, boolean>>({})
   const [newPassword, setNewPassword] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [formError, setFormError] = useState('')
+  const [useNationalScope, setUseNationalScope] = useState(false)
 
   const canSeeAllCommunes = authUser?.role === 'admin' || authUser?.commune === 'ALL'
+  const creationCommunes = useNationalScope ? allCommunes : scopedCommunes
+  const creationCommuneNames = useMemo(
+    () => Array.from(new Set(creationCommunes.map(territoryCommuneName).filter(Boolean)))
+      .sort((first, second) => first.localeCompare(second, 'ar')),
+    [creationCommunes]
+  )
+  const groupCommuneOptions = creationCommuneNames
 
   const loadUsers = useCallback(async () => {
     try {
-      const res = await fetch('/api/auth/users')
+      const params = new URLSearchParams()
+      if (isGeneralManager) appendTerritoryParams(params, territoryFilter)
+      const res = await fetch(`/api/auth/users?${params.toString()}`)
       if (res.ok) {
         const data = await res.json()
         setUsers(data.users || [])
       }
     } catch { /* */ }
     setIsLoading(false)
-  }, [])
+  }, [isGeneralManager, territoryFilter])
 
-  useEffect(() => { loadUsers() }, [loadUsers])
+  const loadAgents = useCallback(async () => {
+    try {
+      const params = new URLSearchParams({ actif: 'true' })
+      if (isGeneralManager && !useNationalScope) appendTerritoryParams(params, territoryFilter)
+      const response = await fetch(`/api/agents?${params.toString()}`)
+      if (response.ok) {
+        const data = await response.json()
+        setAgents(data.agents || [])
+      }
+    } catch { /* ignore */ }
+  }, [isGeneralManager, territoryFilter, useNationalScope])
+
+  useEffect(() => { loadUsers(); loadAgents() }, [loadUsers, loadAgents])
 
   // Filtered users based on search and commune
   const filteredUsers = users.filter(u => {
@@ -173,6 +250,11 @@ export function UserManagementSection() {
           nom: formData.nom,
           commune: canSeeAllCommunes ? formData.commune : authUser?.commune,
           role: canSeeAllCommunes ? formData.role : 'responsable',
+          agentId: canSeeAllCommunes ? formData.agentId : undefined,
+          managedCommunes: formData.role === 'responsable' ? formData.managedCommunes : undefined,
+          communeGroupName: formData.role === 'responsable' ? formData.communeGroupName : undefined,
+          allowOutsideTerritory: isGeneralManager && useNationalScope,
+          territoryFilter: isGeneralManager ? territoryFilter : undefined,
         }),
       })
       const data = await res.json()
@@ -182,7 +264,8 @@ export function UserManagementSection() {
       }
       toast.success(`تم إنشاء المستخدم ${formData.nom} بنجاح`)
       setShowAddForm(false)
-      setFormData({ username: '', password: '', nom: '', commune: 'سلا', role: 'responsable' })
+      setUseNationalScope(false)
+      setFormData({ username: '', password: '', nom: '', commune: scopedCommuneNames.length === 1 ? scopedCommuneNames[0] : '', role: 'responsable', agentId: '', managedCommunes: [], communeGroupName: '' })
       await loadUsers()
     } catch {
       setFormError('حدث خطأ في الاتصال')
@@ -204,7 +287,10 @@ export function UserManagementSection() {
           nom: editFormData.nom,
           commune: canSeeAllCommunes ? editFormData.commune : undefined,
           role: canSeeAllCommunes ? editFormData.role : undefined,
+          agentId: canSeeAllCommunes ? editFormData.agentId : undefined,
           actif: editFormData.actif,
+          navVisibilityJson: JSON.stringify(editNavVisibility),
+          territoryFilter: isGeneralManager ? territoryFilter : undefined,
         }),
       })
       const data = await res.json()
@@ -214,6 +300,7 @@ export function UserManagementSection() {
       }
       toast.success(`تم تحديث المستخدم ${editFormData.nom} بنجاح`)
       setEditingUser(null)
+      setEditNavVisibility({})
       await loadUsers()
     } catch {
       setFormError('حدث خطأ في الاتصال')
@@ -290,19 +377,11 @@ export function UserManagementSection() {
       nom: u.nom,
       commune: u.commune,
       role: u.role,
+      agentId: u.agentId || '',
       actif: u.actif,
     })
+    setEditNavVisibility(parseNavVisibilityJson(u.navVisibilityJson))
     setFormError('')
-  }
-
-  const handleResetUsers = async () => {
-    try {
-      await fetch('/api/auth/seed-users', { method: 'POST' })
-      await loadUsers()
-      toast.success('تم إعادة إنشاء المستخدمين الافتراضيين')
-    } catch {
-      toast.error('حدث خطأ')
-    }
   }
 
   const formatDate = (d: string | null) => {
@@ -324,11 +403,7 @@ export function UserManagementSection() {
           <span className="text-xs text-slate-400">{users.filter(u => u.actif).length} نشط</span>
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={handleResetUsers}
-            className="px-3 py-1.5 bg-slate-50 text-slate-600 rounded-lg text-xs font-semibold hover:bg-slate-100 transition-all border border-slate-200">
-            🔄 الافتراضيون
-          </button>
-          <motion.button onClick={() => { setShowAddForm(true); setFormError(''); setFormData({ username: '', password: '', nom: '', commune: authUser?.commune !== 'ALL' ? authUser?.commune || 'سلا' : 'سلا', role: 'responsable' }) }}
+            <motion.button onClick={() => { setShowAddForm(true); setFormError(''); setUseNationalScope(false); setFormData({ username: '', password: '', nom: '', commune: authUser?.commune !== 'ALL' ? authUser?.commune || '' : (scopedCommuneNames.length === 1 ? scopedCommuneNames[0] : ''), role: 'responsable', agentId: '', managedCommunes: [], communeGroupName: '' }) }}
             whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
             className="px-4 py-1.5 bg-gradient-to-l from-emerald-600 to-teal-600 text-white rounded-lg text-xs font-bold shadow-lg shadow-emerald-200 flex items-center gap-1.5">
             <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" /></svg>
@@ -351,9 +426,7 @@ export function UserManagementSection() {
           <select value={filterCommune} onChange={(e) => setFilterCommune(e.target.value)}
             className="px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-300">
             <option value="ALL">كل الجماعات</option>
-            <option value="سلا">جماعة سلا</option>
-            <option value="سيدي أبي القنادل">جماعة سيدي أبي القنادل</option>
-            <option value="عامر">جماعة عامر</option>
+            {scopedCommuneNames.map((commune) => <option key={commune} value={commune}>جماعة {commune}</option>)}
             <option value="ALL_ADMIN">المسؤولون العامون</option>
           </select>
         )}
@@ -415,13 +488,13 @@ export function UserManagementSection() {
             className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
             onClick={() => setShowAddForm(false)}>
             <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden"
+              className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[calc(100vh-2rem)] overflow-hidden flex flex-col"
               onClick={(e) => e.stopPropagation()}>
-              <div className="bg-gradient-to-l from-emerald-700 to-teal-700 text-white px-6 py-4">
+              <div className="shrink-0 bg-gradient-to-l from-emerald-700 to-teal-700 text-white px-6 py-4">
                 <h3 className="font-bold text-base">👤 إضافة مستخدم جديد</h3>
                 <p className="text-emerald-200 text-xs mt-0.5">إنشاء حساب جديد للوصول إلى النظام</p>
               </div>
-              <form onSubmit={handleAddUser} className="p-6 space-y-4">
+              <form onSubmit={handleAddUser} className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-6 space-y-4">
                 <div>
                   <label className="block text-sm font-semibold text-slate-700 mb-1.5">الاسم الكامل *</label>
                   <input type="text" value={formData.nom} onChange={(e) => setFormData({ ...formData, nom: e.target.value })} required
@@ -444,13 +517,19 @@ export function UserManagementSection() {
                   <>
                     <div>
                       <label className="block text-sm font-semibold text-slate-700 mb-1.5">الجماعة الترابية</label>
+                      {isGeneralManager && (
+                        <button type="button" onClick={() => { setUseNationalScope((current) => !current); setFormData((current) => ({ ...current, commune: '', managedCommunes: [], communeGroupName: '' })) }}
+                          className={`mb-2 w-full rounded-xl border px-3 py-2 text-right text-xs font-bold transition ${useNationalScope ? 'border-emerald-400 bg-emerald-50 text-emerald-800' : 'border-slate-200 bg-slate-50 text-slate-600 hover:border-emerald-300'}`}>
+                          {useNationalScope ? '🌍 الكتالوج الوطني مفعّل — جماعات خارج النطاق الحالي مسموحة' : '📍 استخدام النطاق الترابي المحدد حالياً'}
+                        </button>
+                      )}
                       <select value={formData.commune} onChange={(e) => setFormData({ ...formData, commune: e.target.value })}
                         className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-300">
-                        <option value="ALL">مسؤول عام (كل الجماعات)</option>
-                        <option value="سلا">جماعة سلا</option>
-                        <option value="سيدي أبي القنادل">جماعة سيدي أبي القنادل</option>
-                        <option value="عامر">جماعة عامر</option>
+                        {formData.role === 'admin' && <option value="ALL">مسؤول عام (كل الجماعات)</option>}
+                        {formData.role !== 'admin' && creationCommuneNames.length !== 1 && <option value="">اختر الجماعة</option>}
+                        {creationCommunes.map((commune) => <option key={commune.code} value={territoryCommuneName(commune)}>{territoryCommuneName(commune)}</option>)}
                       </select>
+                      {isGeneralManager && <p className="mt-1 text-[10px] text-slate-500">يطبّق الكتالوج الوطني فقط عند تفعيله من طرف المدير العام، ولا يغيّر نطاق بقية الحسابات.</p>}
                     </div>
                     <div>
                       <label className="block text-sm font-semibold text-slate-700 mb-1.5">الدور</label>
@@ -458,8 +537,41 @@ export function UserManagementSection() {
                         className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-300">
                         <option value="responsable">مسؤول جماعة</option>
                         <option value="admin">مسؤول عام</option>
+                        <option value="agent">عون ميداني (تطبيق الهاتف)</option>
                       </select>
                     </div>
+                    {formData.role === 'agent' && <div>
+                      <label className="block text-sm font-semibold text-slate-700 mb-1.5">العون الميداني *</label>
+                      <select value={formData.agentId} onChange={(e) => { const agent = agents.find((item) => item.id === e.target.value); setFormData({ ...formData, agentId: e.target.value, commune: agent?.commune || formData.commune }) }} required
+                        className="w-full px-4 py-2.5 border border-violet-200 bg-violet-50 rounded-xl text-sm outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-300">
+                        <option value="">اختر العون المرتبط بالحساب</option>
+                        {agents.filter((agent) => formData.commune === 'ALL' || agent.commune === formData.commune).map((agent) => <option key={agent.id} value={agent.id}>{agent.nom} {agent.prenom} — {agent.commune}</option>)}
+                      </select>
+                      <p className="mt-1 text-[10px] text-violet-600">سيقتصر هذا الحساب على أوامر العمل المسندة لهذا العون.</p>
+                    </div>}
+                    {formData.role === 'responsable' && (
+                      <div className="rounded-xl border border-cyan-200 bg-cyan-50 p-3 space-y-3">
+                        <div>
+                          <p className="text-sm font-bold text-cyan-800">👥 مجموعة جماعات</p>
+                          <p className="text-[10px] text-cyan-700">اختياري: اختر جماعتين أو أكثر من نفس الإقليم أو العمالة.</p>
+                        </div>
+                        <input value={formData.communeGroupName} onChange={(event) => setFormData({ ...formData, communeGroupName: event.target.value })}
+                          placeholder="اسم المجموعة، مثال: مجموعة جماعات سلا" className="w-full rounded-lg border border-cyan-200 bg-white px-3 py-2 text-sm outline-none focus:border-cyan-500" />
+                        <div className="grid grid-cols-1 gap-1.5 max-h-40 overflow-y-auto">
+                          {groupCommuneOptions.map((commune) => (
+                            <label key={commune} className="flex items-center gap-2 rounded-md bg-white px-2 py-1.5 text-xs text-slate-700">
+                              <input type="checkbox" checked={formData.managedCommunes.includes(commune)} onChange={(event) => {
+                                const managedCommunes = event.target.checked
+                                  ? [...new Set([...formData.managedCommunes, commune])]
+                                  : formData.managedCommunes.filter((item) => item !== commune)
+                                setFormData({ ...formData, managedCommunes, commune: managedCommunes[0] || formData.commune })
+                              }} className="accent-cyan-600" />
+                              {COMMUNE_LABELS[commune] || commune}
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </>
                 )}
                 {!canSeeAllCommunes && (
@@ -516,10 +628,9 @@ export function UserManagementSection() {
                       <label className="block text-sm font-semibold text-slate-700 mb-1.5">الجماعة الترابية</label>
                       <select value={editFormData.commune} onChange={(e) => setEditFormData({ ...editFormData, commune: e.target.value })}
                         className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-300">
-                        <option value="ALL">مسؤول عام (كل الجماعات)</option>
-                        <option value="سلا">جماعة سلا</option>
-                        <option value="سيدي أبي القنادل">جماعة سيدي أبي القنادل</option>
-                        <option value="عامر">جماعة عامر</option>
+                        {editFormData.role === 'admin' && <option value="ALL">مسؤول عام (كل الجماعات)</option>}
+                        {editFormData.role !== 'admin' && scopedCommuneNames.length !== 1 && <option value="">اختر الجماعة</option>}
+                        {scopedCommunes.map((commune) => <option key={commune.code} value={territoryCommuneName(commune)}>{territoryCommuneName(commune)}</option>)}
                       </select>
                     </div>
                     <div>
@@ -528,8 +639,17 @@ export function UserManagementSection() {
                         className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-300">
                         <option value="responsable">مسؤول جماعة</option>
                         <option value="admin">مسؤول عام</option>
+                        <option value="agent">عون ميداني (تطبيق الهاتف)</option>
                       </select>
                     </div>
+                    {editFormData.role === 'agent' && <div>
+                      <label className="block text-sm font-semibold text-slate-700 mb-1.5">العون الميداني *</label>
+                      <select value={editFormData.agentId} onChange={(e) => { const agent = agents.find((item) => item.id === e.target.value); setEditFormData({ ...editFormData, agentId: e.target.value, commune: agent?.commune || editFormData.commune }) }} required
+                        className="w-full px-4 py-2.5 border border-violet-200 bg-violet-50 rounded-xl text-sm outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-300">
+                        <option value="">اختر العون المرتبط بالحساب</option>
+                        {agents.filter((agent) => editFormData.commune === 'ALL' || agent.commune === editFormData.commune).map((agent) => <option key={agent.id} value={agent.id}>{agent.nom} {agent.prenom} — {agent.commune}</option>)}
+                      </select>
+                    </div>}
                   </>
                 )}
                 <div className="flex items-center justify-between bg-slate-50 rounded-xl p-3">
@@ -543,6 +663,41 @@ export function UserManagementSection() {
                       animate={{ right: editFormData.actif ? '0.25rem' : '2rem' }}
                       transition={{ type: 'spring', stiffness: 500, damping: 30 }} />
                   </button>
+                </div>
+                <div className="rounded-2xl border border-violet-100 bg-violet-50/70 p-4 space-y-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <label className="text-sm font-semibold text-violet-900">🧭 أقسام هذا الحساب</label>
+                      <p className="text-[10px] text-violet-700 mt-0.5">إذا تركتها دون تخصيص، سيبقى الحساب على إعدادات جماعته.</p>
+                    </div>
+                    <div className="flex gap-2">
+                      <button type="button" onClick={() => setEditNavVisibility(Object.fromEntries(DEFAULT_NAV_ORDER.map((id) => [id, true])))}
+                        className="rounded-lg bg-white px-3 py-1.5 text-[11px] font-bold text-violet-700 border border-violet-200 hover:bg-violet-50">إظهار الكل</button>
+                      <button type="button" onClick={() => setEditNavVisibility({})}
+                        className="rounded-lg bg-white px-3 py-1.5 text-[11px] font-bold text-slate-600 border border-slate-200 hover:bg-slate-50">اعتماد الجماعة</button>
+                    </div>
+                  </div>
+                  <div className="grid max-h-56 grid-cols-1 gap-2 overflow-y-auto pr-1 sm:grid-cols-2">
+                    {DEFAULT_NAV_ORDER.map((id) => {
+                      if (id === 'settings') return null
+                      const isVisible = editNavVisibility[id] ?? true
+                      return (
+                        <button
+                          key={id}
+                          type="button"
+                          onClick={() => setEditNavVisibility((current) => ({ ...current, [id]: !(current[id] ?? true) }))}
+                          className={`flex items-center justify-between gap-3 rounded-xl border px-3 py-2 text-right transition-all ${
+                            isVisible ? 'border-emerald-200 bg-white text-slate-700' : 'border-slate-200 bg-slate-50 text-slate-400'
+                          }`}
+                        >
+                          <span className="text-xs font-medium">{USER_NAV_LABELS[id]}</span>
+                          <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${isVisible ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-500'}`}>
+                            {isVisible ? 'ظاهر' : 'مخفي'}
+                          </span>
+                        </button>
+                      )
+                    })}
+                  </div>
                 </div>
                 {formError && (
                   <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-red-600 text-xs font-medium">{formError}</div>

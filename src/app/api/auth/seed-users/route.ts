@@ -1,78 +1,75 @@
+import crypto from 'crypto'
 import { db } from '@/lib/db'
-import { NextResponse } from 'next/server'
-import { hashPassword, requireAuth } from '@/lib/auth'
+import { NextRequest, NextResponse } from 'next/server'
+import { hashPassword, requireAdmin } from '@/lib/auth'
 
-const DEFAULT_USERS = [
-  {
-    username: 'admin',
-    password: 'admin123',
-    nom: 'المسؤول العام',
-    commune: 'ALL',
-    role: 'admin',
-  },
-  {
-    username: 'sla',
-    password: 'sla2025',
-    nom: 'مسؤول جماعة سلا',
-    commune: 'سلا',
-    role: 'responsable',
-  },
-  {
-    username: 'bouknadel',
-    password: 'bouknadel2025',
-    nom: 'مسؤول جماعة سيدي أبي القنادل',
-    commune: 'سيدي أبي القنادل',
-    role: 'responsable',
-  },
-  {
-    username: 'ameur',
-    password: 'ameur2025',
-    nom: 'مسؤول جماعة عامر',
-    commune: 'عامر',
-    role: 'responsable',
-  },
-]
+function hasValidSetupToken(request: NextRequest, expectedToken: string): boolean {
+  const providedToken = request.headers.get('authorization')?.replace(/^Bearer\s+/i, '')
+  if (!providedToken) return false
 
-export async function POST() {
-  const authResult = await requireAuth()
-  if ('error' in authResult) return authResult.error
+  const providedBuffer = Buffer.from(providedToken)
+  const expectedBuffer = Buffer.from(expectedToken)
+  return providedBuffer.length === expectedBuffer.length && crypto.timingSafeEqual(providedBuffer, expectedBuffer)
+}
 
+export async function POST(request: NextRequest) {
   try {
-    // Only create users that don't already exist
-    const createdUsers = []
-    for (const u of DEFAULT_USERS) {
-      const existing = await db.user.findUnique({ where: { username: u.username } })
-      if (!existing) {
-        const user = await db.user.create({
-          data: {
-            username: u.username,
-            password: hashPassword(u.password),
-            nom: u.nom,
-            commune: u.commune,
-            role: u.role,
-          }
-        })
-        createdUsers.push({
-          username: user.username,
-          nom: user.nom,
-          commune: user.commune,
-          role: user.role,
-        })
-      }
+    const userCount = await db.user.count()
+
+    if (userCount > 0) {
+      const authResult = await requireAdmin()
+      if ('error' in authResult) return authResult.error
+      return NextResponse.json({ message: 'تم إعداد المستخدمين مسبقاً' })
     }
 
-    return NextResponse.json({
-      message: createdUsers.length > 0 ? 'تم إنشاء المستخدمين الافتراضيين بنجاح' : 'المستخدمون موجودون مسبقاً',
-      usersCreated: createdUsers.length,
+    const setupToken = process.env.INITIAL_SETUP_TOKEN
+    const username = process.env.INITIAL_ADMIN_USERNAME
+    const password = process.env.INITIAL_ADMIN_PASSWORD
+
+    if (!setupToken || !username || !password) {
+      return NextResponse.json(
+        { error: 'يلزم إعداد بيانات المسؤول الأول في متغيرات البيئة' },
+        { status: 503 }
+      )
+    }
+
+    if (!hasValidSetupToken(request, setupToken)) {
+      return NextResponse.json({ error: 'رمز الإعداد الأولي غير صالح' }, { status: 401 })
+    }
+
+    if (username.trim().length < 3 || password.length < 12) {
+      return NextResponse.json(
+        { error: 'بيانات المسؤول الأول لا تستوفي متطلبات الأمان' },
+        { status: 500 }
+      )
+    }
+
+    const user = await db.user.create({
+      data: {
+        username: username.trim(),
+        password: hashPassword(password),
+        nom: process.env.INITIAL_ADMIN_NAME?.trim() || 'المسؤول العام',
+        commune: 'ALL',
+        role: 'admin',
+      },
+      select: {
+        id: true,
+        username: true,
+        nom: true,
+        commune: true,
+        role: true,
+      },
     })
+
+    return NextResponse.json({ message: 'تم إنشاء المسؤول الأول بنجاح', user }, { status: 201 })
   } catch (error) {
     console.error('Seed users error:', error)
-    return NextResponse.json({ error: 'حدث خطأ أثناء إنشاء المستخدمين' }, { status: 500 })
+    return NextResponse.json({ error: 'حدث خطأ أثناء إعداد المسؤول الأول' }, { status: 500 })
   }
 }
 
 export async function GET() {
-  const authResult = await requireAuth()
+  const authResult = await requireAdmin()
   if ('error' in authResult) return authResult.error
 
   try {

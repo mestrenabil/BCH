@@ -5,7 +5,7 @@ import { requireAuth, verifyPassword, hashPassword } from '@/lib/auth'
 // POST /api/auth/change-password — Change current user's password
 export async function POST(request: NextRequest) {
   try {
-    const authResult = await requireAuth()
+    const authResult = await requireAuth({ allowFieldAgent: true })
     if ('error' in authResult) return authResult.error
     const { user: authUser } = authResult
 
@@ -18,9 +18,9 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    if (newPassword.length < 4) {
+    if (newPassword.length < 12) {
       return NextResponse.json(
-        { error: 'كلمة المرور الجديدة يجب أن تكون 4 أحرف على الأقل' },
+        { error: 'كلمة المرور الجديدة يجب أن تكون 12 حرفاً على الأقل' },
         { status: 400 }
       )
     }

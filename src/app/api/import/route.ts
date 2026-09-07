@@ -1,6 +1,7 @@
 import { db } from '@/lib/db'
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAuth, getCommuneFilter } from '@/lib/auth'
+import { requireAuth, resolveRecordCommune } from '@/lib/auth'
+import { getTerritoryFilterFromValue, isCommuneInTerritoryScope } from '@/lib/territory-scope'
 
 export async function POST(request: NextRequest) {
   try {
@@ -10,7 +11,7 @@ export async function POST(request: NextRequest) {
     const { user } = authResult
 
     const body = await request.json()
-    const { type, data } = body as { type: 'interventions' | 'agents' | 'products'; data: Record<string, string>[] }
+    const { type, data, territoryFilter } = body as { type: 'interventions' | 'agents' | 'products'; data: Record<string, string>[]; territoryFilter?: unknown }
 
     if (!type || !data || !Array.isArray(data)) {
       return NextResponse.json({ error: 'البيانات غير صالحة' }, { status: 400 })
@@ -20,7 +21,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'نوع البيانات غير مدعوم' }, { status: 400 })
     }
 
-    const communeFilter = user.commune !== 'ALL' ? user.commune : null
+    const territorialScope = getTerritoryFilterFromValue(territoryFilter)
+    const resolveImportedCommune = (requestedCommune: string): string | null => {
+      const commune = resolveRecordCommune(user, requestedCommune)
+      if (!commune) return null
+      if (user.commune === 'ALL' && !isCommuneInTerritoryScope(commune, territorialScope)) return null
+      return commune
+    }
     let success = 0
     let failed = 0
     const errors: string[] = []
@@ -36,10 +43,9 @@ export async function POST(request: NextRequest) {
             continue
           }
 
-          // Enforce commune filter for non-admin users
-          const commune = row.commune || ''
-          if (communeFilter && commune !== communeFilter) {
-            errors.push(`صف ${i + 1}: لا تملك صلاحية لإضافة تدخلات في هذه الجماعة`)
+          const commune = resolveImportedCommune(row.commune || '')
+          if (!commune) {
+            errors.push(`صف ${i + 1}: يجب تحديد جماعة ضمن نطاق حسابك`)
             failed++
             continue
           }
@@ -85,9 +91,9 @@ export async function POST(request: NextRequest) {
             continue
           }
 
-          const commune = row.commune || ''
-          if (communeFilter && commune !== communeFilter) {
-            errors.push(`صف ${i + 1}: لا تملك صلاحية لإضافة أعوان في هذه الجماعة`)
+          const commune = resolveImportedCommune(row.commune || '')
+          if (!commune) {
+            errors.push(`صف ${i + 1}: يجب تحديد جماعة ضمن نطاق حسابك`)
             failed++
             continue
           }
@@ -110,9 +116,9 @@ export async function POST(request: NextRequest) {
             continue
           }
 
-          const commune = row.commune || ''
-          if (communeFilter && commune !== communeFilter) {
-            errors.push(`صف ${i + 1}: لا تملك صلاحية لإضافة منتجات في هذه الجماعة`)
+          const commune = resolveImportedCommune(row.commune || '')
+          if (!commune) {
+            errors.push(`صف ${i + 1}: يجب تحديد جماعة ضمن نطاق حسابك`)
             failed++
             continue
           }

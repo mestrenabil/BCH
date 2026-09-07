@@ -1,6 +1,6 @@
 import { db } from '@/lib/db'
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAuth, getCommuneFilter } from '@/lib/auth'
+import { canAccessCommune, requireAuth } from '@/lib/auth'
 
 // GET /api/documents/[id]/interventions — Get all interventions linked to a document
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -17,8 +17,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       return NextResponse.json({ error: 'المستند غير موجود' }, { status: 404 })
     }
 
-    // Non-admin users can only see documents from their own commune
-    if (user.commune !== 'ALL' && document.commune !== user.commune) {
+    if (!canAccessCommune(user, document.commune)) {
       return NextResponse.json({ error: 'ليس لديك صلاحية الوصول لهذا المستند' }, { status: 403 })
     }
 
@@ -43,10 +42,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     })
 
     // Filter by commune if needed
-    const communeFilter = getCommuneFilter(user)
-    const filtered = communeFilter
-      ? interventions.filter(i => i.intervention.commune === communeFilter)
-      : interventions
+    const filtered = interventions.filter((item) => canAccessCommune(user, item.intervention.commune))
 
     return NextResponse.json({ interventions: filtered })
   } catch (error) {

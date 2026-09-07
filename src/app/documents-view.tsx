@@ -5,6 +5,8 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { useAppStore } from '@/lib/store'
 import { toast } from 'sonner'
 import dynamic from 'next/dynamic'
+import { appendTerritoryParams, hasTerritorySelection } from '@/lib/geography'
+import { territoryCommuneName, useTerritoryCommunes } from '@/hooks/use-territory-communes'
 
 // Dynamic import of PDF viewer (no SSR due to pdfjs DOMMatrix issue)
 const PdfViewer = dynamic(() => import('./pdf-viewer'), { ssr: false })
@@ -46,6 +48,15 @@ interface CategoryCount {
   count: number
 }
 
+interface CustomCategory {
+  id: string
+  key: string
+  label: string
+  icon: string
+  color: string
+  commune: string
+}
+
 // ===== CONSTANTS =====
 const CATEGORIES = [
   { id: 'ALL', label: 'الكل', icon: '📁', color: '#64748b' },
@@ -83,11 +94,13 @@ const COMMUNE_LABELS: Record<string, string> = {
   'سلا': 'جماعة سلا',
   'سيدي أبي القنادل': 'جماعة سيدي أبي القنادل',
   'عامر': 'جماعة عامر',
+  'السهول': 'جماعة السهول',
 }
 const COMMUNE_COLORS: Record<string, string> = {
   'سلا': '#059669',
   'سيدي أبي القنادل': '#7c3aed',
   'عامر': '#d97706',
+  'السهول': '#0ea5e9',
 }
 
 function getFileIcon(typeFichier: string): string {
@@ -165,12 +178,22 @@ function ImageViewer({ document: doc, onClose }: { document: DocumentRecord; onC
 
 // ===== MAIN COMPONENT =====
 export default function DocumentsView() {
-  const { user, selectedCommune } = useAppStore()
+  const { user, selectedCommune, territoryFilter } = useAppStore()
   const canSeeAllCommunes = user?.role === 'admin' || user?.commune === 'ALL'
+  const useTerritoryFilter = user?.role === 'admin' && user.commune === 'ALL'
+  const { communes: scopedCommunes } = useTerritoryCommunes(territoryFilter, useTerritoryFilter)
+  const scopedCommuneNames = useMemo(
+    () => Array.from(new Set(scopedCommunes.map(territoryCommuneName).filter(Boolean)))
+      .sort((first, second) => first.localeCompare(second, 'ar')),
+    [scopedCommunes]
+  )
+  const mustChooseScopedCommune = useTerritoryFilter && hasTerritorySelection(territoryFilter)
   const effectiveCommune = canSeeAllCommunes ? selectedCommune : user?.commune || ''
+  const accountCommune = user?.commune && user.commune !== 'ALL' ? user.commune : ''
 
   const [documents, setDocuments] = useState<DocumentRecord[]>([])
   const [categories, setCategories] = useState<CategoryCount[]>([])
+  const [customDocumentCategories, setCustomDocumentCategories] = useState<CustomCategory[]>([])
   const [total, setTotal] = useState(0)
   const [isLoading, setIsLoading] = useState(true)
   const [selectedCategory, setSelectedCategory] = useState('ALL')
@@ -193,7 +216,23 @@ export default function DocumentsView() {
   const [isUploading, setIsUploading] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
+  const [showNewUploadCategory, setShowNewUploadCategory] = useState(false)
+  const [newUploadCategory, setNewUploadCategory] = useState('')
+  const [isAddingUploadCategory, setIsAddingUploadCategory] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const categoryOptions = useMemo(() => [...CATEGORIES, ...customDocumentCategories.map((category) => ({
+    id: category.key,
+    label: category.label,
+    icon: category.icon || '📎',
+    color: category.color || '#64748b',
+  }))], [customDocumentCategories])
+
+  useEffect(() => {
+    if (!mustChooseScopedCommune || scopedCommuneNames.includes(uploadForm.commune)) return
+    const commune = scopedCommuneNames.length === 1 ? scopedCommuneNames[0] : ''
+    if (uploadForm.commune === commune) return
+    setUploadForm((current) => ({ ...current, commune }))
+  }, [mustChooseScopedCommune, scopedCommuneNames, uploadForm.commune])
 
   // Viewers
   const [viewingDocument, setViewingDocument] = useState<DocumentRecord | null>(null)
@@ -234,6 +273,7 @@ export default function DocumentsView() {
     try {
       const params = new URLSearchParams()
       if (effectiveCommune && effectiveCommune !== 'ALL') params.set('commune', effectiveCommune)
+      if (useTerritoryFilter) appendTerritoryParams(params, territoryFilter)
       if (selectedCategory !== 'ALL') params.set('categorie', selectedCategory)
       if (debouncedSearch) params.set('search', debouncedSearch)
       const res = await fetch(`/api/documents?${params.toString()}`)
@@ -246,11 +286,49 @@ export default function DocumentsView() {
       toast.error('فشل في تحميل المستندات')
     }
     setIsLoading(false)
-  }, [effectiveCommune, selectedCategory, debouncedSearch])
+  }, [effectiveCommune, selectedCategory, debouncedSearch, territoryFilter, useTerritoryFilter])
 
   useEffect(() => {
     fetchDocuments()
   }, [fetchDocuments])
+
+  useEffect(() => {
+    const params = new URLSearchParams()
+    if (useTerritoryFilter) appendTerritoryParams(params, territoryFilter)
+    fetch(`/api/document-categories?${params.toString()}`)
+      .then((response) => response.ok ? response.json() : null)
+      .then((data) => setCustomDocumentCategories(data?.categories || []))
+      .catch(() => undefined)
+  }, [territoryFilter, useTerritoryFilter])
+
+  const handleAddDocumentCategory = async () => {
+    const label = newUploadCategory.trim()
+    const commune = uploadForm.commune || accountCommune || (effectiveCommune !== 'ALL' ? effectiveCommune : '')
+    if (label.length < 2 || !commune) {
+      toast.error('حدد الجماعة وأدخل اسم الفئة أولاً')
+      return
+    }
+    setIsAddingUploadCategory(true)
+    try {
+      const response = await fetch('/api/document-categories', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ label, commune, territoryFilter: useTerritoryFilter ? territoryFilter : undefined }),
+      })
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(data.error || 'تعذر إضافة فئة المستند')
+      const created = data.category as CustomCategory
+      setCustomDocumentCategories((current) => [...current, created])
+      setUploadForm((current) => ({ ...current, categorie: created.key }))
+      setNewUploadCategory('')
+      setShowNewUploadCategory(false)
+      toast.success('تمت إضافة فئة المستند')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'تعذر إضافة الفئة')
+    } finally {
+      setIsAddingUploadCategory(false)
+    }
+  }
 
   // Sort documents
   const sortedDocuments = useMemo(() => {
@@ -292,8 +370,8 @@ export default function DocumentsView() {
       toast.error('نوع الملف غير مدعوم')
       return
     }
-    if (file.size > 50 * 1024 * 1024) {
-      toast.error('حجم الملف يتجاوز 50 ميغابايت')
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error('حجم الملف يتجاوز 10 ميغابايت')
       return
     }
     setUploadFile(file)
@@ -314,6 +392,8 @@ export default function DocumentsView() {
     e.preventDefault()
     if (!uploadFile) { toast.error('يرجى اختيار ملف'); return }
     if (!uploadForm.titre.trim()) { toast.error('يرجى إدخال عنوان المستند'); return }
+    const documentCommune = uploadForm.commune || accountCommune || (effectiveCommune !== 'ALL' ? effectiveCommune : '')
+    if (!documentCommune) { toast.error('يرجى تحديد الجماعة'); return }
 
     setIsUploading(true)
     setUploadProgress(10)
@@ -338,10 +418,10 @@ export default function DocumentsView() {
           titre: uploadForm.titre,
           description: uploadForm.description,
           categorie: uploadForm.categorie,
-          commune: uploadForm.commune || (effectiveCommune !== 'ALL' ? effectiveCommune : ''),
+          commune: documentCommune,
+          territoryFilter: useTerritoryFilter ? territoryFilter : undefined,
           reference: uploadForm.reference,
           dateDocument: uploadForm.dateDocument || null,
-          uploadedBy: user?.nom || '',
           nomFichier: fileData.nomFichier,
           cheminFichier: fileData.cheminFichier,
           typeFichier: fileData.typeFichier,
@@ -353,7 +433,7 @@ export default function DocumentsView() {
 
       toast.success('تم رفع المستند بنجاح')
       setShowUploadDialog(false)
-      setUploadForm({ titre: '', description: '', categorie: 'عام', commune: '', reference: '', dateDocument: '' })
+      setUploadForm({ titre: '', description: '', categorie: 'عام', commune: mustChooseScopedCommune && scopedCommuneNames.length === 1 ? scopedCommuneNames[0] : '', reference: '', dateDocument: '' })
       setUploadFile(null)
       setUploadProgress(0)
       fetchDocuments()
@@ -646,7 +726,7 @@ export default function DocumentsView() {
 
         {/* Category chips */}
         <div className="flex items-center gap-2 mt-3 overflow-x-auto pb-1">
-          {CATEGORIES.map((cat) => {
+          {categoryOptions.map((cat) => {
             const count = cat.id === 'ALL' ? total : categories.find(c => c.categorie === cat.id)?.count || 0
             if (cat.id !== 'ALL' && count === 0 && selectedCategory !== cat.id) return null
             return (
@@ -983,7 +1063,7 @@ export default function DocumentsView() {
                 onChange={(e) => setBulkCategory(e.target.value)}
                 className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-300 mb-4"
               >
-                {CATEGORIES.filter(c => c.id !== 'ALL').map(cat => (
+                {categoryOptions.filter(c => c.id !== 'ALL').map(cat => (
                   <option key={cat.id} value={cat.id}>{cat.icon} {cat.label}</option>
                 ))}
               </select>
@@ -1279,21 +1359,35 @@ export default function DocumentsView() {
                     <select value={uploadForm.categorie}
                       onChange={(e) => setUploadForm(prev => ({ ...prev, categorie: e.target.value }))}
                       className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-300">
-                      {CATEGORIES.filter(c => c.id !== 'ALL').map(cat => (
+                      {categoryOptions.filter(c => c.id !== 'ALL').map(cat => (
                         <option key={cat.id} value={cat.id}>{cat.icon} {cat.label}</option>
                       ))}
                     </select>
+                    {!showNewUploadCategory ? (
+                      <button type="button" onClick={() => setShowNewUploadCategory(true)} className="mt-1.5 text-[11px] font-bold text-emerald-600 hover:text-emerald-700">
+                        ＋ إضافة فئة جديدة حسب الحاجة
+                      </button>
+                    ) : (
+                      <div className="mt-2 flex gap-2">
+                        <input value={newUploadCategory} onChange={(event) => setNewUploadCategory(event.target.value)} placeholder="اسم الفئة الجديدة" className="min-w-0 flex-1 px-2.5 py-2 rounded-lg border border-emerald-200 bg-emerald-50/30 text-xs outline-none" autoFocus />
+                        <button type="button" disabled={isAddingUploadCategory} onClick={handleAddDocumentCategory} className="shrink-0 px-3 py-2 rounded-lg bg-emerald-600 text-white text-xs font-bold disabled:opacity-50">{isAddingUploadCategory ? '...' : 'حفظ'}</button>
+                        <button type="button" onClick={() => { setShowNewUploadCategory(false); setNewUploadCategory('') }} className="shrink-0 px-2 py-2 rounded-lg border border-slate-200 text-xs">✕</button>
+                      </div>
+                    )}
                   </div>
                   <div>
-                    <label className="block text-sm font-semibold text-slate-700 mb-1.5">الجماعة</label>
-                    <select
-                      value={uploadForm.commune || (effectiveCommune !== 'ALL' ? effectiveCommune : '')}
+              <label className="block text-sm font-semibold text-slate-700 mb-1.5">الجماعة *</label>
+              <select
+                      required
+                      value={uploadForm.commune || accountCommune || (effectiveCommune !== 'ALL' ? effectiveCommune : '')}
                       onChange={(e) => setUploadForm(prev => ({ ...prev, commune: e.target.value }))}
                       className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-300">
-                      <option value="">عام (كل الجماعات)</option>
-                      <option value="سلا">جماعة سلا</option>
-                      <option value="سيدي أبي القنادل">جماعة سيدي أبي القنادل</option>
-                      <option value="عامر">جماعة عامر</option>
+                      {!accountCommune && <option value="">اختر الجماعة</option>}
+                      {accountCommune
+                        ? <option value={accountCommune}>{accountCommune}</option>
+                        : useTerritoryFilter
+                        ? scopedCommunes.map((commune) => <option key={commune.code} value={territoryCommuneName(commune)}>{territoryCommuneName(commune)}</option>)
+                        : <><option value="سلا">جماعة سلا</option><option value="سيدي أبي القنادل">جماعة سيدي أبي القنادل</option><option value="عامر">جماعة عامر</option><option value="السهول">جماعة السهول</option></>}
                     </select>
                   </div>
                 </div>
@@ -1402,7 +1496,7 @@ export default function DocumentsView() {
                     <select value={editForm.categorie}
                       onChange={(e) => setEditForm(prev => ({ ...prev, categorie: e.target.value }))}
                       className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-300">
-                      {CATEGORIES.filter(c => c.id !== 'ALL').map(cat => (
+                      {categoryOptions.filter(c => c.id !== 'ALL').map(cat => (
                         <option key={cat.id} value={cat.id}>{cat.icon} {cat.label}</option>
                       ))}
                     </select>

@@ -1,9 +1,10 @@
 'use client'
 
-import React, { useState, useCallback, useEffect } from 'react'
+import React, { useState, useCallback, useEffect, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { toast } from 'sonner'
 import { useAppStore, type CommuneType } from '@/lib/store'
+import { appendTerritoryParams, type TerritoryFilter } from '@/lib/geography'
 import {
   type Intervention, type InterventionDocument,
   TYPE_LABELS, TYPE_COLORS, TYPE_ICONS, STATUT_LABELS, STATUT_COLORS,
@@ -154,9 +155,10 @@ function DocumentPickerDialog({ interventionId, commune, existingDocIds, onSelec
 }
 
 // ===== INTERVENTIONS VIEW =====
-function InterventionsView({ interventions, total, page, setPage, onEdit, onRefresh, selectedCommune, onAdd }: {
+function InterventionsView({ interventions, total, page, setPage, onEdit, onRefresh, selectedCommune, territoryFilter, useTerritoryFilter, onAdd }: {
   interventions: Intervention[]; total: number; page: number; setPage: (p: number) => void
   onEdit: (id: string) => void; onRefresh: () => void; selectedCommune: CommuneType | 'ALL'
+  territoryFilter: TerritoryFilter; useTerritoryFilter: boolean
   onAdd?: () => void
 }) {
   const [localSearch, setLocalSearch] = useState('')
@@ -190,6 +192,14 @@ function InterventionsView({ interventions, total, page, setPage, onEdit, onRefr
   const [filterCostMin, setFilterCostMin] = useState('')
   const [filterCostMax, setFilterCostMax] = useState('')
   const [filterAgent, setFilterAgent] = useState('')
+  const availableCommunes = useMemo(() => [...new Set(interventions.map((intervention) => intervention.commune).filter(Boolean))]
+    .sort((first, second) => first.localeCompare(second, 'ar')), [interventions])
+  const territoryQuery = useMemo(() => {
+    const params = new URLSearchParams()
+    if (useTerritoryFilter) appendTerritoryParams(params, territoryFilter)
+    return params.toString()
+  }, [territoryFilter, useTerritoryFilter])
+  const territorySuffix = territoryQuery ? `?${territoryQuery}` : ''
 
   // Comparison
   const [comparisonIds, setComparisonIds] = useState<string[]>([])
@@ -312,7 +322,7 @@ function InterventionsView({ interventions, total, page, setPage, onEdit, onRefr
 
   const handleDelete = async (id: string) => {
     try {
-      await fetch(`/api/interventions/${id}`, { method: 'DELETE' })
+      await fetch(`/api/interventions/${id}${territorySuffix}`, { method: 'DELETE' })
       setDeleteConfirm(null)
       onRefresh()
       toast.success('تم حذف التدخل بنجاح')
@@ -348,7 +358,7 @@ function InterventionsView({ interventions, total, page, setPage, onEdit, onRefr
         const res = await fetch(`/api/interventions/${id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ statut: bulkStatut, commune: intervention?.commune }),
+          body: JSON.stringify({ statut: bulkStatut, commune: intervention?.commune, territoryFilter: useTerritoryFilter ? territoryFilter : undefined }),
         })
         if (res.ok) success++
         else fail++
@@ -368,7 +378,7 @@ function InterventionsView({ interventions, total, page, setPage, onEdit, onRefr
     let fail = 0
     for (const id of selectedIds) {
       try {
-        const res = await fetch(`/api/interventions/${id}`, { method: 'DELETE' })
+        const res = await fetch(`/api/interventions/${id}${territorySuffix}`, { method: 'DELETE' })
         if (res.ok) success++
         else fail++
       } catch { fail++ }
@@ -385,6 +395,7 @@ function InterventionsView({ interventions, total, page, setPage, onEdit, onRefr
       try {
         const params = new URLSearchParams()
         if (localCommuneFilter !== 'ALL') params.set('commune', localCommuneFilter)
+        if (useTerritoryFilter) appendTerritoryParams(params, territoryFilter)
         const res = await fetch(`/api/quartiers?${params.toString()}`)
         if (res.ok) {
           const data = await res.json()
@@ -393,7 +404,7 @@ function InterventionsView({ interventions, total, page, setPage, onEdit, onRefr
       } catch { /* ignore */ }
     }
     fetchQuartiers()
-  }, [localCommuneFilter])
+  }, [localCommuneFilter, territoryFilter, useTerritoryFilter])
 
   const filteredInterventions = (() => {
     let result = interventions.filter(i => 
@@ -555,9 +566,7 @@ function InterventionsView({ interventions, total, page, setPage, onEdit, onRefr
           <select value={localCommuneFilter} onChange={(e) => { setLocalCommuneFilter(e.target.value); setQuartierFilter('ALL') }}
             className="px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-emerald-500/20">
             <option value="ALL">كل الجماعات</option>
-            <option value="سلا">جماعة سلا</option>
-            <option value="سيدي أبي القنادل">جماعة سيدي أبي القنادل</option>
-            <option value="عامر">جماعة عامر</option>
+            {availableCommunes.map((commune) => <option key={commune} value={commune}>{COMMUNE_LABELS[commune as keyof typeof COMMUNE_LABELS] || commune}</option>)}
           </select>
           <select value={quartierFilter} onChange={(e) => setQuartierFilter(e.target.value)}
             className="px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 max-w-[160px]">
@@ -644,7 +653,7 @@ function InterventionsView({ interventions, total, page, setPage, onEdit, onRefr
       `}</style>
       <div className="print-only mb-6" dir="rtl">
         <div className="text-center border-b-2 border-slate-800 pb-4 mb-4">
-          <h1 className="text-2xl font-bold">عمالة سلا — قسم حفظ الصحة والبيئة</h1>
+          <h1 className="text-2xl font-bold">المنصة المندمجة لتدبير قسم الوقاية وحفظ الصحة</h1>
           <p className="text-sm text-slate-600">تقرير التدخلات — {new Date().toLocaleDateString('ar-MA')}</p>
         </div>
       </div>
@@ -668,7 +677,7 @@ function InterventionsView({ interventions, total, page, setPage, onEdit, onRefr
               className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium whitespace-nowrap transition-all ${
                 filterStatut === k ? 'shadow-md ring-2 ring-offset-1' : 'bg-white border border-slate-100'
               }`}
-              style={filterStatut === k ? { backgroundColor: STATUT_COLORS[k] + '15', color: STATUT_COLORS[k], ringColor: STATUT_COLORS[k] + '30' } : {}}>
+              style={filterStatut === k ? { backgroundColor: STATUT_COLORS[k] + '15', color: STATUT_COLORS[k] } : {}}>
               <div className="w-2 h-2 rounded-full" style={{ backgroundColor: STATUT_COLORS[k] }} />
               {v}: {count}
             </button>

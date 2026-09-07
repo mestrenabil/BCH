@@ -3,7 +3,8 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAppStore } from '@/lib/store'
-import { COMMUNE_LABELS, COMMUNE_COLORS } from '@/lib/constants'
+import { ALL_TERRITORIES, appendTerritoryParams, type TerritoryCatalog } from '@/lib/geography'
+import { COMMUNE_LABELS, COMMUNE_COLORS, OFFICES } from '@/lib/constants'
 import { toast } from 'sonner'
 
 // ===== TYPE DEFINITIONS =====
@@ -15,8 +16,23 @@ interface Agent {
   commune: string
   fonction: string
   actif: boolean
+  teamId?: string | null
+  team?: Team | null
   createdAt: string
   updatedAt: string
+}
+
+interface Team {
+  id: string
+  name: string
+  commune: string
+  office: string
+  mission: string
+  description: string
+  color: string
+  actif: boolean
+  agents: Agent[]
+  _count?: { agents: number }
 }
 
 // ===== CONSTANTS =====
@@ -26,8 +42,6 @@ const FONCTION_OPTIONS = [
   { value: 'مراقب', label: 'مراقب', icon: '👁️', color: '#d97706' },
   { value: 'مسؤول', label: 'مسؤول', icon: '👔', color: '#7c3aed' },
 ]
-
-const COMMUNE_KEYS = Object.keys(COMMUNE_LABELS) as string[]
 
 // ===== HELPER FUNCTIONS =====
 function getFonctionColor(fonction: string): string {
@@ -40,8 +54,9 @@ function getFonctionIcon(fonction: string): string {
 
 // ===== MAIN COMPONENT =====
 export default function AgentsView() {
-  const { user, selectedCommune } = useAppStore()
-  const canSeeAllCommunes = user?.role === 'admin' || user?.commune === 'ALL'
+  const { user, selectedCommune, territoryFilter } = useAppStore()
+  const canSeeAllCommunes = user?.commune === 'ALL' || Boolean(user?.managedCommunes && user.managedCommunes.length > 1)
+  const useTerritoryFilter = user?.role === 'admin' && user.commune === 'ALL'
   const effectiveCommune = canSeeAllCommunes ? selectedCommune : (user?.commune || '')
 
   // Tab state
@@ -49,6 +64,7 @@ export default function AgentsView() {
 
   // Data state
   const [agents, setAgents] = useState<Agent[]>([])
+  const [teams, setTeams] = useState<Team[]>([])
   const [agentInterventionCounts, setAgentInterventionCounts] = useState<Record<string, number>>({})
   const [isLoading, setIsLoading] = useState(true)
 
@@ -62,20 +78,73 @@ export default function AgentsView() {
   const [editingAgent, setEditingAgent] = useState<Agent | null>(null)
   const [deletingAgent, setDeletingAgent] = useState<Agent | null>(null)
   const [isSaving, setIsSaving] = useState(false)
-
-  // Team detail state
-  const [selectedTeamCommune, setSelectedTeamCommune] = useState<string | null>(null)
+  const [showTeamDialog, setShowTeamDialog] = useState(false)
+  const [editingTeam, setEditingTeam] = useState<Team | null>(null)
+  const [teamForm, setTeamForm] = useState({ name: '', commune: '', office: 'OFFICE_04', mission: '', description: '', color: '#10b981', actif: true })
 
   // Form state
   const emptyForm = {
     nom: '',
     prenom: '',
     telephone: '',
-    commune: canSeeAllCommunes ? 'سلا' : (user?.commune || 'سلا'),
+    commune: user?.commune && user.commune !== 'ALL' ? user.commune : '',
     fonction: 'عون صحية',
     actif: true,
+    teamId: '',
   }
   const [form, setForm] = useState(emptyForm)
+  const [territoryCatalog, setTerritoryCatalog] = useState<TerritoryCatalog | null>(null)
+
+  useEffect(() => {
+    if (!useTerritoryFilter) return
+    let active = true
+    fetch('/geography/catalog.json')
+      .then((response) => response.ok ? response.json() : null)
+      .then((catalog: TerritoryCatalog | null) => { if (active && catalog) setTerritoryCatalog(catalog) })
+      .catch(() => undefined)
+    return () => { active = false }
+  }, [useTerritoryFilter])
+
+  const scopedCommunes = useMemo(() => (territoryCatalog?.communes || []).filter((commune) => (
+    (territoryFilter.regionCode === ALL_TERRITORIES || commune.regionCode === territoryFilter.regionCode) &&
+    (territoryFilter.provinceCode === ALL_TERRITORIES || commune.provinceCode === territoryFilter.provinceCode) &&
+    (territoryFilter.communeCode === ALL_TERRITORIES || commune.code === territoryFilter.communeCode)
+  )).sort((first, second) => (first.nameAr || first.name).localeCompare(second.nameAr || second.name, 'ar')), [territoryCatalog, territoryFilter])
+
+  // جماعات تظهر فيها أعوان فعلاً (مصدر الحقيقة للعرض)
+  const availableCommunes = useMemo(() => [...new Set(agents.map((agent) => agent.commune).filter(Boolean))]
+    .sort((first, second) => first.localeCompare(second, 'ar')), [agents])
+
+  // تحقق إذا كان نطاق ترابي محدد محدد (وليس الكل)
+  const hasTerritoryScope = useTerritoryFilter && !(
+    territoryFilter.regionCode === ALL_TERRITORIES &&
+    territoryFilter.provinceCode === ALL_TERRITORIES &&
+    territoryFilter.communeCode === ALL_TERRITORIES
+  )
+
+  // أسماء الجماعات في النطاق المحدد (لتقييد الاختيار في النموذج مثلاً)
+  const scopedCommuneNames = useMemo(() => [...new Set(
+    scopedCommunes.map((c) => c.nameAr || c.name || c.nameFr).filter(Boolean)
+  )], [scopedCommunes])
+
+  // قائمة عرض موحّدة: ندمج الجماعات التي بها أعوان فعلاً + جماعات النطاق المحدد فقط
+  // (لا نعرض كامل كتالوج 1503 جماعة الوطني أبداً)
+  const displayCommuneNames = useMemo(() => {
+    const base = hasTerritoryScope
+      ? [...new Set([...availableCommunes, ...scopedCommuneNames])]
+      : availableCommunes.length > 0
+        ? availableCommunes
+        : user?.managedCommunes?.length
+          ? Array.from(new Set(user.managedCommunes))
+          : user?.commune && user.commune !== 'ALL' ? [user.commune] : []
+    return Array.from(new Set(base)).sort((first, second) => first.localeCompare(second, 'ar'))
+  }, [availableCommunes, scopedCommuneNames, hasTerritoryScope, user?.commune, user?.managedCommunes])
+  const agentScopeQuery = useMemo(() => {
+    const params = new URLSearchParams()
+    if (useTerritoryFilter) appendTerritoryParams(params, territoryFilter)
+    return params.toString()
+  }, [territoryFilter, useTerritoryFilter])
+  const agentScopeSuffix = agentScopeQuery ? `?${agentScopeQuery}` : ''
 
   // ===== DATA FETCHING =====
   const fetchAgents = useCallback(async () => {
@@ -83,25 +152,39 @@ export default function AgentsView() {
     try {
       const params = new URLSearchParams()
       if (effectiveCommune && effectiveCommune !== 'ALL') params.set('commune', effectiveCommune)
-      const [agentsRes, interventionsRes] = await Promise.all([
+      if (useTerritoryFilter) appendTerritoryParams(params, territoryFilter)
+      const interventionParams = new URLSearchParams(params)
+      interventionParams.set('limit', '9999')
+      interventionParams.set('select', 'agentNom') // حمولة خفيفة: id + agentNom + commune فقط
+      const [agentsRes, interventionsRes, teamsRes] = await Promise.all([
         fetch(`/api/agents?${params.toString()}`),
-        fetch(`/api/interventions?${effectiveCommune && effectiveCommune !== 'ALL' ? 'commune=' + effectiveCommune + '&' : ''}limit=9999`),
+        fetch(`/api/interventions?${interventionParams.toString()}`),
+        fetch(`/api/teams?${params.toString()}`),
       ])
       if (!agentsRes.ok) throw new Error()
       const agentsData = await agentsRes.json()
       const fetchedAgents = agentsData.agents || []
       setAgents(fetchedAgents)
+      if (teamsRes.ok) {
+        const teamsData = await teamsRes.json()
+        setTeams(teamsData.teams || [])
+      }
 
-      // Count interventions per agent
+      // عدّ التدخلات لكل عون بتمرير واحد O(n) بدل حلقة متداخلة O(n×m)
       if (interventionsRes.ok) {
         const interventionsData = await interventionsRes.json()
-        const interventions = interventionsData.interventions || []
+        const interventions: { agentNom: string }[] = interventionsData.interventions || []
+        // بناء خريطة عدّ مرجعية لكل اسم → عدد
+        const countByName = new Map<string, number>()
+        for (const inv of interventions) {
+          if (!inv.agentNom) continue
+          countByName.set(inv.agentNom, (countByName.get(inv.agentNom) || 0) + 1)
+        }
         const counts: Record<string, number> = {}
         for (const agent of fetchedAgents) {
           const fullName = `${agent.nom} ${agent.prenom}`.trim()
-          counts[agent.id] = interventions.filter((i: { agentNom: string }) =>
-            i.agentNom === agent.nom || i.agentNom === fullName
-          ).length
+          // نطابق إما الاسم الكامل أو الاسم العائلي فقط (حسب طريقة الإدخال)
+          counts[agent.id] = (countByName.get(fullName) || 0) + (countByName.get(agent.nom) || 0)
         }
         setAgentInterventionCounts(counts)
       }
@@ -109,7 +192,9 @@ export default function AgentsView() {
       toast.error('فشل في تحميل بيانات الأعوان')
     }
     setIsLoading(false)
-  }, [effectiveCommune])
+  }, [effectiveCommune, territoryFilter, useTerritoryFilter])
+
+  const availableTeams = useMemo(() => teams.filter((team) => team.commune === form.commune && team.actif), [teams, form.commune])
 
   useEffect(() => {
     fetchAgents()
@@ -149,7 +234,7 @@ export default function AgentsView() {
     const active = agents.filter(a => a.actif).length
     const inactive = total - active
     const byCommune: Record<string, number> = {}
-    for (const key of COMMUNE_KEYS) {
+    for (const key of displayCommuneNames) {
       byCommune[key] = agents.filter(a => a.commune === key).length
     }
     const byFonction: Record<string, number> = {}
@@ -157,13 +242,13 @@ export default function AgentsView() {
       byFonction[f.value] = agents.filter(a => a.fonction === f.value).length
     }
     return { total, active, inactive, byCommune, byFonction }
-  }, [agents])
+  }, [agents, displayCommuneNames])
 
   // ===== CRUD HANDLERS =====
   const handleAdd = () => {
     setForm({
       ...emptyForm,
-      commune: canSeeAllCommunes ? 'سلا' : (user?.commune || 'سلا'),
+      commune: displayCommuneNames.length === 1 ? displayCommuneNames[0] : '',
     })
     setShowAddDialog(true)
   }
@@ -177,6 +262,7 @@ export default function AgentsView() {
       commune: agent.commune,
       fonction: agent.fonction,
       actif: agent.actif,
+      teamId: agent.teamId || '',
     })
   }
 
@@ -198,12 +284,14 @@ export default function AgentsView() {
         telephone: form.telephone.trim(),
         fonction: form.fonction,
         actif: form.actif,
+        teamId: form.teamId || null,
       }
 
       // Only send commune if admin; backend enforces for non-admin
       if (canSeeAllCommunes) {
         body.commune = form.commune
       }
+      if (useTerritoryFilter) body.territoryFilter = territoryFilter
 
       const res = await fetch(url, {
         method,
@@ -226,10 +314,71 @@ export default function AgentsView() {
     setIsSaving(false)
   }
 
+  const openTeamDialog = (team?: Team) => {
+    setEditingTeam(team || null)
+    setTeamForm(team ? {
+      name: team.name,
+      commune: team.commune,
+      office: team.office,
+      mission: team.mission,
+      description: team.description || '',
+      color: team.color || '#10b981',
+      actif: team.actif,
+    } : {
+      name: '', commune: displayCommuneNames.length === 1 ? displayCommuneNames[0] : '', office: 'OFFICE_04', mission: '', description: '', color: '#10b981', actif: true,
+    })
+    setShowTeamDialog(true)
+  }
+
+  const handleSaveTeam = async (event: React.FormEvent) => {
+    event.preventDefault()
+    if (!teamForm.name.trim() || !teamForm.mission.trim()) {
+      toast.error('يرجى إدخال اسم الفريق ومهمته')
+      return
+    }
+    if (!teamForm.commune) {
+      toast.error('يرجى تحديد الجماعة')
+      return
+    }
+    setIsSaving(true)
+    try {
+      const response = await fetch(editingTeam ? `/api/teams/${editingTeam.id}` : '/api/teams', {
+        method: editingTeam ? 'PUT' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...teamForm, territoryFilter: useTerritoryFilter ? territoryFilter : undefined }),
+      })
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.error || 'تعذر حفظ الفريق')
+      toast.success(editingTeam ? 'تم تحديث الفريق' : 'تمت إضافة الفريق')
+      setShowTeamDialog(false)
+      setEditingTeam(null)
+      fetchAgents()
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'تعذر حفظ الفريق')
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const handleDeleteTeam = async (team: Team) => {
+    if (!window.confirm(`هل تريد حذف الفريق «${team.name}»؟ سيتم إلغاء ربط أعوانه فقط.`)) return
+    try {
+      const response = await fetch(`/api/teams/${team.id}${agentScopeSuffix}`, { method: 'DELETE' })
+      if (!response.ok) {
+        const data = await response.json()
+        throw new Error(data.error || 'تعذر حذف الفريق')
+      }
+      toast.success('تم حذف الفريق وإلغاء ربط الأعوان به')
+      fetchAgents()
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'تعذر حذف الفريق')
+    }
+  }
+
   const handleDelete = async () => {
     if (!deletingAgent) return
     try {
-      const res = await fetch(`/api/agents/${deletingAgent.id}`, { method: 'DELETE' })
+      const res = await fetch(`/api/agents/${deletingAgent.id}${agentScopeSuffix}`, { method: 'DELETE' })
       if (!res.ok) throw new Error()
       toast.success('تم حذف العون بنجاح')
       setDeletingAgent(null)
@@ -244,7 +393,7 @@ export default function AgentsView() {
       const res = await fetch(`/api/agents/${agent.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ actif: !agent.actif }),
+        body: JSON.stringify({ actif: !agent.actif, territoryFilter: useTerritoryFilter ? territoryFilter : undefined }),
       })
       if (!res.ok) throw new Error()
       toast.success(agent.actif ? 'تم تعطيل العون' : 'تم تفعيل العون')
@@ -255,23 +404,17 @@ export default function AgentsView() {
   }
 
   // ===== TEAM COMPUTATIONS =====
-  const teamStats = useMemo(() => {
-    const teams: { commune: string; label: string; color: string; agents: Agent[]; totalInterventions: number; activeCount: number }[] = []
-    for (const key of COMMUNE_KEYS) {
-      const teamAgents = agents.filter(a => a.commune === key)
-      if (teamAgents.length === 0 && !canSeeAllCommunes) continue
-      const totalInvs = teamAgents.reduce((sum, a) => sum + (agentInterventionCounts[a.id] || 0), 0)
-      teams.push({
-        commune: key,
-        label: COMMUNE_LABELS[key],
-        color: COMMUNE_COLORS[key],
-        agents: teamAgents,
-        totalInterventions: totalInvs,
-        activeCount: teamAgents.filter(a => a.actif).length,
-      })
+  const teamStats = useMemo(() => teams.map((team) => {
+    const teamAgents = agents.filter((agent) => agent.teamId === team.id)
+    return {
+      ...team,
+      agents: teamAgents,
+      label: COMMUNE_LABELS[team.commune] || team.commune,
+      color: team.color || COMMUNE_COLORS[team.commune] || '#64748b',
+      totalInterventions: teamAgents.reduce((sum, agent) => sum + (agentInterventionCounts[agent.id] || 0), 0),
+      activeCount: teamAgents.filter((agent) => agent.actif).length,
     }
-    return teams
-  }, [agents, agentInterventionCounts, canSeeAllCommunes])
+  }), [teams, agents, agentInterventionCounts])
 
   // ===== RENDER =====
   return (
@@ -320,6 +463,17 @@ export default function AgentsView() {
                 <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
               </svg>
               إضافة عون
+            </motion.button>
+          )}
+          {activeTab === 'teams' && (
+            <motion.button
+              onClick={() => openTeamDialog()}
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              className="bg-gradient-to-l from-violet-600 to-indigo-600 text-white px-5 py-2.5 rounded-xl font-medium shadow-lg shadow-violet-200 flex items-center gap-2"
+            >
+              <span className="text-lg">＋</span>
+              إضافة فريق
             </motion.button>
           )}
         </div>
@@ -382,7 +536,7 @@ export default function AgentsView() {
             <div>
               <p className="text-[11px] text-slate-400 font-medium">حسب الجماعة</p>
               <div className="flex flex-wrap gap-1 mt-1">
-                {COMMUNE_KEYS.map(key => (
+                {displayCommuneNames.map(key => (
                   <span key={key} className="text-[11px] font-bold px-1.5 py-0.5 rounded-md text-white" style={{ backgroundColor: COMMUNE_COLORS[key] }}>
                     {stats.byCommune[key] || 0}
                   </span>
@@ -446,7 +600,7 @@ export default function AgentsView() {
             <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
               {teamStats.map((team, i) => (
                 <motion.div
-                  key={team.commune}
+                  key={team.id}
                   initial={{ opacity: 0, y: 15 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: i * 0.08 }}
@@ -457,16 +611,20 @@ export default function AgentsView() {
                     <div className="absolute -top-4 -left-4 w-16 h-16 rounded-full bg-white/8" />
                     <div className="flex items-center justify-between relative z-10">
                       <div className="flex items-center gap-3">
-                        <div className="w-11 h-11 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center text-xl">🏛️</div>
+                        <div className="w-11 h-11 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center text-xl">{OFFICES[team.office]?.icon || '👥'}</div>
                         <div>
-                          <h4 className="font-bold text-sm">{team.label}</h4>
-                          <p className="text-[10px] text-white/70 mt-0.5">فرقة العمل</p>
+                          <h4 className="font-bold text-sm">{team.name}</h4>
+                          <p className="text-[10px] text-white/70 mt-0.5">{team.label} · {OFFICES[team.office]?.nameAr || team.office}</p>
                         </div>
                       </div>
                       <div className="bg-white/20 backdrop-blur-sm px-3 py-1.5 rounded-xl text-center">
                         <div className="text-lg font-extrabold">{team.agents.length}</div>
                         <div className="text-[8px] text-white/70 font-medium">عون</div>
                       </div>
+                    </div>
+                    <div className="flex items-center gap-2 mt-3">
+                      <span className="text-[10px] bg-white/15 rounded-md px-2 py-1 font-bold">{team.actif ? 'نشط' : 'غير نشط'}</span>
+                      <span className="text-[10px] text-white/80 truncate">مهمة: {team.mission}</span>
                     </div>
                   </div>
 
@@ -542,6 +700,11 @@ export default function AgentsView() {
                         )}
                       </div>
                     </div>
+
+                    <div className="flex items-center gap-2 pt-1">
+                      <button type="button" onClick={() => openTeamDialog(team)} className="flex-1 rounded-lg border border-slate-200 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50">تعديل الفريق</button>
+                      <button type="button" onClick={() => handleDeleteTeam(team)} className="rounded-lg border border-red-100 px-3 py-2 text-xs font-bold text-red-500 hover:bg-red-50">حذف</button>
+                    </div>
                   </div>
                 </motion.div>
               ))}
@@ -554,8 +717,8 @@ export default function AgentsView() {
               <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">📊 مقارنة أداء الفرق</h3>
               <div className="space-y-3">
                 {teamStats.map(team => (
-                  <div key={team.commune} className="flex items-center gap-3">
-                    <span className="text-xs font-bold text-slate-600 min-w-[100px] truncate">{team.label}</span>
+                  <div key={team.id} className="flex items-center gap-3">
+                    <span className="text-xs font-bold text-slate-600 min-w-[130px] truncate">{team.name}</span>
                     <div className="flex-1 bg-slate-100 rounded-full h-6 relative overflow-hidden">
                       <div
                         className="h-full rounded-full transition-all duration-700 flex items-center justify-end px-2"
@@ -588,7 +751,7 @@ export default function AgentsView() {
         <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-4">
           <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">التوزيع حسب الجماعة الترابية</h3>
           <div className="flex items-center gap-1 h-8 rounded-xl overflow-hidden">
-            {COMMUNE_KEYS.map((key) => {
+            {displayCommuneNames.map((key) => {
               const pct = stats.total > 0 ? ((stats.byCommune[key] || 0) / stats.total) * 100 : 0
               return (
                 <div
@@ -607,7 +770,7 @@ export default function AgentsView() {
             })}
           </div>
           <div className="flex items-center gap-4 mt-2 flex-wrap">
-            {COMMUNE_KEYS.map((key) => (
+            {displayCommuneNames.map((key) => (
               <div key={key} className="flex items-center gap-1.5">
                 <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: COMMUNE_COLORS[key] }} />
                 <span className="text-[11px] text-slate-500">{COMMUNE_LABELS[key]}</span>
@@ -643,9 +806,7 @@ export default function AgentsView() {
               className="px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-300"
             >
               <option value="ALL">كل الجماعات</option>
-              {COMMUNE_KEYS.map(key => (
-                <option key={key} value={key}>{COMMUNE_LABELS[key]}</option>
-              ))}
+              {availableCommunes.map((commune) => <option key={commune} value={commune}>{COMMUNE_LABELS[commune] || commune}</option>)}
             </select>
           )}
 
@@ -768,6 +929,80 @@ export default function AgentsView() {
         </>
       )}
 
+      {/* ===== TEAM DIALOG ===== */}
+      <AnimatePresence>
+        {showTeamDialog && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[56] flex items-center justify-center p-4"
+            onClick={() => { setShowTeamDialog(false); setEditingTeam(null) }}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto"
+              onClick={(event) => event.stopPropagation()}
+              dir="rtl"
+            >
+              <div className="bg-gradient-to-l from-violet-600 to-indigo-600 px-6 py-4 text-white">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-lg font-bold">{editingTeam ? 'تعديل الفريق' : 'إضافة فريق جديد'}</h3>
+                    <p className="text-xs text-violet-100/80 mt-1">كل جماعة يمكن أن تضم عدة فرق بمهام ومكاتب مختلفة</p>
+                  </div>
+                  <button type="button" onClick={() => { setShowTeamDialog(false); setEditingTeam(null) }} className="p-2 hover:bg-white/20 rounded-xl">✕</button>
+                </div>
+              </div>
+              <form onSubmit={handleSaveTeam} className="p-6 space-y-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 mb-1.5">اسم الفريق <span className="text-red-400">*</span></label>
+                  <input value={teamForm.name} onChange={(event) => setTeamForm((prev) => ({ ...prev, name: event.target.value }))} placeholder="مثال: فريق مكافحة الحشرات" className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50/50 text-sm outline-none focus:ring-2 focus:ring-violet-500/20" required />
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 mb-1.5">الجماعة الترابية <span className="text-red-400">*</span></label>
+                    {canSeeAllCommunes ? (
+                      <select value={teamForm.commune} onChange={(event) => setTeamForm((prev) => ({ ...prev, commune: event.target.value }))} className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm" required>
+                        <option value="">— اختر الجماعة —</option>
+                        {displayCommuneNames.map((commune) => <option key={commune} value={commune}>{COMMUNE_LABELS[commune] || commune}</option>)}
+                      </select>
+                    ) : (
+                      <div className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-100 text-sm font-bold">{COMMUNE_LABELS[user?.commune || ''] || user?.commune}</div>
+                    )}
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 mb-1.5">المكتب</label>
+                    <select value={teamForm.office} onChange={(event) => setTeamForm((prev) => ({ ...prev, office: event.target.value }))} className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm">
+                      {Object.entries(OFFICES).map(([key, office]) => <option key={key} value={key}>{office.icon} {office.nameAr}</option>)}
+                    </select>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 mb-1.5">المهمة المحددة <span className="text-red-400">*</span></label>
+                  <input value={teamForm.mission} onChange={(event) => setTeamForm((prev) => ({ ...prev, mission: event.target.value }))} placeholder="مثال: مكافحة الجرذان والتدخلات الميدانية" className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50/50 text-sm outline-none focus:ring-2 focus:ring-violet-500/20" required />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 mb-1.5">وصف إضافي</label>
+                  <textarea value={teamForm.description} onChange={(event) => setTeamForm((prev) => ({ ...prev, description: event.target.value }))} rows={3} placeholder="اختصاصات الفريق أو مجال تدخله" className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50/50 text-sm outline-none focus:ring-2 focus:ring-violet-500/20 resize-none" />
+                </div>
+                <div className="flex items-center gap-3">
+                  <label className="text-xs font-bold text-slate-500">لون الفريق</label>
+                  <input type="color" value={teamForm.color} onChange={(event) => setTeamForm((prev) => ({ ...prev, color: event.target.value }))} className="h-9 w-14 rounded-lg border border-slate-200 bg-white p-1" />
+                  <span className="text-xs text-slate-400">يساعد على تمييز الفريق في العرض</span>
+                </div>
+                <div className="flex items-center gap-3 pt-2">
+                  <button type="submit" disabled={isSaving} className="flex-1 bg-gradient-to-l from-violet-600 to-indigo-600 text-white py-3 rounded-xl font-bold text-sm disabled:opacity-50">{isSaving ? 'جاري الحفظ...' : editingTeam ? 'حفظ التعديلات' : 'إضافة الفريق'}</button>
+                  <button type="button" onClick={() => { setShowTeamDialog(false); setEditingTeam(null) }} className="px-6 py-3 rounded-xl border border-slate-200 text-sm font-medium text-slate-600">إلغاء</button>
+                </div>
+              </form>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* ===== ADD/EDIT DIALOG ===== */}
       <AnimatePresence>
         {(showAddDialog || editingAgent) && (
@@ -859,12 +1094,12 @@ export default function AgentsView() {
                   {canSeeAllCommunes ? (
                     <select
                       value={form.commune}
-                      onChange={(e) => setForm(prev => ({ ...prev, commune: e.target.value }))}
+                      onChange={(e) => setForm(prev => ({ ...prev, commune: e.target.value, teamId: '' }))}
+                      required
                       className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-300"
                     >
-                      {COMMUNE_KEYS.map(key => (
-                        <option key={key} value={key}>{COMMUNE_LABELS[key]}</option>
-                      ))}
+                      <option value="">— اختر الجماعة —</option>
+                      {displayCommuneNames.map((commune) => <option key={commune} value={commune}>{COMMUNE_LABELS[commune] || commune}</option>)}
                     </select>
                   ) : (
                     <div
@@ -876,6 +1111,22 @@ export default function AgentsView() {
                       <span className="text-[10px] text-slate-400 mr-auto">يتم تعيينها تلقائياً</span>
                     </div>
                   )}
+                </div>
+
+                {/* Team */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 mb-1.5">الفريق</label>
+                  <select
+                    value={form.teamId}
+                    onChange={(e) => setForm(prev => ({ ...prev, teamId: e.target.value }))}
+                    className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-300"
+                  >
+                    <option value="">— بدون فريق —</option>
+                    {availableTeams.map((team) => (
+                      <option key={team.id} value={team.id}>{team.name} · {team.mission}</option>
+                    ))}
+                  </select>
+                  <p className="text-[10px] text-slate-400 mt-1">يتم عرض فرق الجماعة المحددة فقط</p>
                 </div>
 
                 {/* Function */}

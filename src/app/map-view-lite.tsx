@@ -2,24 +2,33 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { useAppStore, type CommuneType, type OverlaySectionKey, OVERLAY_SECTION_LABELS } from '@/lib/store'
+import { useAppStore, type CommuneType, type MapClickCoords, type OverlaySectionKey, OVERLAY_SECTION_LABELS } from '@/lib/store'
 import {
   type Intervention, type Quartier, type InterventionPhoto,
   TYPE_LABELS, TYPE_COLORS, TYPE_ICONS, STATUT_LABELS, STATUT_COLORS,
   COMMUNE_LABELS, COMMUNE_COLORS,
 } from '@/lib/constants'
+import {
+  ALL_TERRITORIES,
+  DEFAULT_TERRITORY_FILTER,
+  hasTerritorySelection,
+  type TerritoryCatalog,
+  type TerritoryCatalogEntry,
+  type TerritoryFilter,
+} from '@/lib/geography'
 
 const COMMUNE_INFO: { name: string; key: string; color: string; population: string; populationMunicipale: string; populationCompteeAPart: string; menages: string; isBouknadel: boolean }[] = [
   { name: 'جماعة سلا', key: 'سلا', color: '#059669', population: '945,101', populationMunicipale: '938,475', populationCompteeAPart: '6,626', menages: '256,144', isBouknadel: false },
   { name: 'جماعة سيدي أبي القنادل', key: 'سيدي أبي القنادل', color: '#7c3aed', population: '43,598', populationMunicipale: '43,550', populationCompteeAPart: '48', menages: '10,439', isBouknadel: true },
   { name: 'جماعة عامر', key: 'عامر', color: '#d97706', population: '75,942', populationMunicipale: '75,896', populationCompteeAPart: '46', menages: '18,540', isBouknadel: false },
+  { name: 'جماعة السهول', key: 'السهول', color: '#0ea5e9', population: '22,281', populationMunicipale: '22,281', populationCompteeAPart: '50', menages: '5,188', isBouknadel: false },
 ]
 
 interface MapComponentProps {
   interventions: Intervention[]
   quartiers: Quartier[]
   selectedCommune: string
-  onMapClick?: (lat: number, lng: number, commune: string | null) => void
+  onMapClick?: (location: MapClickCoords) => void
   mapClickEnabled?: boolean
   showCommunePopups?: boolean
   onInterventionCreated?: () => void
@@ -30,14 +39,118 @@ interface MapComponentProps {
   measureMode?: boolean
   onMeasureResult?: (distance: number, points: { lat: number; lng: number }[]) => void
   showQuartiers?: boolean
+  territoryFilter?: TerritoryFilter
+  nationalBoundariesVisible?: boolean
+  enforcedCommune?: string
+  enforcedCommunes?: string[]
 }
 
-function MapView({ interventions, quartiers, selectedCommune, canSeeAllCommunes, onMapClick, onRefresh, onNavigateToInterventions }: { interventions: Intervention[]; quartiers: Quartier[]; selectedCommune: CommuneType | 'ALL'; canSeeAllCommunes: boolean; onMapClick: (lat: number, lng: number, commune: string | null) => void; onRefresh?: () => void; onNavigateToInterventions?: () => void }) {
+type TerritoryFilterControlsProps = {
+  catalog: TerritoryCatalog | null
+  filter: TerritoryFilter
+  provinces: TerritoryCatalogEntry[]
+  communes: TerritoryCatalogEntry[]
+  loading: boolean
+  error: string
+  showingAllTerritories: boolean
+  onToggleAll: () => void
+  onRegionChange: (code: string) => void
+  onProvinceChange: (code: string) => void
+  onCommuneChange: (code: string) => void
+}
+
+function territoryName(entry: TerritoryCatalogEntry): string {
+  return entry.nameAr || entry.name || entry.nameFr
+}
+
+function formatTerritoryStat(value: number | null | undefined): string {
+  return typeof value === 'number' ? value.toLocaleString('ar-MA') : 'غير متاح'
+}
+
+function TerritoryFilterControls({
+  catalog,
+  filter,
+  provinces,
+  communes,
+  loading,
+  error,
+  showingAllTerritories,
+  onToggleAll,
+  onRegionChange,
+  onProvinceChange,
+  onCommuneChange,
+}: TerritoryFilterControlsProps) {
+  return (
+    <div className="bg-sky-50 rounded-xl p-3 border border-sky-100">
+      <div className="flex items-center justify-between gap-2 mb-2">
+        <p className="text-[10px] font-bold text-sky-800 uppercase tracking-wider">🌐 الحدود الترابية الوطنية</p>
+        <button
+          type="button"
+          onClick={onToggleAll}
+          aria-pressed={showingAllTerritories}
+          className="px-2 py-1 rounded-md bg-white text-[10px] font-bold text-sky-700 border border-sky-200 hover:bg-sky-100 transition-colors"
+        >
+          {showingAllTerritories ? 'إخفاء الكل' : 'إظهار الكل'}
+        </button>
+      </div>
+      {loading ? (
+        <p className="text-[11px] text-sky-700 py-1">جاري تحميل الجهات والأقاليم والجماعات...</p>
+      ) : error ? (
+        <p className="text-[11px] text-red-600 py-1">{error}</p>
+      ) : catalog ? (
+        <div className="space-y-2">
+          <label className="block text-[10px] font-semibold text-slate-600">
+            الجهة
+            <select
+              value={filter.regionCode}
+              onChange={(event) => onRegionChange(event.target.value)}
+              className="mt-1 w-full rounded-lg border border-sky-200 bg-white px-2 py-1.5 text-xs text-slate-700 outline-none focus:border-sky-500"
+            >
+              <option value={ALL_TERRITORIES}>كل الجهات ({catalog.regions.length})</option>
+              {catalog.regions.map((region) => <option key={region.code} value={region.code}>{territoryName(region)}</option>)}
+            </select>
+          </label>
+          <label className="block text-[10px] font-semibold text-slate-600">
+            الإقليم أو العمالة
+            <select
+              value={filter.provinceCode}
+              onChange={(event) => onProvinceChange(event.target.value)}
+              className="mt-1 w-full rounded-lg border border-sky-200 bg-white px-2 py-1.5 text-xs text-slate-700 outline-none focus:border-sky-500"
+            >
+              <option value={ALL_TERRITORIES}>كل الأقاليم والعمالات ({provinces.length})</option>
+              {provinces.map((province) => <option key={province.code} value={province.code}>{territoryName(province)}</option>)}
+            </select>
+          </label>
+          <label className="block text-[10px] font-semibold text-slate-600">
+            الجماعة
+            <select
+              value={filter.communeCode}
+              onChange={(event) => onCommuneChange(event.target.value)}
+              className="mt-1 w-full rounded-lg border border-sky-200 bg-white px-2 py-1.5 text-xs text-slate-700 outline-none focus:border-sky-500"
+            >
+              <option value={ALL_TERRITORIES}>كل الجماعات ({communes.length})</option>
+              {communes.map((commune) => <option key={commune.code} value={commune.code}>{territoryName(commune)}</option>)}
+            </select>
+          </label>
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
+function MapView({ interventions, quartiers, selectedCommune, canSeeAllCommunes, onMapClick, onRefresh, onNavigateToInterventions }: { interventions: Intervention[]; quartiers: Quartier[]; selectedCommune: CommuneType | 'ALL'; canSeeAllCommunes: boolean; onMapClick: (location: MapClickCoords) => void; onRefresh?: () => void; onNavigateToInterventions?: () => void }) {
   const [mapLoaded, setMapLoaded] = useState(false)
   const [MapComponent, setMapComponent] = useState<React.ComponentType<MapComponentProps> | null>(null)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [hoveredCommune, setHoveredCommune] = useState<string | null>(null)
-  const { setSelectedCommune, settings } = useAppStore()
+  const { setSelectedCommune, settings, territoryFilter, setTerritoryFilter, user } = useAppStore()
+  const managedCommunes = user?.managedCommunes?.length
+    ? user.managedCommunes
+    : (user?.commune && user.commune !== 'ALL' ? [user.commune] : [])
+  const isCommuneGroupAccount = managedCommunes.length > 1
+  const isGlobalManager = canSeeAllCommunes && managedCommunes.length === 0
+  const enforcedCommune = managedCommunes.length === 1 ? managedCommunes[0] : undefined
+  const mapSelectedCommune = enforcedCommune || selectedCommune
 
   // Helper to check overlay section visibility
   const isSectionVisible = useCallback((key: OverlaySectionKey): boolean => {
@@ -46,6 +159,43 @@ function MapView({ interventions, quartiers, selectedCommune, canSeeAllCommunes,
 
   const [mapError, setMapError] = useState(false)
   const [mapLoadAttempt, setMapLoadAttempt] = useState(0)
+  const [territoryCatalog, setTerritoryCatalog] = useState<TerritoryCatalog | null>(null)
+  const [territoryLoading, setTerritoryLoading] = useState(true)
+  const [territoryError, setTerritoryError] = useState('')
+  const [nationalBoundariesVisible, setNationalBoundariesVisible] = useState(isGlobalManager)
+  // Click-to-add + measure mode — declared early because mapClickEnabledForScope depends on them
+  const [clickToAddEnabled, setClickToAddEnabled] = useState(true)
+  const [measureMode, setMeasureMode] = useState(false)
+  const selectedTerritoryCommune = territoryFilter.communeCode !== ALL_TERRITORIES
+    ? territoryCatalog?.communes.find((commune) => commune.code === territoryFilter.communeCode)
+    : undefined
+  const selectedTerritoryName = selectedTerritoryCommune ? territoryName(selectedTerritoryCommune) : undefined
+  const mapScopeCommunes = isCommuneGroupAccount
+    ? (selectedTerritoryName && managedCommunes.includes(selectedTerritoryName)
+      ? [selectedTerritoryName]
+      : (mapSelectedCommune !== 'ALL' && managedCommunes.includes(mapSelectedCommune) ? [mapSelectedCommune] : managedCommunes))
+    : (enforcedCommune ? [enforcedCommune] : (selectedTerritoryName ? [selectedTerritoryName] : (mapSelectedCommune !== 'ALL' ? [mapSelectedCommune] : [])))
+  const mapScopeCommune = mapScopeCommunes.length === 1 ? mapScopeCommunes[0] : undefined
+  const shouldDisplayOperationalMarkers = mapScopeCommunes.length > 0 || !canSeeAllCommunes || hasTerritorySelection(territoryFilter)
+  // Default to true when settings.mapClickEnabled is undefined (not yet loaded)
+  const settingsMapClick = settings.mapClickEnabled ?? true
+  const mapClickEnabledForScope = (mapScopeCommunes.length > 0 || settingsMapClick) && clickToAddEnabled && !measureMode
+  const scopedQuartiers = React.useMemo(() => (
+    !shouldDisplayOperationalMarkers
+      ? []
+      : (mapScopeCommunes.length ? quartiers.filter((quartier) => mapScopeCommunes.includes(quartier.commune)) : quartiers)
+  ), [mapScopeCommunes, quartiers, shouldDisplayOperationalMarkers])
+  const scopedInterventions = React.useMemo(() => (
+    !shouldDisplayOperationalMarkers
+      ? []
+      : (mapScopeCommunes.length ? interventions.filter((intervention) => mapScopeCommunes.includes(intervention.commune)) : interventions)
+  ), [interventions, mapScopeCommunes, shouldDisplayOperationalMarkers])
+
+  useEffect(() => {
+    if (enforcedCommune && selectedCommune !== enforcedCommune) {
+      setSelectedCommune(enforcedCommune as CommuneType)
+    }
+  }, [enforcedCommune, selectedCommune, setSelectedCommune])
 
   // Search state
   const [searchQuery, setSearchQuery] = useState('')
@@ -94,8 +244,7 @@ function MapView({ interventions, quartiers, selectedCommune, canSeeAllCommunes,
   // SIG Legend panel
   const [showLegend, setShowLegend] = useState(false)
 
-  // Measure distance tool
-  const [measureMode, setMeasureMode] = useState(false)
+  // Measure distance tool — measureMode declared above (needed by mapClickEnabledForScope)
   const [measureResult, setMeasureResult] = useState<{ distance: number; points: number } | null>(null)
 
   // Quartier markers toggle (replaces heatmap)
@@ -134,18 +283,23 @@ function MapView({ interventions, quartiers, selectedCommune, canSeeAllCommunes,
   // Filter search results when debounced search changes
   useEffect(() => {
     if (!debouncedSearch.trim()) {
-      setSearchResults([])
-      setShowSearchDropdown(false)
+      // Only clear if there's something to clear — avoids unnecessary re-renders
+      setSearchResults((prev) => prev.length === 0 ? prev : [])
+      setShowSearchDropdown((prev) => prev ? false : prev)
       return
     }
     const q = debouncedSearch.trim().toLowerCase()
-    const filtered = quartiers.filter(qt =>
+    const filtered = scopedQuartiers.filter(qt =>
       qt.nom.toLowerCase().includes(q) ||
       qt.commune.toLowerCase().includes(q)
-    )
-    setSearchResults(filtered.slice(0, 10))
-    setShowSearchDropdown(filtered.length > 0)
-  }, [debouncedSearch, quartiers])
+    ).slice(0, 10)
+    // Compare shallow content to avoid setState when results are unchanged
+    setSearchResults((prev) => {
+      if (prev.length === filtered.length && prev.every((item, i) => item.id === filtered[i].id)) return prev
+      return filtered
+    })
+    setShowSearchDropdown((prev) => (prev === (filtered.length > 0) ? prev : filtered.length > 0))
+  }, [debouncedSearch, scopedQuartiers])
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -158,6 +312,26 @@ function MapView({ interventions, quartiers, selectedCommune, canSeeAllCommunes,
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
+
+  useEffect(() => {
+    if (!enforcedCommune || !territoryCatalog) return
+    const assignedCommune = territoryCatalog.communes.find((commune) => territoryName(commune) === enforcedCommune)
+    if (!assignedCommune) return
+
+    const nextFilter = {
+      regionCode: assignedCommune.regionCode,
+      provinceCode: assignedCommune.provinceCode || ALL_TERRITORIES,
+      communeCode: assignedCommune.code,
+    }
+    if (territoryFilter.regionCode !== nextFilter.regionCode || territoryFilter.provinceCode !== nextFilter.provinceCode || territoryFilter.communeCode !== nextFilter.communeCode) {
+      setTerritoryFilter(nextFilter)
+    }
+    setNationalBoundariesVisible(true)
+  }, [enforcedCommune, setTerritoryFilter, territoryCatalog, territoryFilter])
+
+  useEffect(() => {
+    if (hasTerritorySelection(territoryFilter)) setNationalBoundariesVisible(true)
+  }, [territoryFilter])
 
   // Handle search result selection
   const handleSearchSelect = useCallback((quartier: Quartier) => {
@@ -177,13 +351,13 @@ function MapView({ interventions, quartiers, selectedCommune, canSeeAllCommunes,
 
   // Filter interventions by search
   const filteredInterventions = React.useMemo(() => {
-    if (!debouncedSearch.trim()) return interventions
+    if (!debouncedSearch.trim()) return scopedInterventions
     const q = debouncedSearch.trim().toLowerCase()
-    return interventions.filter(inv =>
+    return scopedInterventions.filter(inv =>
       inv.quartier.toLowerCase().includes(q) ||
       inv.adresse.toLowerCase().includes(q)
     )
-  }, [interventions, debouncedSearch])
+  }, [debouncedSearch, scopedInterventions])
 
   useEffect(() => {
     setMapError(false)
@@ -195,8 +369,235 @@ function MapView({ interventions, quartiers, selectedCommune, canSeeAllCommunes,
     })
   }, [mapLoadAttempt])
 
-  const totalPopulation = COMMUNE_INFO.reduce((sum, c) => sum + parseInt(c.population.replace(/,/g, '')), 0)
-  const activeCommune = COMMUNE_INFO.find(c => c.key === selectedCommune)
+  useEffect(() => {
+    let active = true
+
+    const loadTerritoryCatalog = async () => {
+      try {
+        const response = await fetch('/geography/catalog.json')
+        if (!response.ok) throw new Error('Unable to load territory catalog')
+        const catalog = await response.json() as TerritoryCatalog
+        if (!Array.isArray(catalog.regions) || !Array.isArray(catalog.provinces) || !Array.isArray(catalog.communes)) {
+          throw new Error('Invalid territory catalog')
+        }
+        if (active) setTerritoryCatalog(catalog)
+      } catch {
+        if (active) setTerritoryError('تعذر تحميل المرشحات الترابية.')
+      } finally {
+        if (active) setTerritoryLoading(false)
+      }
+    }
+
+    void loadTerritoryCatalog()
+    return () => { active = false }
+  }, [])
+
+  const managedCommuneNames = React.useMemo(() => Array.from(new Set(managedCommunes)), [managedCommunes])
+  const groupCommuneItems = React.useMemo(() => managedCommuneNames.map((communeName) => {
+    const catalogCommune = territoryCatalog?.communes.find((commune) => territoryName(commune) === communeName)
+    const legacyCommune = COMMUNE_INFO.find((commune) => commune.key === communeName)
+
+    if (catalogCommune) {
+      return {
+        name: `جماعة ${communeName}`,
+        key: communeName,
+        color: legacyCommune?.color || COMMUNE_COLORS[communeName] || '#0f766e',
+        population: formatTerritoryStat(catalogCommune.population),
+        populationMunicipale: formatTerritoryStat(
+          typeof catalogCommune.population === 'number'
+            ? catalogCommune.population - (catalogCommune.foreigners || 0)
+            : null,
+        ),
+        populationCompteeAPart: formatTerritoryStat(catalogCommune.foreigners),
+        menages: formatTerritoryStat(catalogCommune.households),
+        isBouknadel: false,
+      }
+    }
+
+    return legacyCommune || {
+      name: `جماعة ${communeName}`,
+      key: communeName,
+      color: COMMUNE_COLORS[communeName] || '#0f766e',
+      population: 'غير متاح',
+      populationMunicipale: 'غير متاح',
+      populationCompteeAPart: 'غير متاح',
+      menages: 'غير متاح',
+      isBouknadel: false,
+    }
+  }), [managedCommuneNames, territoryCatalog])
+  const groupInterventions = React.useMemo(() => (
+    isCommuneGroupAccount
+      ? interventions.filter((intervention) => managedCommuneNames.includes(intervention.commune))
+      : scopedInterventions
+  ), [interventions, isCommuneGroupAccount, managedCommuneNames, scopedInterventions])
+  const groupQuartiers = React.useMemo(() => (
+    isCommuneGroupAccount
+      ? quartiers.filter((quartier) => managedCommuneNames.includes(quartier.commune))
+      : scopedQuartiers
+  ), [isCommuneGroupAccount, managedCommuneNames, quartiers, scopedQuartiers])
+  const groupStatistics = React.useMemo(() => {
+    if (!isCommuneGroupAccount) return null
+
+    const catalogCommunes = managedCommuneNames.map((communeName) => (
+      territoryCatalog?.communes.find((commune) => territoryName(commune) === communeName)
+    ))
+    const sumStatistic = (field: 'population' | 'households' | 'foreigners') => catalogCommunes.reduce((sum, commune, index) => {
+      const catalogValue = commune?.[field]
+      if (typeof catalogValue === 'number') return sum + catalogValue
+
+      const legacyCommune = COMMUNE_INFO.find((item) => item.key === managedCommuneNames[index])
+      const fallback = field === 'population'
+        ? legacyCommune?.population
+        : field === 'households'
+          ? legacyCommune?.menages
+          : legacyCommune?.populationCompteeAPart
+      return sum + (fallback ? (parseInt(fallback.replace(/,/g, ''), 10) || 0) : 0)
+    }, 0)
+    const hasStatistic = (field: 'population' | 'households' | 'foreigners') => catalogCommunes.some((commune, index) => (
+      typeof commune?.[field] === 'number' || Boolean(COMMUNE_INFO.find((item) => item.key === managedCommuneNames[index]))
+    ))
+    const completedInterventions = groupInterventions.filter((intervention) => intervention.statut === 'TERMINEE').length
+
+    return {
+      communes: managedCommuneNames.length,
+      population: sumStatistic('population'),
+      households: sumStatistic('households'),
+      foreigners: sumStatistic('foreigners'),
+      hasPopulation: hasStatistic('population'),
+      hasHouseholds: hasStatistic('households'),
+      hasForeigners: hasStatistic('foreigners'),
+      interventions: groupInterventions.length,
+      quartiers: groupQuartiers.length,
+      completedInterventions,
+      completionRate: groupInterventions.length
+        ? Math.round((completedInterventions / groupInterventions.length) * 100)
+        : 0,
+    }
+  }, [groupInterventions, groupQuartiers, isCommuneGroupAccount, managedCommuneNames, territoryCatalog])
+  const activeTerritoryCommune = territoryCatalog?.communes.find((commune) => territoryName(commune) === mapScopeCommune)
+  const activeCommune = React.useMemo(() => {
+    const legacyCommune = COMMUNE_INFO.find((commune) => commune.key === mapScopeCommune)
+    if (legacyCommune) return legacyCommune
+    if (!activeTerritoryCommune || !mapScopeCommune) return null
+
+    return {
+      name: `جماعة ${territoryName(activeTerritoryCommune)}`,
+      key: mapScopeCommune,
+      color: COMMUNE_COLORS[mapScopeCommune] || '#0f766e',
+      population: formatTerritoryStat(activeTerritoryCommune.population),
+      populationMunicipale: formatTerritoryStat(activeTerritoryCommune.population),
+      populationCompteeAPart: formatTerritoryStat(activeTerritoryCommune.foreigners),
+      menages: formatTerritoryStat(activeTerritoryCommune.households),
+      isBouknadel: false,
+    }
+  }, [activeTerritoryCommune, mapScopeCommune])
+  const territoryProvinces = React.useMemo(() => {
+    if (!territoryCatalog) return []
+    return territoryCatalog.provinces
+      .filter((province) => territoryFilter.regionCode === ALL_TERRITORIES || province.regionCode === territoryFilter.regionCode)
+      .sort((first, second) => territoryName(first).localeCompare(territoryName(second), 'ar'))
+  }, [territoryCatalog, territoryFilter.regionCode])
+
+  const territoryCommunes = React.useMemo(() => {
+    if (!territoryCatalog) return []
+    return territoryCatalog.communes
+      .filter((commune) => {
+        if (territoryFilter.provinceCode !== ALL_TERRITORIES) return commune.provinceCode === territoryFilter.provinceCode
+        return territoryFilter.regionCode === ALL_TERRITORIES || commune.regionCode === territoryFilter.regionCode
+      })
+      .sort((first, second) => territoryName(first).localeCompare(territoryName(second), 'ar'))
+  }, [territoryCatalog, territoryFilter.provinceCode, territoryFilter.regionCode])
+  const territoryCommuneItems = React.useMemo(() => territoryCommunes.map((commune, index) => {
+    const name = territoryName(commune)
+    const color = COMMUNE_COLORS[name] || ['#059669', '#7c3aed', '#d97706', '#0ea5e9'][index % 4]
+    return {
+      name: `جماعة ${name}`,
+      key: name,
+      color,
+      population: formatTerritoryStat(commune.population),
+      populationMunicipale: formatTerritoryStat(
+        typeof commune.population === 'number' ? commune.population - (commune.foreigners || 0) : null,
+      ),
+      populationCompteeAPart: formatTerritoryStat(commune.foreigners),
+      menages: formatTerritoryStat(commune.households),
+      isBouknadel: false,
+    }
+  }), [territoryCommunes])
+  const visibleCommuneInfo = isCommuneGroupAccount
+    ? groupCommuneItems
+    : managedCommunes.length
+      ? (activeCommune ? [activeCommune] : groupCommuneItems)
+      : hasTerritorySelection(territoryFilter)
+        ? territoryCommuneItems
+        : []
+  const canChooseDisplayedCommunes = (canSeeAllCommunes || isCommuneGroupAccount) && visibleCommuneInfo.length > 0
+  const canUseNationalFilters = canSeeAllCommunes && !isCommuneGroupAccount
+  const sidebarCommuneItems = visibleCommuneInfo
+  const sidebarScopeLabel = activeCommune?.name || user?.communeGroupName || (mapScopeCommune ? `جماعة ${mapScopeCommune}` : 'النطاق الترابي المختار')
+  const territoryPopulation = territoryCommunes.reduce((sum, commune) => sum + (commune.population || 0), 0)
+  const totalPopulation = isCommuneGroupAccount && groupStatistics?.hasPopulation
+    ? groupStatistics.population
+    : activeCommune
+      ? (parseInt(activeCommune.population.replace(/,/g, ''), 10) || 0)
+      : territoryPopulation
+  const sidebarCommunesCount = isCommuneGroupAccount
+    ? managedCommuneNames.length
+    : (mapScopeCommunes.length || territoryCommunes.length)
+
+  const handleTerritoryRegionChange = useCallback((regionCode: string) => {
+    setSelectedCommune('ALL')
+    setTerritoryFilter({ regionCode, provinceCode: ALL_TERRITORIES, communeCode: ALL_TERRITORIES })
+    setNationalBoundariesVisible(true)
+  }, [setSelectedCommune, setTerritoryFilter])
+
+  const handleTerritoryProvinceChange = useCallback((provinceCode: string) => {
+    setSelectedCommune('ALL')
+    setNationalBoundariesVisible(true)
+    if (provinceCode === ALL_TERRITORIES) {
+      setTerritoryFilter({ ...territoryFilter, provinceCode, communeCode: ALL_TERRITORIES })
+      return
+    }
+    const province = territoryCatalog?.provinces.find((entry) => entry.code === provinceCode)
+    setTerritoryFilter({
+      regionCode: province?.regionCode ?? ALL_TERRITORIES,
+      provinceCode,
+      communeCode: ALL_TERRITORIES,
+    })
+  }, [territoryCatalog, territoryFilter, setTerritoryFilter])
+
+  const handleTerritoryCommuneChange = useCallback((communeCode: string) => {
+    setSelectedCommune('ALL')
+    setNationalBoundariesVisible(true)
+    if (communeCode === ALL_TERRITORIES) {
+      setTerritoryFilter({ ...territoryFilter, communeCode })
+      return
+    }
+    const commune = territoryCatalog?.communes.find((entry) => entry.code === communeCode)
+    setTerritoryFilter({
+      regionCode: commune?.regionCode ?? ALL_TERRITORIES,
+      provinceCode: commune?.provinceCode ?? ALL_TERRITORIES,
+      communeCode,
+    })
+  }, [territoryCatalog, territoryFilter, setTerritoryFilter])
+
+  const isShowingAllTerritories = nationalBoundariesVisible &&
+    territoryFilter.regionCode === ALL_TERRITORIES &&
+    territoryFilter.provinceCode === ALL_TERRITORIES &&
+    territoryFilter.communeCode === ALL_TERRITORIES
+
+  const handleToggleAllTerritories = useCallback(() => {
+    if (isShowingAllTerritories) {
+      setNationalBoundariesVisible(false)
+      return
+    }
+    setTerritoryFilter(DEFAULT_TERRITORY_FILTER)
+    setNationalBoundariesVisible(true)
+  }, [isShowingAllTerritories])
+
+  const handleLegacyCommuneSelection = useCallback((commune: CommuneType | 'ALL') => {
+    setTerritoryFilter(DEFAULT_TERRITORY_FILTER)
+    setSelectedCommune(commune)
+  }, [setSelectedCommune, setTerritoryFilter])
 
   // Intervention counts by type for current filter
   const typeCounts = Object.entries(TYPE_LABELS).map(([key, label]) => ({
@@ -212,13 +613,13 @@ function MapView({ interventions, quartiers, selectedCommune, canSeeAllCommunes,
 
   // Filtered quartiers for sidebar list
   const filteredQuartiersForSidebar = React.useMemo(() => {
-    if (!debouncedSearch.trim()) return quartiers
+    if (!debouncedSearch.trim()) return scopedQuartiers
     const q = debouncedSearch.trim().toLowerCase()
-    return quartiers.filter(qt =>
+    return scopedQuartiers.filter(qt =>
       qt.nom.toLowerCase().includes(q) ||
       qt.commune.toLowerCase().includes(q)
     )
-  }, [quartiers, debouncedSearch])
+  }, [scopedQuartiers, debouncedSearch])
 
   // === HANDLERS FOR NEW FEATURES ===
 
@@ -299,6 +700,59 @@ function MapView({ interventions, quartiers, selectedCommune, canSeeAllCommunes,
   const completionRate = filteredInterventions.length > 0
     ? Math.round((filteredInterventions.filter(i => i.statut === 'TERMINEE').length / filteredInterventions.length) * 100)
     : 0
+  const summaryInterventions = groupStatistics?.interventions ?? filteredInterventions.length
+  const summaryQuartiers = groupStatistics?.quartiers ?? scopedQuartiers.length
+  const summaryPopulation = groupStatistics?.hasPopulation
+    ? groupStatistics.population.toLocaleString('ar-MA')
+    : activeCommune ? activeCommune.population : String(sidebarCommunesCount)
+  const summaryPopulationLabel = groupStatistics
+    ? 'سكان المجموعة'
+    : activeCommune ? 'السكان' : 'الجماعات'
+  const renderGroupStatistics = () => {
+    if (!groupStatistics) return null
+
+    const formatGroupStatistic = (value: number, available: boolean) => (
+      available ? value.toLocaleString('ar-MA') : 'غير متاح'
+    )
+
+    return (
+      <div className="px-3 pb-2">
+        <div className="rounded-xl border border-teal-100 bg-gradient-to-br from-teal-50 to-emerald-50 p-3">
+          <div className="flex items-start justify-between gap-2 mb-2.5">
+            <div>
+              <p className="text-[11px] font-bold text-teal-800">📊 إحصائيات مشتركة</p>
+              <p className="text-[10px] text-teal-700 mt-0.5">{user?.communeGroupName || 'مجموعة الجماعات'} · {groupStatistics.communes} جماعات</p>
+            </div>
+            <span className="rounded-full bg-white px-2 py-1 text-[9px] font-bold text-teal-700 shadow-sm">
+              إنجاز {groupStatistics.completionRate}%
+            </span>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div className="rounded-lg bg-white/90 p-2 text-center">
+              <div className="text-sm font-bold text-teal-700">{formatGroupStatistic(groupStatistics.population, groupStatistics.hasPopulation)}</div>
+              <div className="text-[9px] text-slate-500">السكان القانونيون</div>
+            </div>
+            <div className="rounded-lg bg-white/90 p-2 text-center">
+              <div className="text-sm font-bold text-teal-700">{formatGroupStatistic(groupStatistics.households, groupStatistics.hasHouseholds)}</div>
+              <div className="text-[9px] text-slate-500">الأسر</div>
+            </div>
+            <div className="rounded-lg bg-white/90 p-2 text-center">
+              <div className="text-sm font-bold text-emerald-700">{groupStatistics.interventions}</div>
+              <div className="text-[9px] text-slate-500">إجمالي التدخلات</div>
+            </div>
+            <div className="rounded-lg bg-white/90 p-2 text-center">
+              <div className="text-sm font-bold text-emerald-700">{groupStatistics.completedInterventions}</div>
+              <div className="text-[9px] text-slate-500">تدخلات مكتملة</div>
+            </div>
+          </div>
+          <div className="mt-2 flex items-center justify-between text-[9px] text-slate-500">
+            <span>🌍 الأجانب: <strong className="text-slate-700">{formatGroupStatistic(groupStatistics.foreigners, groupStatistics.hasForeigners)}</strong></span>
+            <span>📍 الأحياء: <strong className="text-slate-700">{groupStatistics.quartiers}</strong></span>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="h-[calc(100vh-8rem)] lg:h-[calc(100vh-6rem)] pb-16 lg:pb-0 relative flex">
@@ -339,7 +793,8 @@ function MapView({ interventions, quartiers, selectedCommune, canSeeAllCommunes,
                 </div>
               </div>
               <div className="bg-white/10 rounded-lg px-3 py-2 text-[10px] text-emerald-100/80 space-y-0.5">
-                <div>🗺️ حدود سلا — قرار رقم 1954.24 (الجريدة الرسمية عدد 7340)</div>
+                <div>🏛️ نطاق الحساب: {sidebarScopeLabel}</div>
+                <div>📊 {isCommuneGroupAccount ? 'إحصائيات مجمعة لجماعات المجموعة' : 'تدخلات وأحياء وبيانات الجماعة المحددة'}</div>
                 <div>👥 السكان — HCP إحصاء 2024</div>
               </div>
             </div>
@@ -402,35 +857,55 @@ function MapView({ interventions, quartiers, selectedCommune, canSeeAllCommunes,
             {/* Quick Stats */}
             <div className="grid grid-cols-3 gap-2 p-3">
               <div className="bg-emerald-50 rounded-xl p-2 text-center border border-emerald-100">
-                <div className="text-lg font-bold text-emerald-700">{filteredInterventions.length}</div>
-                <div className="text-[9px] text-emerald-600 font-semibold">التدخلات</div>
+                <div className="text-lg font-bold text-emerald-700">{summaryInterventions}</div>
+                <div className="text-[9px] text-emerald-600 font-semibold">{isCommuneGroupAccount ? 'تدخلات المجموعة' : 'التدخلات'}</div>
               </div>
               <div className="bg-violet-50 rounded-xl p-2 text-center border border-violet-100">
-                <div className="text-lg font-bold text-violet-700">{quartiers.length}</div>
-                <div className="text-[9px] text-violet-600 font-semibold">الأحياء</div>
+                <div className="text-lg font-bold text-violet-700">{summaryQuartiers}</div>
+                <div className="text-[9px] text-violet-600 font-semibold">{isCommuneGroupAccount ? 'أحياء المجموعة' : 'الأحياء'}</div>
               </div>
               <div className="bg-amber-50 rounded-xl p-2 text-center border border-amber-100">
-                <div className="text-lg font-bold text-amber-700">{COMMUNE_INFO.length}</div>
-                <div className="text-[9px] text-amber-600 font-semibold">الجماعات</div>
+                <div className="text-lg font-bold text-amber-700">{summaryPopulation}</div>
+                <div className="text-[9px] text-amber-600 font-semibold">{summaryPopulationLabel}</div>
               </div>
             </div>
 
+            {renderGroupStatistics()}
+
+            {canUseNationalFilters && (
+              <div className="px-3 pb-2">
+                <TerritoryFilterControls
+                  catalog={territoryCatalog}
+                  filter={territoryFilter}
+                  provinces={territoryProvinces}
+                  communes={territoryCommunes}
+                  loading={territoryLoading}
+                  error={territoryError}
+                  showingAllTerritories={isShowingAllTerritories}
+                  onToggleAll={handleToggleAllTerritories}
+                  onRegionChange={handleTerritoryRegionChange}
+                  onProvinceChange={handleTerritoryProvinceChange}
+                  onCommuneChange={handleTerritoryCommuneChange}
+                />
+              </div>
+            )}
+
             {/* Commune Filter */}
             <div className="px-3 pb-2">
-              {canSeeAllCommunes ? (
+              {canChooseDisplayedCommunes ? (
                 <div className="bg-slate-50 rounded-xl p-3 border border-slate-100">
                   <div className="flex items-center justify-between mb-2">
                     <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">🏛️ فلترة الجماعات</p>
                     <span className="text-[9px] text-slate-400">👥 {totalPopulation.toLocaleString('ar-MA')}</span>
                   </div>
                   <div className="flex flex-wrap gap-1.5">
-                    <button onClick={() => setSelectedCommune('ALL')}
+                    <button onClick={() => handleLegacyCommuneSelection('ALL')}
                       className={`px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all ${selectedCommune === 'ALL' ? 'bg-slate-800 text-white shadow-md' : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'}`}>
                       الكل
                     </button>
-                    {COMMUNE_INFO.map((info) => (
+                    {visibleCommuneInfo.map((info) => (
                       <button key={info.key}
-                        onClick={() => setSelectedCommune(selectedCommune === info.key ? 'ALL' : info.key as CommuneType)}
+                        onClick={() => handleLegacyCommuneSelection(selectedCommune === info.key ? 'ALL' : info.key as CommuneType)}
                         onMouseEnter={() => setHoveredCommune(info.key)}
                         onMouseLeave={() => setHoveredCommune(null)}
                         className={`px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all flex items-center gap-1.5 ${
@@ -501,16 +976,16 @@ function MapView({ interventions, quartiers, selectedCommune, canSeeAllCommunes,
             <div className="px-3 pb-2">
               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">الحدود الترابية • السكان القانونيون 2024</p>
               <div className="space-y-1.5">
-                {COMMUNE_INFO.filter(info => canSeeAllCommunes || info.key === selectedCommune).map((info) => (
+                {sidebarCommuneItems.map((info) => (
                   <motion.div
                     key={info.name}
                     onMouseEnter={() => setHoveredCommune(info.key)}
                     onMouseLeave={() => setHoveredCommune(null)}
-                    onClick={() => canSeeAllCommunes ? setSelectedCommune(selectedCommune === info.key ? 'ALL' : info.key as CommuneType) : undefined}
+                    onClick={() => canChooseDisplayedCommunes ? handleLegacyCommuneSelection(selectedCommune === info.key ? 'ALL' : info.key as CommuneType) : undefined}
                     className={`flex items-center gap-2.5 p-2 rounded-lg transition-all ${
-                      canSeeAllCommunes ? 'cursor-pointer' : ''
+                      canChooseDisplayedCommunes ? 'cursor-pointer' : ''
                     } ${
-                      selectedCommune !== 'ALL' && selectedCommune !== info.key ? 'opacity-40' : 'hover:bg-slate-50'
+                      mapSelectedCommune !== 'ALL' && mapSelectedCommune !== info.key ? 'opacity-40' : 'hover:bg-slate-50'
                     } ${hoveredCommune === info.key ? 'bg-slate-50 ring-1 ring-slate-200' : ''}`}
                   >
                     <div className="w-5 h-5 rounded-md border-2 flex items-center justify-center flex-shrink-0" style={{ borderColor: info.color, backgroundColor: info.color + '20' }}>
@@ -647,32 +1122,50 @@ function MapView({ interventions, quartiers, selectedCommune, canSeeAllCommunes,
                     <div className="w-8 h-8 rounded-lg bg-white/15 flex items-center justify-center text-lg">🗺️</div>
                     <div>
                       <h3 className="font-bold text-sm">الخريطة التفاعلية — SIG</h3>
-                      <p className="text-[10px] text-emerald-200/80">نظام المعلومات الجغرافية</p>
+                      <p className="text-[10px] text-emerald-200/80">نطاق الحساب: {sidebarScopeLabel}</p>
                     </div>
                   </div>
                 </div>
                 <div className="grid grid-cols-3 gap-2 p-3">
                   <div className="bg-emerald-50 rounded-xl p-2 text-center border border-emerald-100">
-                    <div className="text-lg font-bold text-emerald-700">{filteredInterventions.length}</div>
-                    <div className="text-[9px] text-emerald-600 font-semibold">التدخلات</div>
+                    <div className="text-lg font-bold text-emerald-700">{summaryInterventions}</div>
+                    <div className="text-[9px] text-emerald-600 font-semibold">{isCommuneGroupAccount ? 'تدخلات المجموعة' : 'التدخلات'}</div>
                   </div>
                   <div className="bg-violet-50 rounded-xl p-2 text-center border border-violet-100">
-                    <div className="text-lg font-bold text-violet-700">{quartiers.length}</div>
-                    <div className="text-[9px] text-violet-600 font-semibold">الأحياء</div>
+                    <div className="text-lg font-bold text-violet-700">{summaryQuartiers}</div>
+                    <div className="text-[9px] text-violet-600 font-semibold">{isCommuneGroupAccount ? 'أحياء المجموعة' : 'الأحياء'}</div>
                   </div>
                   <div className="bg-amber-50 rounded-xl p-2 text-center border border-amber-100">
-                    <div className="text-lg font-bold text-amber-700">{COMMUNE_INFO.length}</div>
-                    <div className="text-[9px] text-amber-600 font-semibold">الجماعات</div>
+                    <div className="text-lg font-bold text-amber-700">{summaryPopulation}</div>
+                    <div className="text-[9px] text-amber-600 font-semibold">{summaryPopulationLabel}</div>
                   </div>
                 </div>
-                {canSeeAllCommunes && (
+                {renderGroupStatistics()}
+                {canUseNationalFilters && (
+                  <div className="px-3 pb-2">
+                    <TerritoryFilterControls
+                      catalog={territoryCatalog}
+                      filter={territoryFilter}
+                      provinces={territoryProvinces}
+                      communes={territoryCommunes}
+                      loading={territoryLoading}
+                      error={territoryError}
+                      showingAllTerritories={isShowingAllTerritories}
+                      onToggleAll={handleToggleAllTerritories}
+                      onRegionChange={handleTerritoryRegionChange}
+                      onProvinceChange={handleTerritoryProvinceChange}
+                      onCommuneChange={handleTerritoryCommuneChange}
+                    />
+                  </div>
+                )}
+                {canChooseDisplayedCommunes && (
                   <div className="px-3 pb-2">
                     <div className="bg-slate-50 rounded-xl p-3 border border-slate-100">
                       <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">🏛️ فلترة الجماعات</p>
                       <div className="flex flex-wrap gap-1.5">
-                        <button onClick={() => setSelectedCommune('ALL')} className={`px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all ${selectedCommune === 'ALL' ? 'bg-slate-800 text-white shadow-md' : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'}`}>الكل</button>
-                        {COMMUNE_INFO.map((info) => (
-                          <button key={info.key} onClick={() => setSelectedCommune(selectedCommune === info.key ? 'ALL' : info.key as CommuneType)} className={`px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all flex items-center gap-1.5 ${selectedCommune === info.key ? 'text-white shadow-md' : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'}`} style={selectedCommune === info.key ? { backgroundColor: info.color } : {}}>
+                        <button onClick={() => handleLegacyCommuneSelection('ALL')} className={`px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all ${selectedCommune === 'ALL' ? 'bg-slate-800 text-white shadow-md' : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'}`}>الكل</button>
+                        {visibleCommuneInfo.map((info) => (
+                          <button key={info.key} onClick={() => handleLegacyCommuneSelection(selectedCommune === info.key ? 'ALL' : info.key as CommuneType)} className={`px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all flex items-center gap-1.5 ${selectedCommune === info.key ? 'text-white shadow-md' : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'}`} style={selectedCommune === info.key ? { backgroundColor: info.color } : {}}>
                             <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: selectedCommune === info.key ? 'white' : info.color }} />
                             {info.name.replace('جماعة ', '')}
                           </button>
@@ -710,7 +1203,7 @@ function MapView({ interventions, quartiers, selectedCommune, canSeeAllCommunes,
               </motion.button>
             </div>
           </div>
-        ) : mapLoaded && MapComponent ? <MapComponent interventions={filteredInterventions} quartiers={quartiers} selectedCommune={selectedCommune} onMapClick={onMapClick} mapClickEnabled={settings.mapClickEnabled} showCommunePopups={settings.showCommunePopups} onInterventionCreated={onRefresh} centerOn={centerOnCoords} onInterventionClick={handleInterventionClick} tileLayer={tileLayer} onMouseMove={(coords) => setMouseCoords(coords)} measureMode={measureMode} onMeasureResult={(distance, points) => { setMeasureResult({ distance, points: points.length }); setMeasureMode(false) }} showQuartiers={showQuartiers} /> : (
+        ) : mapLoaded && MapComponent ? <MapComponent interventions={filteredInterventions} quartiers={scopedQuartiers} selectedCommune={mapSelectedCommune} onMapClick={onMapClick} mapClickEnabled={mapClickEnabledForScope} showCommunePopups={settings.showCommunePopups} onInterventionCreated={onRefresh} centerOn={centerOnCoords} onInterventionClick={handleInterventionClick} tileLayer={tileLayer} onMouseMove={(coords) => setMouseCoords(coords)} measureMode={measureMode} onMeasureResult={(distance, points) => { setMeasureResult({ distance, points: points.length }); setMeasureMode(false) }} showQuartiers={showQuartiers} territoryFilter={territoryFilter} nationalBoundariesVisible={nationalBoundariesVisible} enforcedCommune={mapScopeCommune} enforcedCommunes={mapScopeCommunes} /> : (
           <div className="h-full flex items-center justify-center bg-slate-50">
             <div className="text-center space-y-4">
               <div className="w-14 h-14 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mx-auto" />
@@ -839,6 +1332,32 @@ function MapView({ interventions, quartiers, selectedCommune, canSeeAllCommunes,
             📏
           </motion.button>
 
+          {/* Divider */}
+          <div className="w-6 h-px bg-slate-300/60 mx-auto" />
+
+          {/* Click-to-Add Intervention Toggle */}
+          <motion.button
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: 1.15 }}
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={() => {
+              setClickToAddEnabled((v) => !v)
+              // If turning off while measure mode is on, keep measure mode
+            }}
+            className={`w-10 h-10 rounded-xl shadow-lg border flex items-center justify-center transition-all text-sm ${
+              clickToAddEnabled
+                ? 'bg-emerald-600 text-white border-emerald-500 shadow-emerald-200'
+                : 'bg-white/90 backdrop-blur-sm text-slate-600 border-slate-200/60 hover:bg-white'
+            }`}
+            title={clickToAddEnabled ? 'إضافة تدخل بالنقر (مُفعّل)' : 'إضافة تدخل بالنقر (مُعطّل) — اضغط للتفعيل'}
+            aria-label="تفعيل النقر لإضافة تدخل"
+            aria-pressed={clickToAddEnabled}
+          >
+            ➕
+          </motion.button>
+
           {/* SIG Legend Toggle */}
           <motion.button
             initial={{ opacity: 0, x: -20 }}
@@ -871,7 +1390,11 @@ function MapView({ interventions, quartiers, selectedCommune, canSeeAllCommunes,
             transition={{ delay: 1.3 }}
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
-            onClick={() => window.print()}
+            onClick={(e) => {
+              e.preventDefault()
+              e.stopPropagation()
+              window.print()
+            }}
             className="w-10 h-10 bg-white/90 backdrop-blur-sm rounded-xl shadow-lg border border-slate-200/60 flex items-center justify-center hover:bg-white transition-all text-sm text-slate-600"
             title="طباعة الخريطة"
           >
@@ -987,12 +1510,24 @@ function MapView({ interventions, quartiers, selectedCommune, canSeeAllCommunes,
                 <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">عناصر الخريطة</p>
                 <div className="space-y-1.5">
                   <div className="flex items-center gap-2">
-                    <div className="w-5 h-0.5 border-t-2 border-dashed border-emerald-500" />
+                    <div className="w-5 h-0.5 border-t-[3px] border-blue-700" />
+                    <span className="text-xs text-slate-600">حدود الجهات</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-5 h-0.5 border-t-2 border-dashed border-violet-600" />
+                    <span className="text-xs text-slate-600">حدود الأقاليم والعمالات</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-5 h-0.5 border-t border-teal-700" />
                     <span className="text-xs text-slate-600">حدود الجماعات</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <div className="w-3 h-3 rounded-full bg-teal-500 border-2 border-white shadow-sm" />
                     <span className="text-xs text-slate-600">علامات الأحياء</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full bg-red-600 border-2 border-white shadow-sm flex items-center justify-center text-[8px]">📢</div>
+                    <span className="text-xs text-slate-600">الشكايات والبلاغات العامة</span>
                   </div>
                 </div>
               </div>
@@ -1689,7 +2224,7 @@ function MapView({ interventions, quartiers, selectedCommune, canSeeAllCommunes,
         </AnimatePresence>
 
         {/* Map click instruction overlay — bottom center */}
-        {settings.mapClickEnabled && (
+        {clickToAddEnabled && !measureMode && (
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -1698,7 +2233,7 @@ function MapView({ interventions, quartiers, selectedCommune, canSeeAllCommunes,
         >
           <div className="bg-white/90 backdrop-blur-sm rounded-lg px-3 py-1.5 shadow-md border border-emerald-100/60 flex items-center gap-1.5">
             <span className="text-[10px]">📍</span>
-            <p className="text-[10px] font-medium text-emerald-700">انقر على الخريطة لإضافة تدخل</p>
+            <p className="text-[10px] font-medium text-emerald-700">انقر داخل {mapScopeCommune ? (COMMUNE_LABELS[mapScopeCommune] || mapScopeCommune) : (user?.communeGroupName || 'الخريطة')} لإضافة تدخل</p>
           </div>
         </motion.div>
         )}

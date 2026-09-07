@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAppStore } from '@/lib/store'
 import { toast } from 'sonner'
@@ -11,11 +11,13 @@ const COMMUNE_LABELS: Record<string, string> = {
   'سلا': 'جماعة سلا',
   'سيدي أبي القنادل': 'جماعة سيدي أبي القنادل',
   'عامر': 'جماعة عامر',
+  'السهول': 'جماعة السهول',
 }
 const COMMUNE_COLORS: Record<string, string> = {
   'سلا': '#059669',
   'سيدي أبي القنادل': '#7c3aed',
   'عامر': '#d97706',
+  'السهول': '#0ea5e9',
 }
 const TYPE_LABELS: Record<string, string> = {
   DERATISATION: 'مكافحة القوارض', DESINSECTISATION: 'مكافحة الحشرات', DESINFECTION: 'التطهير والتعقيم',
@@ -31,8 +33,8 @@ const STATUT_COLORS: Record<string, string> = {
 }
 
 // ===== EXPORT TYPE DEFINITIONS =====
-type ExportType = 'interventions' | 'statistics' | 'inventory' | 'monthly' | 'commune' | 'custom'
-type ExportFormat = 'csv' | 'pdf'
+type ExportType = 'comprehensive' | 'interventions' | 'statistics' | 'inventory' | 'monthly' | 'commune' | 'custom'
+type ExportFormat = 'csv' | 'json' | 'pdf'
 
 interface ExportTypeOption {
   id: ExportType
@@ -43,6 +45,7 @@ interface ExportTypeOption {
 }
 
 const EXPORT_TYPES: ExportTypeOption[] = [
+  { id: 'comprehensive', icon: '🧭', title: 'التقرير الشامل لكل الأقسام', description: 'ملخص موحد للمكاتب والتدخلات والمؤشرات الحرجة', color: '#0f766e' },
   { id: 'interventions', icon: '📋', title: 'تقرير التدخلات', description: 'قائمة مفصلة لجميع عمليات التدخل مع البيانات الكاملة', color: '#10b981' },
   { id: 'statistics', icon: '📊', title: 'التقرير الإحصائي', description: 'رسوم بيانية وملخص إحصائي شامل للعمليات', color: '#3b82f6' },
   { id: 'inventory', icon: '📦', title: 'تقرير المخزون', description: 'مستويات المخزون والمنتجات المتوفرة والتنبيهات', color: '#f59e0b' },
@@ -93,7 +96,16 @@ interface ExportHistoryItem {
 export default function ExportView() {
   const { user, selectedCommune, selectedYear } = useAppStore()
   const canSeeAllCommunes = user?.role === 'admin' || user?.commune === 'ALL'
-  const effectiveCommune = canSeeAllCommunes ? selectedCommune : user?.commune || ''
+  const accountCommunes = user
+    ? (Array.isArray(user.managedCommunes) && user.managedCommunes.length > 0
+      ? Array.from(new Set(user.managedCommunes.filter((commune) => commune && commune !== 'ALL')))
+      : user.commune !== 'ALL' ? [user.commune] : [])
+    : []
+  const effectiveCommune = canSeeAllCommunes
+    ? selectedCommune
+    : accountCommunes.length === 1 ? accountCommunes[0] : 'ALL'
+  const availableCommunes = canSeeAllCommunes ? Object.keys(COMMUNE_LABELS) : accountCommunes
+  const canSelectCommune = canSeeAllCommunes || accountCommunes.length > 1
 
   // State
   const [selectedExportType, setSelectedExportType] = useState<ExportType | null>(null)
@@ -144,15 +156,23 @@ export default function ExportView() {
     try {
       const params = new URLSearchParams()
       if (filterCommune !== 'ALL') params.set('commune', filterCommune)
-      if (filterYear) {
-        params.set('year', filterYear)
-        if (filterFrom) params.set('from', filterFrom)
-        if (filterTo) params.set('to', filterTo)
-      }
+      if (filterYear) params.set('year', filterYear)
+      if (filterFrom) params.set('from', filterFrom)
+      if (filterTo) params.set('to', filterTo)
       if (filterType !== 'ALL') params.set('type', filterType)
       if (filterStatut !== 'ALL') params.set('statut', filterStatut)
 
-      if ((selectedExportType === 'inventory') || (selectedExportType === 'custom' && filterType !== 'ALL')) {
+      if (selectedExportType === 'comprehensive' || selectedExportType === 'statistics') {
+        params.set('format', 'json')
+        params.set('period', filterYear ? 'year' : 'all')
+        const res = await fetch(`/api/reports/comprehensive?${params.toString()}`)
+        if (!res.ok) throw new Error('فشل في تحميل البيانات')
+        const data = await res.json() as { sections?: Array<{ section: string; office: string; total: number }>; totalRecords?: number }
+        const sections = data.sections || []
+        setPreviewTotal(data.totalRecords || sections.reduce((sum, row) => sum + row.total, 0))
+        setPreviewColumns(['القسم', 'المكتب', 'عدد السجلات'])
+        setPreviewData(sections.map((row) => ({ 'القسم': row.section, 'المكتب': row.office, 'عدد السجلات': row.total })))
+      } else if ((selectedExportType === 'inventory') || (selectedExportType === 'custom' && filterType !== 'ALL')) {
         // Load products for inventory
         const res = await fetch(`/api/products?${params.toString()}`)
         if (!res.ok) throw new Error('فشل في تحميل البيانات')
@@ -245,15 +265,17 @@ export default function ExportView() {
     const params = new URLSearchParams()
     params.set('format', format)
     if (filterCommune !== 'ALL') params.set('commune', filterCommune)
-    if (filterYear) {
-      params.set('year', filterYear)
-      if (filterFrom) params.set('from', filterFrom)
-      if (filterTo) params.set('to', filterTo)
-    }
+    if (filterYear) params.set('year', filterYear)
+    if (filterFrom) params.set('from', filterFrom)
+    if (filterTo) params.set('to', filterTo)
     if (filterType !== 'ALL') params.set('type', filterType)
     if (filterStatut !== 'ALL') params.set('statut', filterStatut)
+    if (selectedExportType === 'comprehensive' || selectedExportType === 'statistics') {
+      params.set('period', filterYear ? 'year' : 'all')
+      return `/api/reports/comprehensive?${params.toString()}`
+    }
     return `/api/export?${params.toString()}`
-  }, [filterCommune, filterYear, filterType, filterStatut, filterFrom, filterTo])
+  }, [selectedExportType, filterCommune, filterYear, filterType, filterStatut, filterFrom, filterTo])
 
   // Add to export history
   const addToHistory = useCallback((type: ExportType, format: string, recordCount: number) => {
@@ -299,22 +321,23 @@ export default function ExportView() {
     }
   }, [])
 
-  // Handle CSV export
-  const handleCsvExport = useCallback(async () => {
+  // Handle structured data export
+  const handleDataExport = useCallback(async () => {
     if (!selectedExportType) {
       toast.error('يرجى اختيار نوع التقرير أولاً')
       return
     }
     toast.loading('جاري تحضير الملف...', { id: 'export-csv' })
-    const url = buildExportUrl('csv')
+    const format = exportFormat === 'json' ? 'json' : 'csv'
+    const url = buildExportUrl(format)
     const communePart = filterCommune !== 'ALL' ? `-${encodeURIComponent(filterCommune)}` : ''
-    const filename = `${selectedExportType}-${filterYear || 'all'}${communePart}.csv`
+    const filename = `${selectedExportType}-${filterYear || 'all'}${communePart}.${format}`
     const ok = await downloadCsv(url, filename)
     if (ok) {
-      addToHistory(selectedExportType, 'csv', previewTotal)
+      addToHistory(selectedExportType, format, previewTotal)
       toast.success('تم تصدير الملف بنجاح', { id: 'export-csv' })
     }
-  }, [selectedExportType, buildExportUrl, addToHistory, previewTotal, downloadCsv, filterCommune, filterYear])
+  }, [selectedExportType, exportFormat, buildExportUrl, addToHistory, previewTotal, downloadCsv, filterCommune, filterYear])
 
   // Handle PDF / Print preview (combined — uses browser print dialog which allows Save as PDF)
   const handlePdfExport = useCallback(() => {
@@ -325,6 +348,30 @@ export default function ExportView() {
     addToHistory(selectedExportType, 'pdf', previewTotal)
     setIsPrintOpen(true)
   }, [selectedExportType, addToHistory, previewTotal])
+
+  const openPdfForType = useCallback((type: ExportType) => {
+    setSelectedExportType(type)
+    setExportFormat('pdf')
+    window.setTimeout(() => setIsPrintOpen(true), 120)
+  }, [])
+
+  const openSectionPdf = useCallback((section: string, total: number) => {
+    const printWindow = window.open('', '_blank', 'width=1100,height=800')
+    if (!printWindow) {
+      toast.error('يرجى السماح بفتح نافذة المعاينة')
+      return
+    }
+    const scope = filterCommune === 'ALL' ? 'كل جماعات الحساب' : COMMUNE_LABELS[filterCommune] || filterCommune
+    const period = filterFrom || filterTo
+      ? `${filterFrom || 'البداية'} — ${filterTo || 'النهاية'}`
+      : filterYear || 'كل السنوات'
+    printWindow.document.write(`<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>تقرير ${section}</title><style>
+      body{font-family:Arial,Tahoma,sans-serif;color:#172033;margin:0;padding:42px;background:#f8fafc}main{max-width:900px;margin:auto;background:white;padding:42px;border:1px solid #e2e8f0;border-radius:18px}header{border-bottom:3px solid #0f766e;padding-bottom:18px;margin-bottom:28px}h1{margin:0 0 8px;color:#0f766e;font-size:26px}p{color:#64748b}.metric{display:inline-block;background:#ecfdf5;border:1px solid #a7f3d0;border-radius:14px;padding:22px 30px;margin:12px 0;font-size:28px;font-weight:800;color:#047857}.meta{margin-top:22px;padding:16px;background:#f8fafc;border-radius:12px;line-height:2}@media print{body{background:white;padding:0}main{border:0;max-width:none}}
+    </style></head><body><main><header><h1>التقرير الخاص بقسم ${section}</h1><p>المنصة المندمجة لتدبير قسم الوقاية وحفظ الصحة</p></header><div class="metric">${total} سجل</div><div class="meta"><b>النطاق الترابي:</b> ${scope}<br><b>الفترة:</b> ${period}<br><b>تاريخ الإصدار:</b> ${new Date().toLocaleString('ar-MA')}</div></main></body></html>`)
+    printWindow.document.close()
+    printWindow.focus()
+    printWindow.onload = () => printWindow.print()
+  }, [filterCommune, filterFrom, filterTo, filterYear])
 
   // Quick export handler
   const handleQuickExport = useCallback(async (quickId: string) => {
@@ -431,16 +478,6 @@ export default function ExportView() {
     toast.success('تم مسح سجل التصدير')
   }, [])
 
-  // Year options
-  const yearOptions = useMemo(() => {
-    const current = new Date().getFullYear()
-    const opts = [{ value: '', label: 'الكل' }]
-    for (let y = current; y >= current - 10; y--) {
-      opts.push({ value: y.toString(), label: y.toString() })
-    }
-    return opts
-  }, [])
-
   return (
     <div className="p-4 lg:p-6 space-y-6" dir="rtl">
       {/* Header */}
@@ -498,9 +535,12 @@ export default function ExportView() {
           {EXPORT_TYPES.map((expType) => {
             const isSelected = selectedExportType === expType.id
             return (
-              <motion.button
+              <motion.div
                 key={expType.id}
                 onClick={() => setSelectedExportType(expType.id)}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') setSelectedExportType(expType.id) }}
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
                 className={`relative flex items-start gap-3 p-4 rounded-2xl border-2 transition-all text-right ${
@@ -535,8 +575,15 @@ export default function ExportView() {
                   <div className={`text-[11px] mt-0.5 ${isSelected ? 'text-emerald-600/70' : 'text-slate-400'}`}>
                     {expType.description}
                   </div>
+                  <button
+                    type="button"
+                    onClick={(event) => { event.stopPropagation(); openPdfForType(expType.id) }}
+                    className="mt-2 rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1 text-[10px] font-bold text-rose-700 transition hover:bg-rose-100"
+                  >
+                    📕 المعاينة وPDF
+                  </button>
                 </div>
-              </motion.button>
+              </motion.div>
             )
           })}
         </div>
@@ -561,27 +608,25 @@ export default function ExportView() {
                   <select
                     value={filterCommune}
                     onChange={(e) => setFilterCommune(e.target.value)}
+                    disabled={!canSelectCommune}
                     className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50/50 text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-300 transition-all"
                   >
-                    <option value="ALL">كل الجماعات</option>
-                    {Object.entries(COMMUNE_LABELS).map(([key, label]) => (
-                      <option key={key} value={key}>{label}</option>
+                    <option value="ALL">{canSeeAllCommunes ? 'كل الجماعات' : 'كل جماعات الحساب'}</option>
+                    {availableCommunes.map((key) => (
+                      <option key={key} value={key}>{COMMUNE_LABELS[key] || key}</option>
                     ))}
                   </select>
+                  <p className="mt-1 text-[10px] text-slate-400">
+                    {canSeeAllCommunes ? 'يمكنك اختيار أي نطاق ترابي' : `النطاق مرتبط بحسابك: ${accountCommunes.map((commune) => COMMUNE_LABELS[commune] || commune).join('، ') || 'غير محدد'}`}
+                  </p>
                 </div>
 
                 {/* Year Filter */}
                 <div>
-                  <label className="block text-xs font-semibold text-slate-600 mb-1.5">📅 السنة</label>
-                  <select
-                    value={filterYear}
-                    onChange={(e) => setFilterYear(e.target.value)}
-                    className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50/50 text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-300 transition-all"
-                  >
-                    {yearOptions.map((y) => (
-                      <option key={y.value} value={y.value}>{y.label}</option>
-                    ))}
-                  </select>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1.5">📅 السنة من الشريط العلوي</label>
+                  <div className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3 py-2.5 text-sm font-bold text-slate-700">
+                    {filterYear || 'كل السنوات'}
+                  </div>
                 </div>
 
                 {/* Type Filter */}
@@ -690,6 +735,16 @@ export default function ExportView() {
                     📄 CSV ملف
                   </button>
                   <button
+                    onClick={() => setExportFormat('json')}
+                    className={`px-5 py-2 rounded-full text-sm font-medium transition-all border-2 ${
+                      exportFormat === 'json'
+                        ? 'bg-emerald-600 text-white border-emerald-600 shadow-md shadow-emerald-200'
+                        : 'bg-white text-slate-600 border-slate-200 hover:border-emerald-300 hover:text-emerald-600'
+                    }`}
+                  >
+                    🧩 JSON بيانات
+                  </button>
+                  <button
                     onClick={() => setExportFormat('pdf')}
                     className={`px-5 py-2 rounded-full text-sm font-medium transition-all border-2 ${
                       exportFormat === 'pdf'
@@ -705,7 +760,7 @@ export default function ExportView() {
               {/* Export Action Button */}
               <div className="flex items-center gap-3 pt-2">
                 <motion.button
-                  onClick={exportFormat === 'csv' ? handleCsvExport : handlePdfExport}
+                  onClick={exportFormat === 'pdf' ? handlePdfExport : handleDataExport}
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
                   className="bg-gradient-to-l from-emerald-600 to-teal-600 text-white px-6 py-3 rounded-xl font-bold shadow-lg shadow-emerald-200 flex items-center gap-2 text-sm"
@@ -713,7 +768,7 @@ export default function ExportView() {
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                     <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" />
                   </svg>
-                  تصدير {exportFormat === 'csv' ? 'CSV' : 'طباعة / PDF'}
+                  تصدير {exportFormat === 'csv' ? 'CSV' : exportFormat === 'json' ? 'JSON' : 'طباعة / PDF'}
                 </motion.button>
                 <button
                   onClick={loadPreview}
@@ -774,6 +829,7 @@ export default function ExportView() {
                       {previewColumns.map((col) => (
                         <th key={col} className="px-3 py-2.5 text-right text-[11px] font-bold text-slate-500 whitespace-nowrap">{col}</th>
                       ))}
+                      {selectedExportType === 'comprehensive' && <th className="px-3 py-2.5 text-right text-[11px] font-bold text-slate-500">إجراء</th>}
                     </tr>
                   </thead>
                   <tbody>
@@ -793,9 +849,9 @@ export default function ExportView() {
                           let cellContent = String(val)
 
                           if (col === 'النوع') {
-                            const typeKey = Object.entries(TYPE_LABELS).find(([, v]) => v === val)?.[0]
+                            const typeKey = Object.entries(TYPE_LABELS).find(([, v]) => v === String(val))?.[0]
                             if (typeKey) {
-                              cellContent = val
+                              cellContent = String(val)
                               cellClass = `text-xs font-bold`
                               return (
                                 <td key={col} className="px-3 py-2">
@@ -859,6 +915,17 @@ export default function ExportView() {
                             <td key={col} className={`px-3 py-2 ${cellClass}`}>{cellContent}</td>
                           )
                         })}
+                        {selectedExportType === 'comprehensive' && (
+                          <td className="px-3 py-2">
+                            <button
+                              type="button"
+                              onClick={() => openSectionPdf(String(row['القسم'] || 'القسم'), Number(row['عدد السجلات'] || 0))}
+                              className="whitespace-nowrap rounded-lg border border-rose-200 bg-rose-50 px-2 py-1 text-[10px] font-bold text-rose-700 transition hover:bg-rose-100"
+                            >
+                              📕 PDF القسم
+                            </button>
+                          </td>
+                        )}
                       </motion.tr>
                     ))}
                   </tbody>
@@ -945,7 +1012,7 @@ export default function ExportView() {
       <PrintDocument
         isOpen={isPrintOpen}
         onClose={() => setIsPrintOpen(false)}
-        exportType={selectedExportType}
+        exportType={selectedExportType === 'comprehensive' ? 'statistics' : selectedExportType}
         filterCommune={filterCommune}
         filterYear={filterYear}
         filterType={filterType}

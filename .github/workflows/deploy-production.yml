@@ -1,0 +1,83 @@
+name: Deploy BCH to production
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bch-production
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: Verify production build
+    runs-on: ubuntu-latest
+
+    env:
+      DATABASE_URL: file:./db/ci.db
+      INITIAL_SETUP_TOKEN: ci-only-setup-token
+      INITIAL_ADMIN_USERNAME: ci-admin
+      INITIAL_ADMIN_PASSWORD: ci-only-password-12345
+      INITIAL_ADMIN_NAME: CI Admin
+      ALLOW_DEMO_SEED: "false"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Use Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Run tests
+        run: npm test
+
+      - name: Build application
+        run: npm run build
+
+  deploy:
+    name: Deploy to VPS
+    needs: verify
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - name: Deploy over verified SSH connection
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+          DEPLOY_PATH: ${{ vars.DEPLOY_PATH }}
+        run: |
+          set -euo pipefail
+
+          test -n "$DEPLOY_HOST" || { echo "Missing DEPLOY_HOST" >&2; exit 1; }
+          test -n "$DEPLOY_USER" || { echo "Missing DEPLOY_USER" >&2; exit 1; }
+          test -n "$DEPLOY_SSH_KEY" || { echo "Missing DEPLOY_SSH_KEY" >&2; exit 1; }
+          test -n "$DEPLOY_KNOWN_HOSTS" || { echo "Missing DEPLOY_KNOWN_HOSTS" >&2; exit 1; }
+
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$DEPLOY_SSH_KEY" > "$HOME/.ssh/bch_deploy_key"
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/bch_deploy_key" "$HOME/.ssh/known_hosts"
+
+          DEPLOY_PATH="${DEPLOY_PATH:-/home/bch/BCH}"
+          ssh -i "$HOME/.ssh/bch_deploy_key" \
+            -o BatchMode=yes \
+            -o IdentitiesOnly=yes \
+            "$DEPLOY_USER@$DEPLOY_HOST" \
+            "BCH_APP_DIR='$DEPLOY_PATH' bash '$DEPLOY_PATH/scripts/deploy-production.sh'"

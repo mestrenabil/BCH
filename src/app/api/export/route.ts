@@ -83,7 +83,7 @@ export async function GET(request: NextRequest) {
 
       const csv = BOM + [headers.join(','), ...rows.map(r => r.join(','))].join('\n')
       // Use ASCII-safe filename to avoid ByteString conversion error with Arabic chars
-      const safeCommune = communeFilter ? encodeURIComponent(communeFilter) : ''
+      const safeCommune = typeof communeFilter === 'string' ? encodeURIComponent(communeFilter) : ''
       return new NextResponse(csv, {
         headers: {
           'Content-Type': 'text/csv; charset=utf-8',

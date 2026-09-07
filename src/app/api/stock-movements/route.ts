@@ -1,6 +1,7 @@
 import { db } from '@/lib/db'
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAuth, getCommuneFilter } from '@/lib/auth'
+import { canAccessCommune, requireAuth, getCommuneFilter, resolveRecordCommune } from '@/lib/auth'
+import { getTerritoryFilterFromValue, isCommuneInTerritoryScope } from '@/lib/territory-scope'
 
 export async function GET(request: NextRequest) {
   try {
@@ -38,7 +39,7 @@ export async function POST(request: NextRequest) {
     const { user } = authResult
 
     const body = await request.json()
-    const { productId, type, quantity, reason, note } = body
+    const { productId, type, quantity, reason, note, commune, territoryFilter } = body
 
     if (!productId || !type || !quantity) {
       return NextResponse.json({ error: 'يرجى ملء جميع الحقول المطلوبة' }, { status: 400 })
@@ -53,11 +54,17 @@ export async function POST(request: NextRequest) {
     if (!product) {
       return NextResponse.json({ error: 'المنتج غير موجود' }, { status: 404 })
     }
-    if (user.commune !== 'ALL' && product.commune !== '' && product.commune !== 'ALL' && product.commune !== user.commune) {
+    if (!canAccessCommune(user, product.commune)) {
       return NextResponse.json({ error: 'ليس لديك صلاحية التعديل على هذا المنتج' }, { status: 403 })
     }
 
-    const enforcedCommune = user.commune !== 'ALL' ? user.commune : (product.commune || '')
+    const enforcedCommune = resolveRecordCommune(user, commune || product.commune)
+    if (!enforcedCommune) {
+      return NextResponse.json({ error: 'يرجى تحديد الجماعة قبل تسجيل حركة المخزون' }, { status: 400 })
+    }
+    if (user.commune === 'ALL' && !isCommuneInTerritoryScope(enforcedCommune, getTerritoryFilterFromValue(territoryFilter))) {
+      return NextResponse.json({ error: 'الجماعة المختارة خارج النطاق الترابي المحدد' }, { status: 403 })
+    }
 
     const movement = await db.stockMovement.create({
       data: {

@@ -3,14 +3,19 @@
   "version": "0.2.0",
   "private": true,
   "scripts": {
-    "dev": "next dev -p 3000 -H 0.0.0.0 --webpack 2>&1 | tee dev.log",
-    "build": "next build && cp -r .next/static .next/standalone/.next/ && cp -r public .next/standalone/",
-    "start": "NODE_ENV=production bun .next/standalone/server.js 2>&1 | tee server.log",
+    "dev": "prisma generate && next dev -p 3000 -H 0.0.0.0",
+    "postinstall": "prisma generate",
+    "build": "next build",
+    "test": "node --experimental-strip-types --test tests/sanitary.test.ts",
+    "postbuild": "node scripts/prepare-standalone.cjs",
+    "start": "next start -p 3000 -H 0.0.0.0",
     "lint": "eslint .",
     "db:push": "prisma db push",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
-    "db:reset": "prisma migrate reset"
+    "db:reset": "prisma migrate reset",
+    "db:import-users": "node scripts/import-users-from-sqlite.cjs",
+    "db:seed:2025": "node scripts/seed-2025.cjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
@@ -66,6 +71,7 @@
     "next-auth": "^4.24.11",
     "next-intl": "^4.3.4",
     "next-themes": "^0.4.6",
+    "nodemailer": "^7.0.13",
     "pdf-lib": "^1.17.1",
     "pdfjs-dist": "^5.4.296",
     "prisma": "^6.11.1",
@@ -91,6 +97,7 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "@types/nodemailer": "^8.0.1",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "bun-types": "^1.3.4",

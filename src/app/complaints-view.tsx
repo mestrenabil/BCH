@@ -1,12 +1,16 @@
 'use client'
 
-import React, { useState, useCallback, useEffect } from 'react'
+import React, { useState, useCallback, useEffect, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { toast } from 'sonner'
-import { type CommuneType } from '@/lib/store'
+import { useAppStore, type CommuneType } from '@/lib/store'
+import { appendTerritoryParams } from '@/lib/geography'
+import { territoryCommuneName, useTerritoryCommunes } from '@/hooks/use-territory-communes'
 import {
   TYPE_LABELS, TYPE_COLORS, TYPE_ICONS,
   COMMUNE_LABELS, COMMUNE_COLORS,
+  FOOD_TYPE_LABELS, FOOD_TYPE_ICONS, FOOD_TYPE_COLORS,
+  FOOD_REPORT_STATUS_LABELS, FOOD_REPORT_STATUS_COLORS,
 } from '@/lib/constants'
 
 // ===== COMPLAINT TYPES =====
@@ -23,12 +27,41 @@ interface Complaint {
   priorite: string
   statut: string
   interventionId: string | null
+  environmentalDossierId: string | null
+  dossier?: { id: string; reference: string; status: string; dueDate: string | null; closedAt?: string | null } | null
   intervention?: { id: string; reference: string; type: string; statut: string } | null
+  environmentalDossier?: { id: string; reference: string; title: string; status: string } | null
+  contacts?: ComplaintContact[]
   dateReception: string
   dateTraitement: string | null
   observations: string | null
   createdAt: string
   updatedAt: string
+}
+
+interface ComplaintContact {
+  id: string
+  channel: string
+  outcome: string
+  notes: string
+  contactedAt: string
+  contactedBy: string
+}
+
+interface FoodReportItem {
+  id: string
+  reference: string
+  source: string
+  commune: string
+  quartier: string
+  adresse: string
+  reportType: string
+  establishmentName: string
+  description: string
+  priority: string
+  statut: string
+  createdAt: string
+  photos?: { id: string }[]
 }
 
 const STATUT_LABELS: Record<string, string> = {
@@ -60,17 +93,40 @@ const PRIORITE_COLORS: Record<string, string> = {
 }
 
 const COMPLAINT_TYPE_LABELS: Record<string, string> = {
-  DERATISATION: 'مكافحة القوارض',
-  DESINSECTISATION: 'مكافحة الحشرات',
-  DESINFECTION: 'التطهير والتعقيم',
-  AUTRE: 'أخرى',
+  ...TYPE_LABELS,
+  FOOD: 'سلامة غذائية',
+  ANIMAL: 'حيوان شارد',
+  ENVIRONMENT: 'بلاغ بيئي',
+}
+
+const CONTACT_CHANNEL_LABELS: Record<string, string> = {
+  PHONE: 'اتصال هاتفي',
+  WHATSAPP: 'واتساب',
+  VISIT: 'زيارة ميدانية',
+  EMAIL: 'بريد إلكتروني',
+  OTHER: 'وسيلة أخرى',
 }
 
 // ===== COMPLAINTS VIEW =====
 function ComplaintsView() {
+  const { user, territoryFilter, selectedYear, setCurrentView, setEnvironmentSubTab } = useAppStore()
+  const useTerritoryFilter = user?.role === 'admin' && user.commune === 'ALL'
+  const { communes: scopedCommunes } = useTerritoryCommunes(territoryFilter, useTerritoryFilter)
+  const scopedCommuneNames = useMemo(
+    () => Array.from(new Set(scopedCommunes.map(territoryCommuneName).filter(Boolean)))
+      .sort((first, second) => first.localeCompare(second, 'ar')),
+    [scopedCommunes]
+  )
+  const accessibleCommuneNames = useMemo(() => {
+    if (useTerritoryFilter) return scopedCommuneNames
+    if (user?.managedCommunes?.length) return Array.from(new Set(user.managedCommunes))
+    return user?.commune && user.commune !== 'ALL' ? [user.commune] : []
+  }, [scopedCommuneNames, useTerritoryFilter, user])
   const [complaints, setComplaints] = useState<Complaint[]>([])
   const [total, setTotal] = useState(0)
   const [isLoading, setIsLoading] = useState(true)
+  const [foodReports, setFoodReports] = useState<FoodReportItem[]>([])
+  const [showFoodReports, setShowFoodReports] = useState(false)
   const [filterStatut, setFilterStatut] = useState('ALL')
   const [filterCommune, setFilterCommune] = useState<string>('ALL')
   const [filterType, setFilterType] = useState('ALL')
@@ -83,9 +139,8 @@ function ComplaintsView() {
   const [addForm, setAddForm] = useState({
     nomCitoyen: '',
     telephone: '',
-    adresse: '',
     quartier: '',
-    commune: 'سلا',
+    commune: '',
     type: 'DERATISATION',
     description: '',
     priorite: 'NORMALE',
@@ -98,6 +153,10 @@ function ComplaintsView() {
   const [editObservations, setEditObservations] = useState('')
   const [editInterventionId, setEditInterventionId] = useState('')
   const [editSubmitting, setEditSubmitting] = useState(false)
+  const [contactChannel, setContactChannel] = useState('PHONE')
+  const [contactOutcome, setContactOutcome] = useState('')
+  const [contactNotes, setContactNotes] = useState('')
+  const [contactSubmitting, setContactSubmitting] = useState(false)
 
   // Interventions for linking
   const [availableInterventions, setAvailableInterventions] = useState<{ id: string; reference: string; type: string; statut: string }[]>([])
@@ -113,6 +172,8 @@ function ComplaintsView() {
     try {
       const params = new URLSearchParams()
       if (filterCommune !== 'ALL') params.set('commune', filterCommune)
+      if (useTerritoryFilter) appendTerritoryParams(params, territoryFilter)
+      if (selectedYear) params.set('year', selectedYear)
       if (filterStatut !== 'ALL') params.set('statut', filterStatut)
       if (filterType !== 'ALL') params.set('type', filterType)
       if (debouncedSearch) params.set('search', debouncedSearch)
@@ -123,7 +184,15 @@ function ComplaintsView() {
       }
     } catch { /* ignore */ }
     return null
-  }, [filterCommune, filterStatut, filterType, debouncedSearch])
+  }, [debouncedSearch, filterCommune, filterStatut, filterType, selectedYear, territoryFilter, useTerritoryFilter])
+
+  const refreshComplaints = useCallback(async () => {
+    const result = await fetchComplaints()
+    if (result) {
+      setComplaints(result.complaints)
+      setTotal(result.total)
+    }
+  }, [fetchComplaints])
 
   useEffect(() => {
     let cancelled = false
@@ -134,10 +203,22 @@ function ComplaintsView() {
         setTotal(result.total)
         setIsLoading(false)
       }
+      // اجلب أيضاً البلاغات الغذائية (لإظهارها كقسم منفصل)
+      try {
+        const params = new URLSearchParams()
+        if (filterCommune !== 'ALL') params.set('commune', filterCommune)
+        if (useTerritoryFilter) appendTerritoryParams(params, territoryFilter)
+        if (selectedYear) params.set('year', selectedYear)
+        const foodRes = await fetch(`/api/food-reports?${params.toString()}`)
+        if (foodRes.ok) {
+          const foodData = await foodRes.json()
+          if (!cancelled) setFoodReports(foodData.reports || [])
+        }
+      } catch { /* ignore */ }
     }
     load()
     return () => { cancelled = true }
-  }, [fetchComplaints])
+  }, [fetchComplaints, filterCommune, territoryFilter, useTerritoryFilter])
 
   const fetchAvailableInterventions = useCallback(async (commune: string) => {
     try {
@@ -159,11 +240,26 @@ function ComplaintsView() {
     setEditStatut(complaint.statut)
     setEditObservations(complaint.observations || '')
     setEditInterventionId(complaint.interventionId || '')
+    setContactChannel('PHONE')
+    setContactOutcome('')
+    setContactNotes('')
     fetchAvailableInterventions(complaint.commune)
+    try {
+      const res = await fetch(`/api/complaints/${complaint.id}`)
+      if (res.ok) {
+        const freshComplaint = await res.json() as Complaint
+        setDetailComplaint(freshComplaint)
+        setEditStatut(freshComplaint.statut)
+        setEditObservations(freshComplaint.observations || '')
+        setEditInterventionId(freshComplaint.interventionId || '')
+      }
+    } catch {
+      return
+    }
   }, [fetchAvailableInterventions])
 
   const handleAddComplaint = useCallback(async () => {
-    if (!addForm.nomCitoyen || !addForm.adresse || !addForm.commune || !addForm.type || !addForm.description) {
+    if (!addForm.nomCitoyen || !addForm.commune || !addForm.type || !addForm.description) {
       toast.error('يرجى ملء جميع الحقول المطلوبة')
       return
     }
@@ -172,13 +268,13 @@ function ComplaintsView() {
       const res = await fetch('/api/complaints', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(addForm),
+        body: JSON.stringify({ ...addForm, territoryFilter: useTerritoryFilter ? territoryFilter : undefined }),
       })
       if (res.ok) {
         toast.success('تم إنشاء الشكاية بنجاح')
         setShowAddDialog(false)
-        setAddForm({ nomCitoyen: '', telephone: '', adresse: '', quartier: '', commune: 'سلا', type: 'DERATISATION', description: '', priorite: 'NORMALE', observations: '' })
-        fetchComplaints()
+        setAddForm({ nomCitoyen: '', telephone: '', quartier: '', commune: accessibleCommuneNames.length === 1 ? accessibleCommuneNames[0] : '', type: 'DERATISATION', description: '', priorite: 'NORMALE', observations: '' })
+        await refreshComplaints()
       } else {
         const data = await res.json()
         toast.error(data.error || 'فشل في إنشاء الشكاية')
@@ -187,7 +283,7 @@ function ComplaintsView() {
       toast.error('حدث خطأ')
     }
     setAddSubmitting(false)
-  }, [addForm, fetchComplaints])
+  }, [accessibleCommuneNames, addForm, refreshComplaints, territoryFilter, useTerritoryFilter])
 
   const handleUpdateComplaint = useCallback(async () => {
     if (!detailComplaint) return
@@ -204,17 +300,75 @@ function ComplaintsView() {
       })
       if (res.ok) {
         toast.success('تم تحديث الشكاية بنجاح')
-        const updated = await res.json()
-        setDetailComplaint(updated)
-        fetchComplaints()
+        await res.json()
+        await refreshComplaints()
+        setDetailComplaint(null)
+        setShowDeleteConfirm(null)
       } else {
-        toast.error('فشل في تحديث الشكاية')
+        const data = await res.json().catch(() => null)
+        toast.error(data?.error || 'فشل في تحديث الشكاية')
       }
     } catch {
       toast.error('حدث خطأ')
     }
     setEditSubmitting(false)
-  }, [detailComplaint, editStatut, editObservations, editInterventionId, fetchComplaints])
+  }, [detailComplaint, editStatut, editObservations, editInterventionId, refreshComplaints])
+
+  const handleCreateEnvironmentalDossier = useCallback(async () => {
+    if (!detailComplaint) return
+    try {
+      const res = await fetch(`/api/complaints/${detailComplaint.id}/environment`, { method: 'POST' })
+      const data = await res.json().catch(() => null) as { dossier?: Complaint['environmentalDossier']; error?: string; alreadyLinked?: boolean } | null
+      if (!res.ok || !data?.dossier) {
+        toast.error(data?.error || 'فشل تحويل الشكاية إلى ملف بيئي')
+        return
+      }
+      const environmentalDossier = data.dossier
+      setDetailComplaint((current) => current ? {
+        ...current,
+        environmentalDossierId: environmentalDossier.id,
+        environmentalDossier,
+      } : current)
+      toast.success(data.alreadyLinked ? 'الشكاية مرتبطة بملف بيئي مسبقاً' : 'تم إنشاء الملف البيئي وربطه بالشكاية')
+    } catch {
+      toast.error('تعذر إنشاء الملف البيئي حالياً')
+    }
+  }, [detailComplaint])
+
+  const handleOpenEnvironmentalDossier = useCallback(() => {
+    setEnvironmentSubTab('dossiers')
+    setCurrentView('environment')
+    setDetailComplaint(null)
+  }, [setCurrentView, setEnvironmentSubTab])
+
+  const handleAddContact = useCallback(async () => {
+    if (!detailComplaint) return
+    if (contactOutcome.trim().length < 3) {
+      toast.error('يرجى تدوين نتيجة التواصل')
+      return
+    }
+    setContactSubmitting(true)
+    try {
+      const res = await fetch(`/api/complaints/${detailComplaint.id}/contacts`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ channel: contactChannel, outcome: contactOutcome, notes: contactNotes }),
+      })
+      if (res.ok) {
+        const contact = await res.json() as ComplaintContact
+        setDetailComplaint((current) => current ? { ...current, contacts: [contact, ...(current.contacts || [])] } : current)
+        setContactOutcome('')
+        setContactNotes('')
+        toast.success('تم حفظ تواصل المشتكي')
+      } else {
+        const data = await res.json().catch(() => null)
+        toast.error(data?.error || 'فشل في حفظ التواصل')
+      }
+    } catch {
+      toast.error('حدث خطأ أثناء حفظ التواصل')
+    }
+    setContactSubmitting(false)
+  }, [contactChannel, contactNotes, contactOutcome, detailComplaint])
 
   const handleDeleteComplaint = useCallback(async (id: string) => {
     try {
@@ -223,14 +377,14 @@ function ComplaintsView() {
         toast.success('تم حذف الشكاية بنجاح')
         setDetailComplaint(null)
         setShowDeleteConfirm(null)
-        fetchComplaints()
+        await refreshComplaints()
       } else {
         toast.error('فشل في حذف الشكاية')
       }
     } catch {
       toast.error('حدث خطأ')
     }
-  }, [fetchComplaints])
+  }, [refreshComplaints])
 
   // Print complaint report
   const handlePrintComplaint = useCallback((complaint: Complaint) => {
@@ -294,7 +448,6 @@ function ComplaintsView() {
   <div class="info-grid">
     <div class="info-card"><div class="label">👤 اسم المواطن</div><div class="value">${complaint.nomCitoyen}</div></div>
     <div class="info-card"><div class="label">📞 الهاتف</div><div class="value">${complaint.telephone || '—'}</div></div>
-    <div class="info-card full-width"><div class="label">📍 العنوان</div><div class="value">${complaint.adresse}</div></div>
     <div class="info-card"><div class="label">🏘️ الحي</div><div class="value">${complaint.quartier || '—'}</div></div>
     <div class="info-card"><div class="label">🏛️ الجماعة</div><div class="value">${COMMUNE_LABELS[complaint.commune as keyof typeof COMMUNE_LABELS] || complaint.commune}</div></div>
     <div class="info-card"><div class="label">📋 النوع</div><div class="value">${COMPLAINT_TYPE_LABELS[complaint.type] || complaint.type}</div></div>
@@ -390,7 +543,7 @@ function ComplaintsView() {
             className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium whitespace-nowrap transition-all ${
               filterStatut === k ? 'shadow-md ring-2 ring-offset-1' : 'bg-white border border-slate-100'
             }`}
-            style={filterStatut === k ? { backgroundColor: STATUT_COLORS[k] + '15', color: STATUT_COLORS[k], ringColor: STATUT_COLORS[k] + '30' } : {}}>
+            style={filterStatut === k ? { backgroundColor: STATUT_COLORS[k] + '15', color: STATUT_COLORS[k] } : {}}>
             <div className="w-2 h-2 rounded-full" style={{ backgroundColor: STATUT_COLORS[k] }} />
             {v}: {complaints.filter(c => c.statut === k).length}
           </button>
@@ -402,18 +555,91 @@ function ComplaintsView() {
         <select value={filterCommune} onChange={(e) => setFilterCommune(e.target.value)}
           className="px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-emerald-500/20">
           <option value="ALL">كل الجماعات</option>
-          <option value="سلا">جماعة سلا</option>
-          <option value="سيدي أبي القنادل">جماعة سيدي أبي القنادل</option>
-          <option value="عامر">جماعة عامر</option>
+          {accessibleCommuneNames.map((commune) => <option key={commune} value={commune}>جماعة {commune}</option>)}
         </select>
         <select value={filterType} onChange={(e) => setFilterType(e.target.value)}
           className="px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-emerald-500/20">
           <option value="ALL">كل الأنواع</option>
-          {Object.entries(COMPLAINT_TYPE_LABELS).map(([k, v]) => (
+          {Object.entries(TYPE_LABELS).map(([k, v]) => (
             <option key={k} value={k}>{v}</option>
           ))}
         </select>
       </div>
+
+      {/* ===== Food Safety Reports Section ===== */}
+      {foodReports.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+          className="rounded-2xl border-2 border-rose-200 bg-rose-50/50 overflow-hidden"
+        >
+          {/* Banner */}
+          <button
+            onClick={() => setShowFoodReports(!showFoodReports)}
+            className="w-full flex items-center justify-between px-4 py-3 bg-gradient-to-l from-rose-600 to-red-600 text-white"
+          >
+            <div className="flex items-center gap-2">
+              <span className="text-xl">🥗</span>
+              <div className="text-right">
+                <div className="font-bold text-sm">بلاغات السلامة الغذائية</div>
+                <div className="text-rose-100 text-[11px]">{foodReports.length} بلاغ · {foodReports.filter(r => r.statut === 'NOUVEAU').length} جديد</div>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              {foodReports.filter(r => r.statut === 'NOUVEAU').length > 0 && (
+                <span className="bg-white/25 rounded-full px-2 py-0.5 text-[10px] font-bold animate-pulse">
+                  {foodReports.filter(r => r.statut === 'NOUVEAU').length} جديد
+                </span>
+              )}
+              <svg xmlns="http://www.w3.org/2000/svg" className={`h-4 w-4 transition-transform ${showFoodReports ? 'rotate-180' : ''}`} viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+              </svg>
+            </div>
+          </button>
+
+          {/* Food reports list (collapsible) */}
+          {showFoodReports && (
+            <div className="p-3 space-y-2 max-h-[400px] overflow-y-auto">
+              {foodReports.map((r) => (
+                <div key={r.id} className="bg-white rounded-xl border border-slate-100 p-3 flex items-start justify-between gap-2 hover:shadow-sm transition-all">
+                  <div className="flex items-start gap-2 flex-1 min-w-0">
+                    <span className="text-lg shrink-0">{FOOD_TYPE_ICONS[r.reportType] || '🥗'}</span>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-sm font-bold text-slate-800">{r.reference}</span>
+                        <span className="px-1.5 py-0.5 rounded-md text-[10px] font-bold text-white" style={{ backgroundColor: FOOD_REPORT_STATUS_COLORS[r.statut] || '#94a3b8' }}>
+                          {FOOD_REPORT_STATUS_LABELS[r.statut] || r.statut}
+                        </span>
+                        {r.source === 'PUBLIC' && <span className="px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-blue-50 text-blue-600">عمومي</span>}
+                        {r.photos && r.photos.length > 0 && <span className="text-[10px]">📸 {r.photos.length}</span>}
+                      </div>
+                      <div className="text-xs text-slate-600 mt-1 line-clamp-1">
+                        {r.establishmentName ? `🏪 ${r.establishmentName} — ` : ''}{r.description || 'بدون وصف'}
+                      </div>
+                      <div className="text-[10px] text-slate-400 mt-0.5">
+                        {FOOD_TYPE_LABELS[r.reportType] || r.reportType} · {r.commune} · {new Date(r.createdAt).toLocaleDateString('ar-MA', { day: '2-digit', month: '2-digit' })}
+                      </div>
+                    </div>
+                  </div>
+                  <a
+                    href="#"
+                    onClick={(e) => { e.preventDefault(); setCurrentView('food') }}
+                    className="shrink-0 text-[10px] font-bold text-rose-600 hover:text-rose-800 px-2 py-1 rounded-lg hover:bg-rose-100"
+                  >
+                    عرض ←
+                  </a>
+                </div>
+              ))}
+              <a
+                href="#"
+                onClick={(e) => { e.preventDefault(); setCurrentView('food') }}
+                className="block text-center text-xs font-bold text-rose-600 hover:text-rose-800 py-2"
+              >
+                عرض كل البلاغات الغذائية ←
+              </a>
+            </div>
+          )}
+        </motion.div>
+      )}
 
       {/* Complaints List */}
       {isLoading ? (
@@ -464,12 +690,13 @@ function ComplaintsView() {
                         )}
                       </div>
                       <p className="text-sm text-slate-700 font-medium mt-1">👤 {complaint.nomCitoyen}</p>
-                      <p className="text-xs text-slate-500 mt-0.5">📍 {complaint.adresse}{complaint.quartier ? ` — ${complaint.quartier}` : ''}</p>
+                      <p className="text-xs text-slate-500 mt-0.5">📍 {complaint.quartier || COMMUNE_LABELS[complaint.commune as keyof typeof COMMUNE_LABELS] || complaint.commune}</p>
                       <p className="text-xs text-slate-400 mt-1 line-clamp-2">{complaint.description}</p>
                       <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-xs text-slate-400">
                         <span className="flex items-center gap-1">📅 {new Date(complaint.dateReception).toLocaleDateString('ar-MA')}</span>
                         {complaint.telephone && <span className="flex items-center gap-1">📞 {complaint.telephone}</span>}
                         {complaint.intervention && <span className="flex items-center gap-1">🔗 {complaint.intervention.reference}</span>}
+                        {complaint.dossier && <span className="flex items-center gap-1">📂 {complaint.dossier.reference}</span>}
                       </div>
                     </div>
                   </div>
@@ -526,7 +753,7 @@ function ComplaintsView() {
                     </div>
                   </div>
                 </div>
-                <p className="text-amber-100 text-sm">👤 {detailComplaint.nomCitoyen} — {detailComplaint.adresse}</p>
+                <p className="text-amber-100 text-sm">👤 {detailComplaint.nomCitoyen}</p>
               </div>
 
               {/* Details */}
@@ -590,12 +817,107 @@ function ComplaintsView() {
                   </div>
                 )}
 
+                {detailComplaint.dossier && (
+                  <div className="rounded-xl border border-indigo-100 bg-indigo-50 p-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="mb-1 text-[10px] font-bold text-indigo-600">📂 الملف الموحد · المكتب 07</p>
+                        <p className="font-mono text-xs font-bold text-indigo-800">{detailComplaint.dossier.reference}</p>
+                        <p className="mt-1 text-[11px] text-indigo-700">الحالة: {detailComplaint.dossier.status}</p>
+                      </div>
+                      <div className="text-left">
+                        <p className="text-[10px] font-medium text-indigo-500">مهلة المعالجة</p>
+                        <p className={`mt-1 text-xs font-bold ${detailComplaint.dossier.dueDate && new Date(detailComplaint.dossier.dueDate).getTime() < Date.now() && !detailComplaint.dossier.closedAt ? 'text-red-600' : 'text-indigo-700'}`}>
+                          {detailComplaint.dossier.dueDate ? new Date(detailComplaint.dossier.dueDate).toLocaleDateString('ar-MA') : 'غير محددة'}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {detailComplaint.environmentalDossier ? (
+                  <div className="bg-emerald-50 rounded-xl p-3 border border-emerald-100">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-[10px] text-emerald-600 font-bold mb-1">الملف البيئي المرتبط</p>
+                        <p className="text-xs font-bold text-emerald-700 font-mono">{detailComplaint.environmentalDossier.reference}</p>
+                        <p className="text-[11px] text-emerald-700 mt-1">{detailComplaint.environmentalDossier.title}</p>
+                      </div>
+                      <button onClick={handleOpenEnvironmentalDossier}
+                        className="shrink-0 px-3 py-2 rounded-lg bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-700 transition-colors">
+                        فتح الملفات البيئية
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="bg-teal-50 rounded-xl p-3 border border-teal-100">
+                    <p className="text-[10px] text-teal-700 font-bold mb-1">ربط بيئي</p>
+                    <p className="text-xs text-teal-800 mb-2">يمكن تحويل هذه الشكاية إلى ملف بيئي مع الاحتفاظ بالجماعة والموقع والوصف والمصدر.</p>
+                    <button onClick={handleCreateEnvironmentalDossier}
+                      className="px-3 py-2 rounded-lg bg-teal-600 text-white text-xs font-bold hover:bg-teal-700 transition-colors">
+                      🌿 إنشاء ملف بيئي
+                    </button>
+                  </div>
+                )}
+
                 {detailComplaint.dateTraitement && (
                   <div className="bg-green-50 rounded-xl p-3 border border-green-100">
                     <p className="text-[10px] text-green-600 font-bold">تاريخ المعالجة</p>
                     <p className="text-xs font-bold text-green-700 mt-0.5">📅 {new Date(detailComplaint.dateTraitement).toLocaleDateString('ar-MA')}</p>
                   </div>
                 )}
+
+                <div className="border-t border-slate-100 pt-4 space-y-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <h4 className="text-sm font-bold text-slate-700">📞 التواصل مع المشتكي</h4>
+                    {detailComplaint.telephone && (
+                      <a href={`tel:${detailComplaint.telephone}`}
+                        className="px-3 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 text-xs font-bold hover:bg-emerald-100 transition-colors">
+                        اتصال مباشر
+                      </a>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[10px] text-slate-400 font-medium mb-1">وسيلة التواصل</label>
+                      <select value={contactChannel} onChange={(event) => setContactChannel(event.target.value)}
+                        className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-emerald-500/20">
+                        {Object.entries(CONTACT_CHANNEL_LABELS).map(([value, label]) => (
+                          <option key={value} value={value}>{label}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] text-slate-400 font-medium mb-1">نتيجة التواصل *</label>
+                      <input value={contactOutcome} onChange={(event) => setContactOutcome(event.target.value)}
+                        placeholder="تم التواصل / لا يجيب..."
+                        className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-emerald-500/20" />
+                    </div>
+                  </div>
+                  <textarea value={contactNotes} onChange={(event) => setContactNotes(event.target.value)}
+                    rows={2} placeholder="تفاصيل المتابعة أو التزام المشتكي..."
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 resize-none" />
+                  <button onClick={handleAddContact} disabled={contactSubmitting}
+                    className="w-full px-4 py-2 rounded-xl bg-slate-800 text-white text-sm font-medium hover:bg-slate-700 disabled:opacity-50 transition-colors">
+                    {contactSubmitting ? 'جاري حفظ التواصل...' : 'تسجيل التواصل'}
+                  </button>
+                  {(detailComplaint.contacts || []).length > 0 && (
+                    <div className="space-y-2 pt-1">
+                      <p className="text-[10px] text-slate-400 font-medium">سجل التواصل</p>
+                      {detailComplaint.contacts!.map((contact) => (
+                        <div key={contact.id} className="rounded-xl bg-slate-50 border border-slate-100 p-3">
+                          <div className="flex items-center justify-between gap-2 text-xs">
+                            <span className="font-bold text-slate-700">{CONTACT_CHANNEL_LABELS[contact.channel] || contact.channel}</span>
+                            <span className="text-slate-400">{new Date(contact.contactedAt).toLocaleString('ar-MA')}</span>
+                          </div>
+                          <p className="text-xs text-slate-700 mt-1">{contact.outcome}</p>
+                          {contact.notes && <p className="text-xs text-slate-500 mt-1 whitespace-pre-wrap">{contact.notes}</p>}
+                          <p className="text-[10px] text-slate-400 mt-2">سجله: {contact.contactedBy || '—'}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
 
                 {/* Actions */}
                 <div className="border-t border-slate-100 pt-4 space-y-3">
@@ -704,11 +1026,6 @@ function ComplaintsView() {
                       className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-300" dir="ltr" />
                   </div>
                 </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">العنوان *</label>
-                  <input type="text" value={addForm.adresse} onChange={(e) => setAddForm({ ...addForm, adresse: e.target.value })}
-                    className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-300" />
-                </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs font-medium text-slate-600 mb-1">الحي</label>
@@ -717,11 +1034,10 @@ function ComplaintsView() {
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-slate-600 mb-1">الجماعة *</label>
-                    <select value={addForm.commune} onChange={(e) => setAddForm({ ...addForm, commune: e.target.value })}
+                    <select required value={addForm.commune} onChange={(e) => setAddForm({ ...addForm, commune: e.target.value })}
                       className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-amber-500/20">
-                      <option value="سلا">جماعة سلا</option>
-                      <option value="سيدي أبي القنادل">جماعة سيدي أبي القنادل</option>
-                      <option value="عامر">جماعة عامر</option>
+                      {accessibleCommuneNames.length !== 1 && <option value="">اختر الجماعة</option>}
+                      {accessibleCommuneNames.map((commune) => <option key={commune} value={commune}>جماعة {commune}</option>)}
                     </select>
                   </div>
                 </div>
@@ -730,7 +1046,7 @@ function ComplaintsView() {
                     <label className="block text-xs font-medium text-slate-600 mb-1">النوع *</label>
                     <select value={addForm.type} onChange={(e) => setAddForm({ ...addForm, type: e.target.value })}
                       className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-amber-500/20">
-                      {Object.entries(COMPLAINT_TYPE_LABELS).map(([k, v]) => (
+                      {Object.entries(TYPE_LABELS).map(([k, v]) => (
                         <option key={k} value={k}>{v}</option>
                       ))}
                     </select>

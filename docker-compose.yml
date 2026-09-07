@@ -1,0 +1,27 @@
+# PostgreSQL/PostGIS للتطوير المحلي
+# الاستخدام: docker compose up -d
+# ثم: DATABASE_URL="postgresql://bch:bch_pass@localhost:5432/bch_health?schema=public"
+
+version: '3.8'
+
+services:
+  postgres:
+    image: postgis/postgis:15-3.4
+    container_name: bch-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: bch_health
+      POSTGRES_USER: bch
+      POSTGRES_PASSWORD: bch_pass
+    ports:
+      - "5432:5432"
+    volumes:
+      - bch_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bch -d bch_health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  bch_pgdata:

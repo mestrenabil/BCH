@@ -1,3 +1,4 @@
+@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800;900&display=swap');
 @import "tailwindcss";
 @import "tw-animate-css";
 
@@ -121,6 +122,45 @@
   }
 }
 
+.public-report-page {
+  font-family: 'Cairo', 'Noto Sans Arabic', 'Segoe UI', Tahoma, sans-serif;
+  font-feature-settings: 'kern', 'liga';
+}
+
+.public-report-page input,
+.public-report-page select,
+.public-report-page textarea,
+.public-report-page button {
+  font-family: inherit;
+}
+
+.public-report-page .text-slate-400 {
+  color: #64748b;
+}
+
+.public-report-page .text-slate-500 {
+  color: #475569;
+}
+
+.public-report-page[data-language='fr'],
+.public-report-page[data-language='en'],
+.public-report-page[data-language='es'] {
+  line-height: 1.65;
+}
+
+.public-report-page[data-language='fr'] input,
+.public-report-page[data-language='fr'] select,
+.public-report-page[data-language='fr'] textarea,
+.public-report-page[data-language='en'] input,
+.public-report-page[data-language='en'] select,
+.public-report-page[data-language='en'] textarea,
+.public-report-page[data-language='es'] input,
+.public-report-page[data-language='es'] select,
+.public-report-page[data-language='es'] textarea {
+  color: #0f172a;
+  background-color: #f8fafc;
+}
+
 /* Leaflet map RTL fix */
 .leaflet-container {
   direction: ltr;
@@ -132,8 +172,14 @@
   order: -1;
 }
 
-[dir="ltr"] .bg-gradient-to-l {
-  background-image: linear-gradient(to right, var(--tw-gradient-stops));
+.site-header {
+  background-color: #065f46 !important;
+  background-image: linear-gradient(to left, #065f46, #0f766e, #064e3b) !important;
+}
+
+.public-report-hero {
+  background-color: #063b37 !important;
+  background-image: linear-gradient(to left, #063b37, #08645a, #0d8a75) !important;
 }
 
 /* Custom scrollbar */
@@ -414,3 +460,105 @@ body.classic-print-active [class*="focus:border-emerald"] {
     max-height: none !important;
   }
 }
+
+/* ===== ACCESSIBILITY ENHANCEMENTS ===== */
+
+/* Skip-to-content link — visible only when focused via keyboard */
+.skip-to-content {
+  position: fixed;
+  top: -100px;
+  inset-inline-start: 1rem;
+  z-index: 300;
+  background: #059669;
+  color: #fff;
+  padding: 0.625rem 1.25rem;
+  border-radius: 0 0 0.75rem 0.75rem;
+  font-weight: 600;
+  font-size: 0.875rem;
+  box-shadow: 0 10px 25px rgba(5, 150, 105, 0.35);
+  transition: top 0.2s ease;
+}
+.skip-to-content:focus {
+  top: 0;
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+
+/* Visible focus ring on all interactive elements (keyboard only) */
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[role="button"]:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid oklch(0.45 0.15 160);
+  outline-offset: 2px;
+  border-radius: 0.375rem;
+}
+
+/* Stronger focus ring in dark mode for contrast */
+.dark a:focus-visible,
+.dark button:focus-visible,
+.dark input:focus-visible,
+.dark select:focus-visible,
+.dark textarea:focus-visible {
+  outline-color: oklch(0.7 0.18 160);
+}
+
+/* Respect reduced-motion preference — disable animations */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* High-contrast text selection */
+::selection {
+  background: oklch(0.45 0.15 160 / 0.25);
+}
+
+/* Ensure screen-reader-only utility is available */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.environment-module .bg-emerald-50 { background-color: rgb(255 251 235) !important; }
+.environment-module .bg-emerald-50\/50 { background-color: rgb(255 251 235 / 0.5) !important; }
+.environment-module .bg-emerald-50\/60 { background-color: rgb(255 251 235 / 0.6) !important; }
+.environment-module .bg-emerald-100 { background-color: rgb(254 243 199) !important; }
+.environment-module .bg-emerald-500 { background-color: rgb(245 158 11) !important; }
+.environment-module .bg-emerald-600 { background-color: rgb(217 119 6) !important; }
+.environment-module .bg-emerald-700 { background-color: rgb(180 83 9) !important; }
+.environment-module .bg-emerald-800 { background-color: rgb(146 64 14) !important; }
+.environment-module .text-emerald-50 { color: rgb(255 251 235) !important; }
+.environment-module .text-emerald-100 { color: rgb(254 243 199) !important; }
+.environment-module .text-emerald-600 { color: rgb(217 119 6) !important; }
+.environment-module .text-emerald-700 { color: rgb(180 83 9) !important; }
+.environment-module .text-emerald-800 { color: rgb(146 64 14) !important; }
+.environment-module .border-emerald-100 { border-color: rgb(254 243 199) !important; }
+.environment-module .border-emerald-200 { border-color: rgb(253 230 138) !important; }
+.environment-module .border-emerald-300 { border-color: rgb(252 211 77) !important; }
+.environment-module .border-emerald-400 { border-color: rgb(251 191 36) !important; }
+.environment-module .hover\:bg-emerald-50:hover { background-color: rgb(255 251 235) !important; }
+.environment-module .hover\:bg-emerald-100:hover { background-color: rgb(254 243 199) !important; }
+.environment-module .hover\:bg-emerald-700:hover { background-color: rgb(180 83 9) !important; }
+.environment-module .hover\:bg-emerald-800:hover { background-color: rgb(146 64 14) !important; }
+.environment-module .hover\:text-emerald-800:hover { color: rgb(146 64 14) !important; }
+.environment-module .focus\:ring-emerald-400:focus { --tw-ring-color: rgb(251 191 36) !important; }
+.environment-module .from-emerald-700 { --tw-gradient-from: rgb(180 83 9) var(--tw-gradient-from-position); --tw-gradient-to: rgb(180 83 9 / 0) var(--tw-gradient-to-position); }
+.environment-module .from-emerald-800 { --tw-gradient-from: rgb(146 64 14) var(--tw-gradient-from-position); --tw-gradient-to: rgb(146 64 14 / 0) var(--tw-gradient-to-position); }
+.environment-module .to-teal-700 { --tw-gradient-to: rgb(194 65 12) var(--tw-gradient-to-position); }

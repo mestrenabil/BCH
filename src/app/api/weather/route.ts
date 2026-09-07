@@ -37,7 +37,7 @@ export async function GET() {
   }
 
   try {
-    const res = await fetch('https://wttr.in/Sale,Morocco?format=j1', {
+    const res = await fetch('https://wttr.in/Morocco?format=j1', {
       next: { revalidate: 1800 }, // 30 minutes cache
     })
 
@@ -58,7 +58,7 @@ export async function GET() {
       windSpeed: parseInt(current.windspeedKmph || '0'),
       description: current.weatherDesc?.[0]?.value || 'N/A',
       descriptionAr: translateWeatherToArabic(current.weatherDesc?.[0]?.value || ''),
-      city: 'سلا',
+      city: 'المغرب',
       icon: current.weatherCode === '113' ? '☀️' :
             current.weatherCode === '116' ? '⛅' :
             current.weatherCode === '119' || current.weatherCode === '122' ? '☁️' :

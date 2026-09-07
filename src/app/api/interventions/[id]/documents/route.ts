@@ -1,6 +1,6 @@
 import { db } from '@/lib/db'
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAuth } from '@/lib/auth'
+import { canAccessCommune, requireAuth } from '@/lib/auth'
 
 // GET /api/interventions/[id]/documents — Get all documents linked to an intervention
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -16,7 +16,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     if (!intervention) {
       return NextResponse.json({ error: 'التدخل غير موجود' }, { status: 404 })
     }
-    if (user.commune !== 'ALL' && intervention.commune !== user.commune) {
+    if (!canAccessCommune(user, intervention.commune)) {
       return NextResponse.json({ error: 'ليس لديك صلاحية الوصول لهذا التدخل' }, { status: 403 })
     }
 
@@ -64,7 +64,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     if (!intervention) {
       return NextResponse.json({ error: 'التدخل غير موجود' }, { status: 404 })
     }
-    if (user.commune !== 'ALL' && intervention.commune !== user.commune) {
+    if (!canAccessCommune(user, intervention.commune)) {
       return NextResponse.json({ error: 'ليس لديك صلاحية تعديل هذا التدخل' }, { status: 403 })
     }
 
@@ -79,6 +79,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const document = await db.document.findUnique({ where: { id: documentId } })
     if (!document) {
       return NextResponse.json({ error: 'المستند غير موجود' }, { status: 404 })
+    }
+    if (!canAccessCommune(user, document.commune)) {
+      return NextResponse.json({ error: 'ليس لديك صلاحية الوصول لهذا المستند' }, { status: 403 })
     }
 
     // Use upsert to avoid duplicates
@@ -123,7 +126,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     if (!intervention) {
       return NextResponse.json({ error: 'التدخل غير موجود' }, { status: 404 })
     }
-    if (user.commune !== 'ALL' && intervention.commune !== user.commune) {
+    if (!canAccessCommune(user, intervention.commune)) {
       return NextResponse.json({ error: 'ليس لديك صلاحية تعديل هذا التدخل' }, { status: 403 })
     }
 

@@ -1,6 +1,6 @@
 import { db } from '@/lib/db'
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAuth, getCommuneFilter } from '@/lib/auth'
+import { requireAuth, getScopedCommuneFilter } from '@/lib/auth'
 
 export async function GET(request: NextRequest) {
   try {
@@ -11,10 +11,7 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url)
     const year = searchParams.get('year')
-    const requestedCommune = searchParams.get('commune')
-
-    // Enforce commune filter based on user's role
-    const communeFilter = getCommuneFilter(user, requestedCommune)
+    const communeFilter = getScopedCommuneFilter(user, searchParams)
 
     const where: Record<string, unknown> = {}
     if (year) {
@@ -24,7 +21,15 @@ export async function GET(request: NextRequest) {
     }
     if (communeFilter) where.commune = communeFilter
 
-    const [total, byType, byStatut, byQuartier, byCommune, monthly, recent] = await Promise.all([
+    const complaintWhere: Record<string, unknown> = {}
+    if (communeFilter) complaintWhere.commune = communeFilter
+    const startOfToday = new Date()
+    startOfToday.setHours(0, 0, 0, 0)
+    const startOfTomorrow = new Date(startOfToday)
+    startOfTomorrow.setDate(startOfTomorrow.getDate() + 1)
+    complaintWhere.dateReception = { gte: startOfToday, lt: startOfTomorrow }
+
+    const [total, byType, byStatut, byQuartier, byCommune, monthly, recent, complaintsToday] = await Promise.all([
       // Total count
       db.intervention.count({ where }),
       // By type
@@ -64,6 +69,7 @@ export async function GET(request: NextRequest) {
         orderBy: { date: 'desc' },
         take: 10,
       }),
+      db.complaint.count({ where: complaintWhere }),
     ])
 
     // Process monthly data
@@ -144,6 +150,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       total,
+      complaintsToday,
       byType: typeStats,
       byStatut: statutStats,
       byQuartier: byQuartier.map(q => ({ quartier: q.quartier, count: q._count })),
@@ -153,6 +160,7 @@ export async function GET(request: NextRequest) {
       recent,
       quartiers,
       userCommune: user.commune, // Send user's commune so frontend knows
+      managedCommunes: user.managedCommunes,
     })
   } catch (error) {
     console.error('Statistics error:', error)

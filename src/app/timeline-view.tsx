@@ -408,7 +408,6 @@ export default function TimelineView({ interventions, commune }: { interventions
                                   style={{
                                     backgroundColor: typeColor + '18',
                                     borderColor: isHovered ? typeColor : typeColor + '40',
-                                    ringColor: typeColor,
                                   }}
                                 >
                                   {/* Status dot */}

@@ -52,7 +52,7 @@ export function mapCSVRowToIntervention(row: CSVRow): {
     const date = row['date'] || row['التاريخ'] || new Date().toISOString().split('T')[0]
     const quartier = row['quartier'] || row['الحي'] || ''
     const adresse = row['adresse'] || row['العنوان'] || ''
-    const commune = row['commune'] || row['الجماعة'] || 'سلا'
+    const commune = row['commune'] || row['الجماعة'] || ''
     const latitude = parseFloat(row['latitude'] || row['خط العرض'] || '34.05')
     const longitude = parseFloat(row['longitude'] || row['خط الطول'] || '-6.80')
     const statut = row['statut'] || row['الحالة'] || 'PLANIFIEE'

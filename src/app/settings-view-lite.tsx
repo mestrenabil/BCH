@@ -1,18 +1,59 @@
 'use client'
 
-import React, { useState, useCallback, useEffect, useRef } from 'react'
+import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { toast } from 'sonner'
-import { useAppStore, type CommuneType, type OverlaySectionKey, OVERLAY_SECTION_LABELS } from '@/lib/store'
+import { useAppStore, type CommuneType, type OverlaySectionKey, type ViewType, OVERLAY_SECTION_LABELS, DEFAULT_NAV_ORDER } from '@/lib/store'
 import { getYearOptions } from '@/lib/store'
+import { appendTerritoryParams, hasTerritorySelection } from '@/lib/geography'
+import { territoryCommuneName, useTerritoryCommunes } from '@/hooks/use-territory-communes'
 import {
   type Quartier,
   COMMUNE_LABELS, COMMUNE_COLORS, COMMUNE_USER_INFO,
 } from '@/lib/constants'
 import { UserManagementSection } from './users-view-lite'
 
+const NAV_SETTINGS_ITEMS: { id: ViewType; label: string; icon: string }[] = [
+  { id: 'dashboard', label: 'لوحة القيادة', icon: '📊' },
+  { id: 'map', label: 'الخريطة التفاعلية', icon: '🗺️' },
+  { id: 'interventions', label: 'التدخلات', icon: '📋' },
+  { id: 'agents', label: 'الفرق والأعوان', icon: '👥' },
+  { id: 'inventory', label: 'المخزون', icon: '📦' },
+  { id: 'documents', label: 'المستندات', icon: '📁' },
+  { id: 'calendar', label: 'التقويم', icon: '📅' },
+  { id: 'complaints', label: 'الشكايات والبلاغات', icon: '📢' },
+  { id: 'workOrders', label: 'أوامر العمل', icon: '🧭' },
+  { id: 'campagnes', label: 'الحملات', icon: '🎪' },
+  { id: 'csvr', label: 'الحيوانات الشاردة', icon: '🐾' },
+  { id: 'food', label: 'السلامة الغذائية', icon: '🥗' },
+  { id: 'dossiers', label: 'الملفات', icon: '🗂️' },
+  { id: 'sanitary', label: 'المراقبة الصحية', icon: '🍽️' },
+  { id: 'water', label: 'مراقبة المياه', icon: '💧' },
+  { id: 'vector', label: 'محاربة النواقل والتطهير', icon: '🐀' },
+  { id: 'funeral', label: 'المقابر والوفيات', icon: '⚱️' },
+  { id: 'environment', label: 'البيئة', icon: '🌳' },
+  { id: 'vigilance', label: 'اليقظة الصحية', icon: '📢' },
+  { id: 'authorizations', label: 'التراخيص', icon: '📋' },
+  { id: 'gis', label: 'نظام المعلومات الجغرافية', icon: '🌐' },
+  { id: 'reportsOffice', label: 'التقارير والإحصائيات', icon: '📊' },
+  { id: 'calendarUnified', label: 'التقويم الموحد', icon: '📅' },
+  { id: 'reports', label: 'التقارير', icon: '📈' },
+  { id: 'operations', label: 'العمليات', icon: '⏱️' },
+  { id: 'kpi', label: 'مؤشرات الأداء', icon: '🎯' },
+  { id: 'alerts', label: 'التنبيهات', icon: '⚡' },
+  { id: 'export', label: 'التصدير', icon: '📤' },
+  { id: 'notifications', label: 'الإشعارات', icon: '🔔' },
+  { id: 'activityLog', label: 'سجل النشاط', icon: '📝' },
+  { id: 'timeline', label: 'الخط الزمني', icon: '📊' },
+  { id: 'users', label: 'المستخدمون', icon: '👥' },
+  { id: 'settings', label: 'الإعدادات', icon: '⚙️' },
+  { id: 'helpCenter', label: 'مركز المساعدة', icon: '❓' },
+]
+
 // ===== CSV IMPORT BUTTON =====
 function CSVImportButton({ type, label, icon, color }: { type: 'interventions' | 'agents' | 'products'; label: string; icon: string; color: string }) {
+  const { user, territoryFilter } = useAppStore()
+  const useTerritoryFilter = user?.role === 'admin' && user.commune === 'ALL'
   const [dialogOpen, setDialogOpen] = useState(false)
   const [csvData, setCsvData] = useState<Record<string, string>[]>([])
   const [isImporting, setIsImporting] = useState(false)
@@ -85,7 +126,7 @@ function CSVImportButton({ type, label, icon, color }: { type: 'interventions' |
       const res = await fetch('/api/import', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type, data: csvData }),
+        body: JSON.stringify({ type, data: csvData, territoryFilter: useTerritoryFilter ? territoryFilter : undefined }),
       })
       const result = await res.json()
       if (res.ok) {
@@ -249,6 +290,16 @@ function CSVImportButton({ type, label, icon, color }: { type: 'interventions' |
 
 // ===== QUARTIER MANAGEMENT SECTION =====
 function QuartierManagementSection() {
+  const { user, territoryFilter } = useAppStore()
+  const useTerritoryFilter = user?.role === 'admin' && user.commune === 'ALL'
+  const { communes: scopedCommunes } = useTerritoryCommunes(territoryFilter, useTerritoryFilter)
+  const scopedCommuneNames = useMemo(
+    () => Array.from(new Set(scopedCommunes.map(territoryCommuneName).filter(Boolean)))
+      .sort((first, second) => first.localeCompare(second, 'ar')),
+    [scopedCommunes]
+  )
+  const mustChooseScopedCommune = useTerritoryFilter && hasTerritorySelection(territoryFilter)
+  const accountCommune = user?.commune && user.commune !== 'ALL' ? user.commune : ''
   const [quartiers, setQuartiers] = useState<Quartier[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
@@ -263,6 +314,7 @@ function QuartierManagementSection() {
       try {
         const params = new URLSearchParams()
         if (filterCommune !== 'ALL') params.set('commune', filterCommune)
+        if (useTerritoryFilter) appendTerritoryParams(params, territoryFilter)
         const res = await fetch(`/api/quartiers?${params}`)
         const data = await res.json()
         if (!cancelled) {
@@ -273,29 +325,31 @@ function QuartierManagementSection() {
     }
     load()
     return () => { cancelled = true }
-  }, [filterCommune])
+  }, [filterCommune, territoryFilter, useTerritoryFilter])
 
   const refreshQuartiers = useCallback(() => {
     const load = async () => {
       try {
         const params = new URLSearchParams()
         if (filterCommune !== 'ALL') params.set('commune', filterCommune)
+        if (useTerritoryFilter) appendTerritoryParams(params, territoryFilter)
         const res = await fetch(`/api/quartiers?${params}`)
         const data = await res.json()
         setQuartiers(data.quartiers || [])
       } catch (err) { console.error('Failed to fetch quartiers:', err) }
     }
     load()
-  }, [filterCommune])
+  }, [filterCommune, territoryFilter, useTerritoryFilter])
 
   const handleSave = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     const form = new FormData(e.currentTarget)
     const data = {
       nom: form.get('nom') as string,
-      commune: form.get('commune') as string,
+      commune: accountCommune || form.get('commune') as string,
       latitude: form.get('latitude') as string,
       longitude: form.get('longitude') as string,
+      territoryFilter: useTerritoryFilter ? territoryFilter : undefined,
     }
     if (!data.nom) { toast.error('يرجى إدخال اسم الحي'); return }
     try {
@@ -366,9 +420,9 @@ function QuartierManagementSection() {
           <select value={filterCommune} onChange={(e) => setFilterCommune(e.target.value)}
             className="px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-teal-500/20">
             <option value="ALL">كل الجماعات</option>
-            <option value="سلا">جماعة سلا</option>
-            <option value="سيدي أبي القنادل">جماعة سيدي أبي القنادل</option>
-            <option value="عامر">جماعة عامر</option>
+            {useTerritoryFilter
+              ? scopedCommunes.map((commune) => <option key={commune.code} value={territoryCommuneName(commune)}>{territoryCommuneName(commune)}</option>)
+              : <><option value="سلا">جماعة سلا</option><option value="سيدي أبي القنادل">جماعة سيدي أبي القنادل</option><option value="عامر">جماعة عامر</option><option value="السهول">جماعة السهول</option></>}
           </select>
         </div>
 
@@ -466,13 +520,15 @@ function QuartierManagementSection() {
                     className="w-full px-3 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none text-sm" />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-500 mb-1.5">الجماعة</label>
-                  <select name="commune" defaultValue={editingQuartier?.commune || ''}
+                  <label className="block text-xs font-bold text-slate-500 mb-1.5">الجماعة *</label>
+                  <select name="commune" required defaultValue={accountCommune || editingQuartier?.commune || (mustChooseScopedCommune && scopedCommuneNames.length === 1 ? scopedCommuneNames[0] : '')}
                     className="w-full px-3 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none text-sm">
-                    <option value="">— اختر الجماعة —</option>
-                    <option value="سلا">جماعة سلا</option>
-                    <option value="سيدي أبي القنادل">جماعة سيدي أبي القنادل</option>
-                    <option value="عامر">جماعة عامر</option>
+                    {!accountCommune && <option value="">— اختر الجماعة —</option>}
+                    {accountCommune
+                      ? <option value={accountCommune}>{COMMUNE_LABELS[accountCommune] || accountCommune}</option>
+                      : useTerritoryFilter
+                      ? scopedCommunes.map((commune) => <option key={commune.code} value={territoryCommuneName(commune)}>{territoryCommuneName(commune)}</option>)
+                      : <><option value="سلا">جماعة سلا</option><option value="سيدي أبي القنادل">جماعة سيدي أبي القنادل</option><option value="عامر">جماعة عامر</option><option value="السهول">جماعة السهول</option></>}
                   </select>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
@@ -531,6 +587,16 @@ function QuartierManagementSection() {
 
 // ===== AGENT MANAGEMENT SECTION =====
 function AgentManagementSection() {
+  const { user, territoryFilter } = useAppStore()
+  const useTerritoryFilter = user?.role === 'admin' && user.commune === 'ALL'
+  const { communes: scopedCommunes } = useTerritoryCommunes(territoryFilter, useTerritoryFilter)
+  const scopedCommuneNames = useMemo(
+    () => Array.from(new Set(scopedCommunes.map(territoryCommuneName).filter(Boolean)))
+      .sort((first, second) => first.localeCompare(second, 'ar')),
+    [scopedCommunes]
+  )
+  const mustChooseScopedCommune = useTerritoryFilter && hasTerritorySelection(territoryFilter)
+  const accountCommune = user?.commune && user.commune !== 'ALL' ? user.commune : ''
   const [agents, setAgents] = useState<{ id: string; nom: string; prenom: string; telephone: string; commune: string; fonction: string; actif: boolean }[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
@@ -551,6 +617,7 @@ function AgentManagementSection() {
       try {
         const params = new URLSearchParams()
         if (filterCommune !== 'ALL') params.set('commune', filterCommune)
+        if (useTerritoryFilter) appendTerritoryParams(params, territoryFilter)
         const res = await fetch(`/api/agents?${params}`)
         const data = await res.json()
         if (!cancelled) { setAgents(data.agents || []); setIsLoading(false) }
@@ -558,20 +625,21 @@ function AgentManagementSection() {
     }
     load()
     return () => { cancelled = true }
-  }, [filterCommune])
+  }, [filterCommune, territoryFilter, useTerritoryFilter])
 
   const refreshAgents = useCallback(() => {
     const load = async () => {
       try {
         const params = new URLSearchParams()
         if (filterCommune !== 'ALL') params.set('commune', filterCommune)
+        if (useTerritoryFilter) appendTerritoryParams(params, territoryFilter)
         const res = await fetch(`/api/agents?${params}`)
         const data = await res.json()
         setAgents(data.agents || [])
       } catch { /* */ }
     }
     load()
-  }, [filterCommune])
+  }, [filterCommune, territoryFilter, useTerritoryFilter])
 
   const handleSave = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -580,9 +648,10 @@ function AgentManagementSection() {
       nom: form.get('nom') as string,
       prenom: form.get('prenom') as string,
       telephone: form.get('telephone') as string,
-      commune: form.get('commune') as string,
+      commune: accountCommune || form.get('commune') as string,
       fonction: form.get('fonction') as string,
       actif: form.get('actif') === 'on',
+      territoryFilter: useTerritoryFilter ? territoryFilter : undefined,
     }
     if (!data.nom) { toast.error('يرجى إدخال اسم العون'); return }
     try {
@@ -643,9 +712,9 @@ function AgentManagementSection() {
           <select value={filterCommune} onChange={(e) => setFilterCommune(e.target.value)}
             className="px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-amber-500/20">
             <option value="ALL">كل الجماعات</option>
-            <option value="سلا">جماعة سلا</option>
-            <option value="سيدي أبي القنادل">جماعة سيدي أبي القنادل</option>
-            <option value="عامر">جماعة عامر</option>
+            {useTerritoryFilter
+              ? scopedCommunes.map((commune) => <option key={commune.code} value={territoryCommuneName(commune)}>{territoryCommuneName(commune)}</option>)
+              : <><option value="سلا">جماعة سلا</option><option value="سيدي أبي القنادل">جماعة سيدي أبي القنادل</option><option value="عامر">جماعة عامر</option><option value="السهول">جماعة السهول</option></>}
           </select>
           <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-amber-50 border border-amber-100">
             <span className="text-sm">👤</span>
@@ -753,13 +822,15 @@ function AgentManagementSection() {
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs font-bold text-slate-500 mb-1.5">🏛️ الجماعة</label>
-                    <select name="commune" defaultValue={editingAgent?.commune || ''}
+                    <label className="block text-xs font-bold text-slate-500 mb-1.5">🏛️ الجماعة *</label>
+                    <select name="commune" required defaultValue={accountCommune || editingAgent?.commune || (mustChooseScopedCommune && scopedCommuneNames.length === 1 ? scopedCommuneNames[0] : '')}
                       className="w-full px-3 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none text-sm">
-                      <option value="">— اختر —</option>
-                      <option value="سلا">جماعة سلا</option>
-                      <option value="سيدي أبي القنادل">جماعة سيدي أبي القنادل</option>
-                      <option value="عامر">جماعة عامر</option>
+                      {!accountCommune && <option value="">— اختر —</option>}
+                      {accountCommune
+                        ? <option value={accountCommune}>{COMMUNE_LABELS[accountCommune] || accountCommune}</option>
+                        : useTerritoryFilter
+                        ? scopedCommunes.map((commune) => <option key={commune.code} value={territoryCommuneName(commune)}>{territoryCommuneName(commune)}</option>)
+                        : <><option value="سلا">جماعة سلا</option><option value="سيدي أبي القنادل">جماعة سيدي أبي القنادل</option><option value="عامر">جماعة عامر</option><option value="السهول">جماعة السهول</option></>}
                     </select>
                   </div>
                   <div>
@@ -830,6 +901,13 @@ function SettingsView() {
   // For admin users: allow switching which commune's settings to view/edit
   const canSeeAllCommunes = user?.role === 'admin' || user?.commune === 'ALL'
   const currentSettingsCommune = isAdminViewingCommune || settingsCommune || user?.commune || 'ALL'
+  const normalizedNavOrder = useMemo(() => {
+    const configured = Array.isArray(settings.navOrder) ? settings.navOrder : []
+    return [
+      ...configured.filter((id) => DEFAULT_NAV_ORDER.includes(id)),
+      ...DEFAULT_NAV_ORDER.filter((id) => !configured.includes(id)),
+    ]
+  }, [settings.navOrder])
 
   // Load settings on mount
   useEffect(() => {
@@ -854,6 +932,39 @@ function SettingsView() {
       const ok = await saveSettings()
       if (!ok) toast.error('حدث خطأ أثناء حفظ الإعدادات')
     }, 800)
+  }
+
+  const handleNavVisibility = (id: ViewType) => {
+    if (id === 'settings') return
+    handleUpdateAndSave({
+      navVisibility: {
+        ...settings.navVisibility,
+        [id]: !(settings.navVisibility?.[id] ?? true),
+        settings: true,
+      },
+    })
+  }
+
+  const handleNavMove = (index: number, direction: -1 | 1) => {
+    const targetIndex = index + direction
+    if (targetIndex < 0 || targetIndex >= normalizedNavOrder.length) return
+    const nextOrder = [...normalizedNavOrder]
+    const [movedItem] = nextOrder.splice(index, 1)
+    nextOrder.splice(targetIndex, 0, movedItem)
+    handleUpdateAndSave({ navOrder: nextOrder })
+  }
+
+  const handleShowAllNav = () => {
+    handleUpdateAndSave({
+      navVisibility: Object.fromEntries(DEFAULT_NAV_ORDER.map((id) => [id, true])) as Record<ViewType, boolean>,
+    })
+  }
+
+  const handleResetNav = () => {
+    handleUpdateAndSave({
+      navOrder: [...DEFAULT_NAV_ORDER],
+      navVisibility: Object.fromEntries(DEFAULT_NAV_ORDER.map((id) => [id, true])) as Record<ViewType, boolean>,
+    })
   }
 
   const handleApplyDefaults = () => {
@@ -908,9 +1019,12 @@ function SettingsView() {
             <div className="flex flex-wrap gap-2">
               {[
                 { key: 'ALL', label: 'عام (المشترك)', icon: '🌐', color: '#475569' },
-                { key: 'سلا', label: 'جماعة سلا', icon: '🏙️', color: '#059669' },
-                { key: 'سيدي أبي القنادل', label: 'جماعة سيدي أبي القنادل', icon: '🏘️', color: '#7c3aed' },
-                { key: 'عامر', label: 'جماعة عامر', icon: '🌄', color: '#d97706' },
+                ...Object.keys(COMMUNE_LABELS).map((commune) => ({
+                  key: commune,
+                  label: COMMUNE_LABELS[commune],
+                  icon: COMMUNE_USER_INFO[commune]?.icon || '🏘️',
+                  color: COMMUNE_COLORS[commune] || '#64748b',
+                })),
               ].map((c) => (
                 <button key={c.key}
                   onClick={() => handleAdminSwitchCommune(c.key)}
@@ -924,6 +1038,50 @@ function SettingsView() {
                   {c.label}
                 </button>
               ))}
+            </div>
+          </div>
+        </motion.div>
+      )}
+
+      {/* Navigation visibility and order — managed by the general administrator */}
+      {user?.role === 'admin' && (
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.07 }}
+          className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+          <div className="bg-gradient-to-l from-indigo-700 to-violet-700 text-white px-6 py-4">
+            <h3 className="font-bold text-base">🧭 أقسام مسؤولي الجماعات</h3>
+            <p className="text-indigo-200 text-xs mt-0.5">تحكم في ما يظهر لموظفي الجماعة المختارة من الأقسام وترتيبها حسب الأولوية</p>
+          </div>
+          <div className="p-4 space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <p className="text-xs text-slate-500">إعداد «عام (المشترك)» يطبق على حسابات جميع الجماعات، ويمكن تخصيص إعدادات جماعة بعينها. يبقى وصول المدير العام كاملاً دائماً.</p>
+              <div className="flex gap-2">
+                <button type="button" onClick={handleShowAllNav} className="px-3 py-2 rounded-lg bg-indigo-50 text-indigo-700 text-xs font-bold hover:bg-indigo-100">إظهار الكل</button>
+                <button type="button" onClick={handleResetNav} className="px-3 py-2 rounded-lg border border-slate-200 text-slate-600 text-xs font-bold hover:bg-slate-50">الافتراضي</button>
+              </div>
+            </div>
+            <div className="space-y-2 max-h-[30rem] overflow-y-auto pr-1">
+              {normalizedNavOrder.map((id, index) => {
+                const item = NAV_SETTINGS_ITEMS.find((candidate) => candidate.id === id)
+                if (!item) return null
+                const visible = id === 'settings' || (settings.navVisibility?.[id] ?? true)
+                return (
+                  <div key={id} className={`flex items-center gap-2 rounded-xl border px-3 py-2 transition-colors ${visible ? 'border-slate-200 bg-white' : 'border-slate-100 bg-slate-50 opacity-60'}`}>
+                    <span className="w-7 text-center text-xs font-bold text-slate-400">{index + 1}</span>
+                    <span className="text-lg">{item.icon}</span>
+                    <span className="flex-1 text-sm font-semibold text-slate-700">{item.label}</span>
+                    <button type="button" onClick={() => handleNavVisibility(id)} disabled={id === 'settings'}
+                      className={`px-2.5 py-1.5 rounded-lg text-[11px] font-bold transition-colors ${id === 'settings' ? 'cursor-not-allowed bg-slate-100 text-slate-400' : visible ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100' : 'bg-slate-200 text-slate-500 hover:bg-slate-300'}`}>
+                      {visible ? 'ظاهر' : 'مخفي'}
+                    </button>
+                    <div className="flex gap-1">
+                      <button type="button" onClick={() => handleNavMove(index, -1)} disabled={index === 0} aria-label="تحريك القسم للأعلى"
+                        className="w-7 h-7 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-30">↑</button>
+                      <button type="button" onClick={() => handleNavMove(index, 1)} disabled={index === normalizedNavOrder.length - 1} aria-label="تحريك القسم للأسفل"
+                        className="w-7 h-7 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-30">↓</button>
+                    </div>
+                  </div>
+                )
+              })}
             </div>
           </div>
         </motion.div>
@@ -1003,6 +1161,7 @@ function SettingsView() {
                 <option value="سلا">جماعة سلا</option>
                 <option value="سيدي أبي القنادل">جماعة سيدي أبي القنادل</option>
                 <option value="عامر">جماعة عامر</option>
+                <option value="السهول">جماعة السهول</option>
               </select>
             )}
           </div>
@@ -1904,9 +2063,9 @@ function SettingsView() {
         <div className="p-6">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {[
-              { label: 'اسم التطبيق', value: 'عمالة سلا — قسم حفظ الصحة والبيئة' },
+              { label: 'اسم التطبيق', value: 'المنصة المندمجة لتدبير قسم الوقاية وحفظ الصحة' },
               { label: 'الإصدار', value: '2.0.0' },
-              { label: 'المصالح', value: 'مكتب مكافحة الجرذان • مكافحة الحشرات • التطهير' },
+              { label: 'المصالح', value: 'قسم الوقاية وحفظ الصحة' },
               { label: 'الحدود الترابية', value: 'قرار رقم 1954.24 — الجريدة الرسمية عدد 7340' },
               { label: 'السكان', value: 'RGPH 2024 — HCP المندوبية السامية للتخطيط' },
               { label: 'التطوير', value: 'Nabil EL BOUOSSI — 2026' },

@@ -3,8 +3,8 @@ import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
 
 export const metadata: Metadata = {
-  title: "نظام 3D - عمالة سلا | قسم حفظ الصحة والبيئة",
-  description: "نظام تدبير ومتابعة عمليات مكتب مكافحة الجرذان ومكافحة الحشرات والتطهير لجماعة بوقنادل سلا",
+  title: "المنصة المندمجة لتدبير قسم الوقاية وحفظ الصحة",
+  description: "المنصة المندمجة لتدبير ومتابعة أعمال قسم الوقاية وحفظ الصحة",
 };
 
 export default function RootLayout({

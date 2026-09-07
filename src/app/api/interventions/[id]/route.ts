@@ -1,6 +1,13 @@
 import { db } from '@/lib/db'
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAuth } from '@/lib/auth'
+import { canAccessCommune, getManagedCommunes, requireAuth } from '@/lib/auth'
+import { getTerritoryFilterFromSearchParams, getTerritoryFilterFromValue, isCommuneInTerritoryScope } from '@/lib/territory-scope'
+import { isCoordinateInCommune } from '@/lib/commune-boundaries'
+
+const GIS_LAYER_KEYS = new Set([
+  'interventions', 'deratisation', 'desinsectisation', 'desinfection', 'complaints', 'establishments', 'waterPoints', 'pollution', 'waste',
+  'sites', 'animals', 'sanitation', 'biteCases', 'foodReports', 'workOrders', 'dossiers',
+])
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -9,6 +16,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const { user } = authResult
 
     const { id } = await params
+    const territorialFilter = getTerritoryFilterFromSearchParams(new URL(request.url).searchParams)
     const intervention = await db.intervention.findUnique({
       where: { id },
       include: {
@@ -40,8 +48,11 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     }
 
     // Non-admin users can only view interventions from their own commune
-    if (user.commune !== 'ALL' && intervention.commune !== user.commune) {
+    if (!canAccessCommune(user, intervention.commune)) {
       return NextResponse.json({ error: 'ليس لديك صلاحية الوصول لهذا التدخل' }, { status: 403 })
+    }
+    if (user.commune === 'ALL' && !isCommuneInTerritoryScope(intervention.commune, territorialFilter)) {
+      return NextResponse.json({ error: 'التدخل خارج النطاق الترابي الحالي' }, { status: 403 })
     }
 
     return NextResponse.json(intervention)
@@ -64,12 +75,25 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     if (!existingCheck) {
       return NextResponse.json({ error: 'التدخل غير موجود' }, { status: 404 })
     }
-    if (user.commune !== 'ALL' && existingCheck.commune !== user.commune) {
+    if (!canAccessCommune(user, existingCheck.commune)) {
       return NextResponse.json({ error: 'ليس لديك صلاحية تعديل هذا التدخل' }, { status: 403 })
     }
 
     const body = await request.json()
-    const { materials, ...restBody } = body
+    const territorialFilter = getTerritoryFilterFromValue(body.territoryFilter)
+    if (user.commune === 'ALL' && (!isCommuneInTerritoryScope(existingCheck.commune, territorialFilter) || !isCommuneInTerritoryScope(body.commune || existingCheck.commune, territorialFilter))) {
+      return NextResponse.json({ error: 'التدخل أو الجماعة المختارة خارج النطاق الترابي الحالي' }, { status: 403 })
+    }
+    if (user.commune !== 'ALL') {
+      const latitude = body.latitude === undefined ? existingCheck.latitude : Number(body.latitude)
+      const longitude = body.longitude === undefined ? existingCheck.longitude : Number(body.longitude)
+      const targetCommune = getManagedCommunes(user).length === 1 ? getManagedCommunes(user)[0] : existingCheck.commune
+      const isWithinCommune = await isCoordinateInCommune(targetCommune, latitude, longitude)
+      if (isWithinCommune === false) {
+        return NextResponse.json({ error: 'إحداثيات التدخل خارج حدود جماعتك' }, { status: 403 })
+      }
+    }
+    const { materials, territoryFilter: _territoryFilter, ...restBody } = body
 
     // Get existing intervention with materials
     const existing = await db.intervention.findUnique({
@@ -122,11 +146,15 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     await db.interventionMaterial.deleteMany({ where: { interventionId: id } })
 
     // Enforce commune: non-admin users cannot change the commune
-    const enforcedCommune = user.commune !== 'ALL' ? user.commune : undefined
+    const managedCommunes = getManagedCommunes(user)
+    const enforcedCommune = user.commune !== 'ALL' && managedCommunes.length === 1 ? managedCommunes[0] : (user.commune !== 'ALL' ? existingCheck.commune : undefined)
 
     // Update intervention
     const updateData: Record<string, unknown> = {
       ...restBody,
+      ...(restBody.gisLayer !== undefined && {
+        gisLayer: typeof restBody.gisLayer === 'string' && GIS_LAYER_KEYS.has(restBody.gisLayer) ? restBody.gisLayer : 'interventions',
+      }),
       ...(enforcedCommune && { commune: enforcedCommune }),
       date: restBody.date ? new Date(restBody.date as string) : undefined,
       latitude: restBody.latitude ? parseFloat(restBody.latitude as string) : undefined,
@@ -135,7 +163,11 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       coutMainOeuvre: restBody.coutMainOeuvre !== undefined ? (restBody.coutMainOeuvre ? parseFloat(restBody.coutMainOeuvre as string) : null) : undefined,
       coutMateriaux: restBody.coutMateriaux !== undefined ? (restBody.coutMateriaux ? parseFloat(restBody.coutMateriaux as string) : null) : undefined,
       coutTotal: restBody.coutTotal !== undefined ? (restBody.coutTotal ? parseFloat(restBody.coutTotal as string) : null) : undefined,
+      // Normalize campagneId: empty string → null (unlink)
+      ...(restBody.campagneId !== undefined && { campagneId: restBody.campagneId || null }),
     }
+    // Avoid passing undefined commune override as a literal undefined for prisma
+    if (restBody.campagneId === undefined) delete updateData.campagneId
 
     // Build new materials
     const newMaterials = (materials && Array.isArray(materials) && materials.length > 0)
@@ -170,6 +202,15 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       })
     }
 
+    // Recompute coutReel for affected campagnes (old + new)
+    const affectedCampagnes = new Set<string>()
+    if (existing.campagneId) affectedCampagnes.add(existing.campagneId)
+    if (restBody.campagneId) affectedCampagnes.add(String(restBody.campagneId))
+    for (const campId of affectedCampagnes) {
+      const agg = await db.intervention.aggregate({ where: { campagneId: campId }, _sum: { coutTotal: true } })
+      await db.campagne.update({ where: { id: campId }, data: { coutReel: agg._sum.coutTotal ?? 0 } })
+    }
+
     return NextResponse.json(intervention)
   } catch (error) {
     console.error('PUT intervention error:', error)
@@ -184,14 +225,18 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     const { user } = authResult
 
     const { id } = await params
+    const territorialFilter = getTerritoryFilterFromSearchParams(new URL(request.url).searchParams)
 
     // Get existing and check commune permission
     const existingCheck = await db.intervention.findUnique({ where: { id } })
     if (!existingCheck) {
       return NextResponse.json({ error: 'التدخل غير موجود' }, { status: 404 })
     }
-    if (user.commune !== 'ALL' && existingCheck.commune !== user.commune) {
+    if (!canAccessCommune(user, existingCheck.commune)) {
       return NextResponse.json({ error: 'ليس لديك صلاحية حذف هذا التدخل' }, { status: 403 })
+    }
+    if (user.commune === 'ALL' && !isCommuneInTerritoryScope(existingCheck.commune, territorialFilter)) {
+      return NextResponse.json({ error: 'التدخل خارج النطاق الترابي الحالي' }, { status: 403 })
     }
 
     // Get existing materials to restore stock
