@@ -32,7 +32,7 @@ export BCH_APP_DIR="$APP_DIR"
 
 npm ci
 npx prisma generate
-npx prisma db push
+npx prisma migrate deploy
 npm run build
 
 if pm2 describe bch-health >/dev/null 2>&1; then

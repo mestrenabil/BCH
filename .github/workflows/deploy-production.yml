@@ -18,8 +18,23 @@ jobs:
     name: Verify production build
     runs-on: ubuntu-latest
 
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: bch_ci
+          POSTGRES_USER: bch_ci
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U bch_ci -d bch_ci"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     env:
-      DATABASE_URL: file:./db/ci.db
+      DATABASE_URL: postgresql://bch_ci@127.0.0.1:5432/bch_ci?schema=public
       INITIAL_SETUP_TOKEN: ci-only-setup-token
       INITIAL_ADMIN_USERNAME: ci-admin
       INITIAL_ADMIN_PASSWORD: ci-only-password-12345
@@ -30,10 +45,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Use Node.js 20
+      - name: Use Node.js 22
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
 
       - name: Install dependencies
@@ -41,6 +56,9 @@ jobs:
 
       - name: Generate Prisma client
         run: npx prisma generate
+
+      - name: Apply Prisma migrations to CI database
+        run: npx prisma migrate deploy
 
       - name: Run tests
         run: npm test
