@@ -240,6 +240,12 @@ sudo certbot --nginx -d bchealth.gov.ma
 
 ## 7. النسخ الاحتياطي
 
+### التخزين الخارجي من داخل المنصة
+
+يعرض قسم الإعدادات حالة الربط، ولا يرسل بيانات الدخول إلى المتصفح. لإرسال نسخة JSON إلى Google Drive، عيّن `GOOGLE_DRIVE_FOLDER_ID` و`GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON` في ملف `.env` على الخادم، ثم شارك مجلد Drive مع بريد `client_email` لحساب الخدمة. ولـ Nextcloud أو أي خادم WebDAV عبر HTTPS عيّن `BACKUP_WEBDAV_URL` و`BACKUP_WEBDAV_USERNAME` و`BACKUP_WEBDAV_PASSWORD`. أعد تشغيل التطبيق بعد تعديل البيئة.
+
+النسخة JSON تستعيد سجلات قاعدة البيانات بالدمج ولا تحذف السجلات الحالية. يجب نسخ مجلد `storage/` بصورة مستقلة لحفظ محتوى الصور والملفات المرفوعة.
+
 ### سكريبت نسخ احتياطي يومي
 
 ```bash

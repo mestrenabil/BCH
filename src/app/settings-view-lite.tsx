@@ -12,6 +12,7 @@ import {
   COMMUNE_LABELS, COMMUNE_COLORS, COMMUNE_USER_INFO,
 } from '@/lib/constants'
 import { UserManagementSection } from './users-view-lite'
+import { BackupManagementSection } from './backup-management-section'
 
 const NAV_SETTINGS_ITEMS: { id: ViewType; label: string; icon: string }[] = [
   { id: 'dashboard', label: 'لوحة القيادة', icon: '📊' },
@@ -1748,9 +1749,11 @@ function SettingsView() {
         </div>
       </motion.div>
 
-      {/* Backup & Restore */}
+      <BackupManagementSection />
+
+      {/* الواجهة القديمة مخفية للمحافظة على توافق موضعي مؤقت أثناء الانتقال للمكوّن الموحّد. */}
       <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }}
-        className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+        className="hidden">
         <div className="bg-gradient-to-l from-cyan-600 to-sky-600 text-white px-6 py-4">
           <h3 className="font-bold text-base">💾 النسخ الاحتياطي</h3>
           <p className="text-cyan-200 text-xs mt-0.5">حفظ واستعادة بيانات التطبيق</p>
@@ -1865,7 +1868,7 @@ function SettingsView() {
       </motion.div>
 
       {/* Data Backup & Restore */}
-      <div className="bg-white rounded-xl border border-slate-200 p-5 space-y-4">
+      <div className="hidden">
         <div className="flex items-center gap-2">
           <span className="text-lg">💾</span>
           <div>
