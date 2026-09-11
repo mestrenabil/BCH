@@ -1,8 +1,9 @@
 import { db } from '@/lib/db'
 import { NextRequest, NextResponse } from 'next/server'
-import { getScopedCommuneFilter, hashPassword, normalizeManagedCommunes, requireAdmin } from '@/lib/auth'
+import { canManageUserAccount, getScopedCommuneFilter, hashPassword, normalizeManagedCommunes, requireUserManager } from '@/lib/auth'
 import { areCommunesInSameProvince, getTerritoryFilterFromValue, isCommuneInTerritoryScope } from '@/lib/territory-scope'
 import { normalizeNavVisibilityJson } from '@/lib/user-nav-settings'
+import { recordActivity } from '@/lib/activity-log'
 
 function normalizeRole(role: unknown): 'admin' | 'responsable' | 'agent' {
   if (role === 'admin') return 'admin'
@@ -17,15 +18,20 @@ const ALLOWED_NAV_KEYS = [
   'users', 'settings', 'helpCenter',
 ]
 
-// GET /api/auth/users — List users (filtered by commune for non-admin)
+// GET /api/auth/users — عرض الحسابات داخل النطاق الترابي للمسؤول
 export async function GET(request: NextRequest) {
   try {
-    const authResult = await requireAdmin()
+    const authResult = await requireUserManager()
     if ('error' in authResult) return authResult.error
 
     const { user: authUser } = authResult
     const communeScope = getScopedCommuneFilter(authUser, new URL(request.url).searchParams)
-    const where = communeScope ? { OR: [{ commune: communeScope }, { commune: 'ALL' }] } : {}
+    const where = authUser.role === 'admin'
+      ? (communeScope ? { OR: [{ commune: communeScope }, { commune: 'ALL' }] } : {})
+      : {
+          role: { not: 'admin' },
+          commune: communeScope || { in: [] },
+        }
     const users = await db.user.findMany({
       where,
       select: {
@@ -46,7 +52,11 @@ export async function GET(request: NextRequest) {
       orderBy: { createdAt: 'desc' },
     })
 
-    return NextResponse.json({ users })
+    const visibleUsers = authUser.role === 'admin'
+      ? users
+      : users.filter((managedUser) => canManageUserAccount(authUser, managedUser))
+
+    return NextResponse.json({ users: visibleUsers })
   } catch (error) {
     console.error('GET users error:', error)
     return NextResponse.json({ error: 'حدث خطأ أثناء تحميل المستخدمين' }, { status: 500 })
@@ -56,7 +66,7 @@ export async function GET(request: NextRequest) {
 // POST /api/auth/users — Create a new user
 export async function POST(request: NextRequest) {
   try {
-    const authResult = await requireAdmin()
+    const authResult = await requireUserManager()
     if ('error' in authResult) return authResult.error
 
     const { user: authUser } = authResult
@@ -78,6 +88,9 @@ export async function POST(request: NextRequest) {
     }
 
     const enforcedRole = normalizeRole(role)
+    if (authUser.role !== 'admin' && enforcedRole === 'admin') {
+      return NextResponse.json({ error: 'لا يمكن لمسؤول الجماعة إنشاء حساب مسؤول عام' }, { status: 403 })
+    }
     let enforcedCommune = enforcedRole === 'admin' ? 'ALL' : String(commune || '').trim()
     let enforcedAgentId: string | null = null
     let enforcedManagedCommunes: string[] = enforcedRole === 'responsable' ? normalizeManagedCommunes(managedCommunes) : []
@@ -110,6 +123,14 @@ export async function POST(request: NextRequest) {
       enforcedCommune = agent.commune
       enforcedManagedCommunes = []
       enforcedGroupName = null
+    }
+
+    if (!canManageUserAccount(authUser, {
+      role: enforcedRole,
+      commune: enforcedCommune,
+      managedCommunes: enforcedManagedCommunes,
+    })) {
+      return NextResponse.json({ error: 'لا يمكنك إنشاء حساب خارج نطاق الجماعات المسندة إليك' }, { status: 403 })
     }
 
     const territoryScope = getTerritoryFilterFromValue(territoryFilter)
@@ -150,6 +171,15 @@ export async function POST(request: NextRequest) {
         actif: true,
         createdAt: true,
       },
+    })
+
+    await recordActivity({
+      user: authUser,
+      action: 'CREATE',
+      entityType: 'USER',
+      entityId: newUser.id,
+      commune: newUser.commune,
+      details: { username: newUser.username, role: newUser.role },
     })
 
     return NextResponse.json({ user: newUser }, { status: 201 })

@@ -1,8 +1,9 @@
 import { db } from '@/lib/db'
 import { NextRequest, NextResponse } from 'next/server'
-import { hashPassword, normalizeManagedCommunes, requireAdmin } from '@/lib/auth'
+import { canManageUserAccount, hashPassword, normalizeManagedCommunes, requireUserManager } from '@/lib/auth'
 import { areCommunesInSameProvince, getTerritoryFilterFromValue, isCommuneInTerritoryScope } from '@/lib/territory-scope'
 import { normalizeNavVisibilityJson } from '@/lib/user-nav-settings'
+import { recordActivity } from '@/lib/activity-log'
 
 function normalizeRole(role: unknown): 'admin' | 'responsable' | 'agent' {
   if (role === 'admin') return 'admin'
@@ -23,8 +24,9 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const authResult = await requireAdmin()
+    const authResult = await requireUserManager()
     if ('error' in authResult) return authResult.error
+    const { user: authUser } = authResult
     const { id } = await params
 
     const user = await db.user.findUnique({
@@ -50,6 +52,10 @@ export async function GET(
       return NextResponse.json({ error: 'المستخدم غير موجود' }, { status: 404 })
     }
 
+    if (!canManageUserAccount(authUser, user)) {
+      return NextResponse.json({ error: 'لا يمكنك الوصول إلى حساب خارج نطاقك الترابي' }, { status: 403 })
+    }
+
     return NextResponse.json({ user })
   } catch (error) {
     console.error('GET user error:', error)
@@ -63,7 +69,7 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const authResult = await requireAdmin()
+    const authResult = await requireUserManager()
     if ('error' in authResult) return authResult.error
     const { user: authUser } = authResult
     const { id } = await params
@@ -71,6 +77,10 @@ export async function PUT(
     const existingUser = await db.user.findUnique({ where: { id } })
     if (!existingUser) {
       return NextResponse.json({ error: 'المستخدم غير موجود' }, { status: 404 })
+    }
+
+    if (!canManageUserAccount(authUser, existingUser)) {
+      return NextResponse.json({ error: 'لا يمكنك تعديل هذا الحساب' }, { status: 403 })
     }
 
     const body = await request.json()
@@ -90,6 +100,9 @@ export async function PUT(
     }
 
     const nextRole = role === undefined ? normalizeRole(existingUser.role) : normalizeRole(role)
+    if (authUser.role !== 'admin' && nextRole === 'admin') {
+      return NextResponse.json({ error: 'لا يمكن لمسؤول الجماعة منح صلاحية المسؤول العام' }, { status: 403 })
+    }
     let nextCommune = nextRole === 'admin' ? 'ALL' : (commune === undefined ? existingUser.commune : String(commune).trim())
     let nextAgentId: string | null = null
     let nextManagedCommunes = nextRole === 'responsable'
@@ -126,6 +139,14 @@ export async function PUT(
       nextCommune = agent.commune
       nextManagedCommunes = []
       nextGroupName = null
+    }
+
+    if (!canManageUserAccount(authUser, {
+      role: nextRole,
+      commune: nextCommune,
+      managedCommunes: nextManagedCommunes,
+    })) {
+      return NextResponse.json({ error: 'لا يمكنك نقل الحساب أو توسيع نطاقه خارج الجماعات المسندة إليك' }, { status: 403 })
     }
 
     const territoryScope = getTerritoryFilterFromValue(territoryFilter)
@@ -166,6 +187,15 @@ export async function PUT(
       },
     })
 
+    await recordActivity({
+      user: authUser,
+      action: 'UPDATE',
+      entityType: 'USER',
+      entityId: updatedUser.id,
+      commune: updatedUser.commune,
+      details: { username: updatedUser.username, role: updatedUser.role, actif: updatedUser.actif },
+    })
+
     return NextResponse.json({ user: updatedUser })
   } catch (error) {
     console.error('PUT user error:', error)
@@ -179,7 +209,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const authResult = await requireAdmin()
+    const authResult = await requireUserManager()
     if ('error' in authResult) return authResult.error
     const { user: authUser } = authResult
     const { id } = await params
@@ -187,6 +217,10 @@ export async function DELETE(
     const existingUser = await db.user.findUnique({ where: { id } })
     if (!existingUser) {
       return NextResponse.json({ error: 'المستخدم غير موجود' }, { status: 404 })
+    }
+
+    if (!canManageUserAccount(authUser, existingUser)) {
+      return NextResponse.json({ error: 'لا يمكنك حذف هذا الحساب' }, { status: 403 })
     }
 
     if (existingUser.id === authUser.id) {
@@ -200,11 +234,19 @@ export async function DELETE(
       }
     }
 
-    // Delete user's sessions first
-    await db.session.deleteMany({ where: { userId: id } })
+    await db.$transaction([
+      db.session.deleteMany({ where: { userId: id } }),
+      db.user.delete({ where: { id } }),
+    ])
 
-    // Delete the user
-    await db.user.delete({ where: { id } })
+    await recordActivity({
+      user: authUser,
+      action: 'DELETE',
+      entityType: 'USER',
+      entityId: existingUser.id,
+      commune: existingUser.commune,
+      details: { username: existingUser.username, role: existingUser.role },
+    })
 
     return NextResponse.json({ success: true })
   } catch (error) {

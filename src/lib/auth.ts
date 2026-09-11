@@ -260,6 +260,45 @@ export async function requireAdmin(): Promise<{ user: AuthUser } | { error: Next
 }
 
 /**
+ * يسمح بإدارة الحسابات للمسؤول العام ولمسؤول الجماعة فقط.
+ * يبقى التحقق من النطاق الترابي والحساب المستهدف إلزامياً داخل مسار API.
+ */
+export async function requireUserManager(): Promise<{ user: AuthUser } | { error: NextResponse }> {
+  const authResult = await requireAuth()
+  if ('error' in authResult) return authResult
+
+  if (authResult.user.role !== 'admin' && authResult.user.role !== 'responsable') {
+    return {
+      error: NextResponse.json(
+        { error: 'ليست لديك صلاحية إدارة حسابات المستخدمين' },
+        { status: 403 }
+      )
+    }
+  }
+
+  return authResult
+}
+
+/**
+ * المسؤول المحلي يدير الحسابات غير العامة الواقعة بالكامل داخل جماعاته فقط.
+ */
+export function canManageUserAccount(
+  manager: AuthUser,
+  target: { role: string; commune: string; managedCommunes?: unknown }
+): boolean {
+  if (isAdmin(manager)) return true
+  if (manager.role !== 'responsable' || target.role === 'admin') return false
+
+  const managerCommunes = getManagedCommunes(manager)
+  const targetManagedCommunes = normalizeManagedCommunes(target.managedCommunes)
+  const targetCommunes = targetManagedCommunes.length > 0
+    ? targetManagedCommunes
+    : (target.commune && target.commune !== 'ALL' ? [target.commune] : [])
+
+  return targetCommunes.length > 0 && targetCommunes.every((commune) => managerCommunes.includes(commune))
+}
+
+/**
  * Get the commune filter for the authenticated user.
  * - Admin users (commune='ALL') can see all communes — returns null (no filter)
  * - Responsible users can only see their own commune — returns their commune name

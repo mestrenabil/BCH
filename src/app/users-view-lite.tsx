@@ -64,7 +64,7 @@ function UserRow({ user, authUser, canSeeAllCommunes, onEdit, onToggleActive, on
 }) {
   const [showActions, setShowActions] = useState(false)
   const isSelf = user.id === authUser?.id
-  const canEdit = canSeeAllCommunes || user.commune === authUser?.commune
+  const canEdit = canSeeAllCommunes || user.role !== 'admin'
 
   return (
     <div className="flex items-center gap-3 p-3 bg-white hover:bg-slate-50/80 transition-colors group relative">
@@ -180,12 +180,19 @@ export function UserManagementSection() {
   const [formError, setFormError] = useState('')
   const [useNationalScope, setUseNationalScope] = useState(false)
 
-  const canSeeAllCommunes = authUser?.role === 'admin' || authUser?.commune === 'ALL'
+  const canSeeAllCommunes = authUser?.role === 'admin'
+  const accountCommuneNames = useMemo(() => {
+    const managedCommunes = authUser?.managedCommunes?.filter((commune) => commune && commune !== 'ALL') || []
+    if (managedCommunes.length > 0) return Array.from(new Set(managedCommunes))
+    return authUser?.commune && authUser.commune !== 'ALL' ? [authUser.commune] : []
+  }, [authUser?.commune, authUser?.managedCommunes])
   const creationCommunes = useNationalScope ? allCommunes : scopedCommunes
   const creationCommuneNames = useMemo(
-    () => Array.from(new Set(creationCommunes.map(territoryCommuneName).filter(Boolean)))
-      .sort((first, second) => first.localeCompare(second, 'ar')),
-    [creationCommunes]
+    () => (canSeeAllCommunes
+      ? Array.from(new Set(creationCommunes.map(territoryCommuneName).filter(Boolean)))
+      : accountCommuneNames
+    ).sort((first, second) => first.localeCompare(second, 'ar')),
+    [accountCommuneNames, canSeeAllCommunes, creationCommunes]
   )
   const groupCommuneOptions = creationCommuneNames
 
@@ -248,11 +255,11 @@ export function UserManagementSection() {
           username: formData.username,
           password: formData.password,
           nom: formData.nom,
-          commune: canSeeAllCommunes ? formData.commune : authUser?.commune,
-          role: canSeeAllCommunes ? formData.role : 'responsable',
-          agentId: canSeeAllCommunes ? formData.agentId : undefined,
-          managedCommunes: formData.role === 'responsable' ? formData.managedCommunes : undefined,
-          communeGroupName: formData.role === 'responsable' ? formData.communeGroupName : undefined,
+          commune: formData.commune || authUser?.commune,
+          role: formData.role,
+          agentId: formData.role === 'agent' ? formData.agentId : undefined,
+          managedCommunes: canSeeAllCommunes && formData.role === 'responsable' ? formData.managedCommunes : undefined,
+          communeGroupName: canSeeAllCommunes && formData.role === 'responsable' ? formData.communeGroupName : undefined,
           allowOutsideTerritory: isGeneralManager && useNationalScope,
           territoryFilter: isGeneralManager ? territoryFilter : undefined,
         }),
@@ -265,7 +272,7 @@ export function UserManagementSection() {
       toast.success(`تم إنشاء المستخدم ${formData.nom} بنجاح`)
       setShowAddForm(false)
       setUseNationalScope(false)
-      setFormData({ username: '', password: '', nom: '', commune: scopedCommuneNames.length === 1 ? scopedCommuneNames[0] : '', role: 'responsable', agentId: '', managedCommunes: [], communeGroupName: '' })
+      setFormData({ username: '', password: '', nom: '', commune: creationCommuneNames.length === 1 ? creationCommuneNames[0] : '', role: 'responsable', agentId: '', managedCommunes: [], communeGroupName: '' })
       await loadUsers()
     } catch {
       setFormError('حدث خطأ في الاتصال')
@@ -285,9 +292,9 @@ export function UserManagementSection() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           nom: editFormData.nom,
-          commune: canSeeAllCommunes ? editFormData.commune : undefined,
-          role: canSeeAllCommunes ? editFormData.role : undefined,
-          agentId: canSeeAllCommunes ? editFormData.agentId : undefined,
+          commune: editFormData.commune,
+          role: editFormData.role,
+          agentId: editFormData.role === 'agent' ? editFormData.agentId : undefined,
           actif: editFormData.actif,
           navVisibilityJson: JSON.stringify(editNavVisibility),
           territoryFilter: isGeneralManager ? territoryFilter : undefined,
@@ -403,7 +410,7 @@ export function UserManagementSection() {
           <span className="text-xs text-slate-400">{users.filter(u => u.actif).length} نشط</span>
         </div>
         <div className="flex items-center gap-2">
-            <motion.button onClick={() => { setShowAddForm(true); setFormError(''); setUseNationalScope(false); setFormData({ username: '', password: '', nom: '', commune: authUser?.commune !== 'ALL' ? authUser?.commune || '' : (scopedCommuneNames.length === 1 ? scopedCommuneNames[0] : ''), role: 'responsable', agentId: '', managedCommunes: [], communeGroupName: '' }) }}
+            <motion.button onClick={() => { setShowAddForm(true); setFormError(''); setUseNationalScope(false); setFormData({ username: '', password: '', nom: '', commune: creationCommuneNames.length === 1 ? creationCommuneNames[0] : '', role: 'responsable', agentId: '', managedCommunes: [], communeGroupName: '' }) }}
             whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
             className="px-4 py-1.5 bg-gradient-to-l from-emerald-600 to-teal-600 text-white rounded-lg text-xs font-bold shadow-lg shadow-emerald-200 flex items-center gap-1.5">
             <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" /></svg>
@@ -511,7 +518,7 @@ export function UserManagementSection() {
                   <label className="block text-sm font-semibold text-slate-700 mb-1.5">كلمة المرور *</label>
                   <input type="password" value={formData.password} onChange={(e) => setFormData({ ...formData, password: e.target.value })} required dir="ltr"
                     className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-300"
-                    placeholder="4 أحرف على الأقل" />
+                    placeholder="12 حرفاً على الأقل" minLength={12} />
                 </div>
                 {canSeeAllCommunes && (
                   <>
@@ -737,7 +744,7 @@ export function UserManagementSection() {
                   <label className="block text-sm font-semibold text-slate-700 mb-1.5">كلمة المرور الجديدة</label>
                   <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} required dir="ltr"
                     className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-300"
-                    placeholder="4 أحرف على الأقل" />
+                    placeholder="12 حرفاً على الأقل" minLength={12} />
                 </div>
                 {formError && (
                   <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-red-600 text-xs font-medium">{formError}</div>
@@ -747,7 +754,7 @@ export function UserManagementSection() {
                     className="flex-1 px-4 py-2.5 bg-slate-100 text-slate-600 rounded-xl text-sm font-medium hover:bg-slate-200 transition-colors">
                     إلغاء
                   </button>
-                  <motion.button type="submit" disabled={isSubmitting || newPassword.length < 4}
+                  <motion.button type="submit" disabled={isSubmitting || newPassword.length < 12}
                     whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
                     className="flex-1 px-4 py-2.5 bg-gradient-to-l from-amber-600 to-orange-600 text-white rounded-xl text-sm font-bold shadow-lg disabled:opacity-50">
                     {isSubmitting ? 'جاري التغيير...' : 'تغيير كلمة المرور'}
@@ -839,8 +846,8 @@ function UsersView() {
       setSelfChangePasswordError('كلمة المرور الجديدة غير متطابقة')
       return
     }
-    if (selfChangePasswordForm.newPassword.length < 4) {
-      setSelfChangePasswordError('كلمة المرور الجديدة يجب أن تكون 4 أحرف على الأقل')
+    if (selfChangePasswordForm.newPassword.length < 12) {
+      setSelfChangePasswordError('كلمة المرور الجديدة يجب أن تكون 12 حرفاً على الأقل')
       return
     }
     setSelfChangePasswordSubmitting(true)
@@ -959,7 +966,7 @@ function UsersView() {
                   <input type="password" value={selfChangePasswordForm.newPassword}
                     onChange={(e) => setSelfChangePasswordForm({ ...selfChangePasswordForm, newPassword: e.target.value })} required dir="ltr"
                     className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-300"
-                    placeholder="4 أحرف على الأقل" />
+                    placeholder="12 حرفاً على الأقل" minLength={12} />
                 </div>
                 <div>
                   <label className="block text-sm font-semibold text-slate-700 mb-1.5">تأكيد كلمة المرور الجديدة</label>

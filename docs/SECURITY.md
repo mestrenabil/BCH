@@ -36,14 +36,16 @@
 
 | الدور | الصلاحية | النطاق |
 |---|---|---|
-| `admin` | كل شيء (إنشاء/تحديث/حذف/إدارة مستخدمين) | `commune='ALL'` (كل الجماعات) |
-| `responsable` | إدارة الكيانات في جماعته | `commune='X'` أو `managedCommunes=[...]` |
+| `admin` | كل شيء، بما فيه إدارة جميع المستخدمين وإنشاء المسؤولين العامين | `commune='ALL'` (كل الجماعات) |
+| `responsable` | إدارة الكيانات وحسابات المستخدمين غير العامين داخل نطاقه فقط | `commune='X'` أو `managedCommunes=[...]` |
 | `agent` | **التطبيق الميداني فقط** (`/terrain`) | مرتبط بـ `Agent` عبر `agentId` |
 
 ### الدوال المساعدة (`src/lib/auth.ts`)
 ```typescript
 requireAuth({ allowFieldAgent? })   // → { user } | { error: 401/403 }
 requireAdmin()                       // → { user } | { error: 401/403 }
+requireUserManager()                 // → admin/responsable أو خطأ 401/403
+canManageUserAccount(manager, user)  // يمنع تجاوز النطاق وتصعيد الصلاحيات
 isAdmin(user)                        // boolean
 canAccessCommune(user, commune)      // boolean
 getScopedCommuneFilter(user, params) // 'ALL' | 'sla' | { in: [...] }
@@ -68,6 +70,7 @@ const { user } = authResult
 - المسؤول العام (`admin`): يرى كل الجماعات.
 - مسؤول جماعة: يرى جماعته فقط (فلتر إلزامي في كل استعلام).
 - حساب مجموعة: يرى جماعاته المُدارة (`managedCommunes`).
+- مسؤول الجماعة يستطيع إنشاء وتحديث وتعطيل وحذف الحسابات غير العامة الواقعة بالكامل داخل نطاقه، ولا يستطيع إدارة حساب `admin` أو منح هذا الدور.
 
 ---
 
