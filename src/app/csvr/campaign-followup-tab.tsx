@@ -2,26 +2,21 @@
 
 import React, { useEffect, useState } from 'react'
 import { toast } from 'sonner'
-import { useAppStore } from '@/lib/store'
 import LocationPicker from './location-picker'
 
 interface Campaign { id: string; reference: string; name: string; achieved: number; quantitativeTarget: number }
 interface Activity { id: string; date: string; type: string; zone: string; quantity: number; staff: string; latitude: number | null; longitude: number | null; notes: string }
-interface Props { buildParams: () => URLSearchParams; onRefresh: () => void }
+interface Props { buildParams: () => URLSearchParams; onRefresh: () => void; mapAllowedCommunes: string[] }
 
 const input = 'w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-cyan-400 focus:ring-2 focus:ring-cyan-100'
 const types: Record<string, string> = { RESULT: 'حصيلة عامة', CAPTURE: 'التقاط', VACCINATION: 'تلقيح', STERILIZATION: 'تعقيم', IDENTIFICATION: 'تعريف', RELEASE: 'إرجاع' }
 
-export default function CampaignFollowupTab({ buildParams, onRefresh }: Props) {
-  const { user } = useAppStore()
+export default function CampaignFollowupTab({ buildParams, onRefresh, mapAllowedCommunes }: Props) {
   const [campaigns, setCampaigns] = useState<Campaign[]>([])
   const [activities, setActivities] = useState<Activity[]>([])
   const [campaignId, setCampaignId] = useState('')
   const [saving, setSaving] = useState(false)
   const [form, setForm] = useState({ date: new Date().toISOString().slice(0, 10), type: 'RESULT', zone: '', quantity: '', staff: '', latitude: '', longitude: '', notes: '' })
-  const managedCommunes = user?.managedCommunes?.length ? user.managedCommunes : (user?.commune && user.commune !== 'ALL' ? [user.commune] : [])
-  const selectedMapCommune = buildParams().get('commune') || ''
-  const mapAllowedCommunes = selectedMapCommune ? [selectedMapCommune] : managedCommunes
 
   const loadCampaigns = async () => {
     const response = await fetch(`/api/csvr/campaigns?${buildParams().toString()}`)

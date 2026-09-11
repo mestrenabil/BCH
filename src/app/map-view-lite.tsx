@@ -170,16 +170,31 @@ function MapView({ interventions, quartiers, selectedCommune, canSeeAllCommunes,
     ? territoryCatalog?.communes.find((commune) => commune.code === territoryFilter.communeCode)
     : undefined
   const selectedTerritoryName = selectedTerritoryCommune ? territoryName(selectedTerritoryCommune) : undefined
+  const selectedTerritoryCommunes = React.useMemo(() => {
+    if (!territoryCatalog || !hasTerritorySelection(territoryFilter)) return []
+    return territoryCatalog.communes
+      .filter((commune) => (
+        (territoryFilter.regionCode === ALL_TERRITORIES || commune.regionCode === territoryFilter.regionCode) &&
+        (territoryFilter.provinceCode === ALL_TERRITORIES || commune.provinceCode === territoryFilter.provinceCode) &&
+        (territoryFilter.communeCode === ALL_TERRITORIES || commune.code === territoryFilter.communeCode)
+      ))
+      .map(territoryName)
+  }, [territoryCatalog, territoryFilter])
   const mapScopeCommunes = isCommuneGroupAccount
     ? (selectedTerritoryName && managedCommunes.includes(selectedTerritoryName)
       ? [selectedTerritoryName]
       : (mapSelectedCommune !== 'ALL' && managedCommunes.includes(mapSelectedCommune) ? [mapSelectedCommune] : managedCommunes))
-    : (enforcedCommune ? [enforcedCommune] : (selectedTerritoryName ? [selectedTerritoryName] : (mapSelectedCommune !== 'ALL' ? [mapSelectedCommune] : [])))
+    : (enforcedCommune
+      ? [enforcedCommune]
+      : (selectedTerritoryCommunes.length > 0
+        ? selectedTerritoryCommunes
+        : (mapSelectedCommune !== 'ALL' ? [mapSelectedCommune] : [])))
   const mapScopeCommune = mapScopeCommunes.length === 1 ? mapScopeCommunes[0] : undefined
   const shouldDisplayOperationalMarkers = mapScopeCommunes.length > 0 || !canSeeAllCommunes || hasTerritorySelection(territoryFilter)
   // Default to true when settings.mapClickEnabled is undefined (not yet loaded)
   const settingsMapClick = settings.mapClickEnabled ?? true
-  const mapClickEnabledForScope = (mapScopeCommunes.length > 0 || settingsMapClick) && clickToAddEnabled && !measureMode
+  const territoryScopeReady = !hasTerritorySelection(territoryFilter) || territoryCatalog !== null
+  const mapClickEnabledForScope = territoryScopeReady && (mapScopeCommunes.length > 0 || settingsMapClick) && clickToAddEnabled && !measureMode
   const scopedQuartiers = React.useMemo(() => (
     !shouldDisplayOperationalMarkers
       ? []

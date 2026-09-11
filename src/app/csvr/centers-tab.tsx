@@ -2,24 +2,19 @@
 
 import React, { useEffect, useState } from 'react'
 import { toast } from 'sonner'
-import { useAppStore } from '@/lib/store'
 import type { StrayAnimal } from './types'
 import LocationPicker from './location-picker'
 
-interface Props { animals: StrayAnimal[]; buildParams: () => URLSearchParams; onRefresh: () => void }
+interface Props { animals: StrayAnimal[]; buildParams: () => URLSearchParams; onRefresh: () => void; mapAllowedCommunes: string[] }
 const input = 'w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-cyan-400 focus:ring-2 focus:ring-cyan-100'
 
-export default function CentersTab({ animals, buildParams, onRefresh }: Props) {
-  const { user } = useAppStore()
+export default function CentersTab({ animals, buildParams, onRefresh, mapAllowedCommunes }: Props) {
   const [centers, setCenters] = useState<Array<Record<string, any>>>([])
   const [centerId, setCenterId] = useState('')
   const [animalId, setAnimalId] = useState(animals[0]?.id || '')
   const [saving, setSaving] = useState(false)
   const [centerForm, setCenterForm] = useState({ name: '', type: 'REFUGE', adresse: '', responsible: '', telephone: '', capacity: '', latitude: '', longitude: '', notes: '' })
   const [admissionForm, setAdmissionForm] = useState({ admittedAt: new Date().toISOString().slice(0, 10), boxOrZone: '', generalCondition: '', weight: '', temperature: '', observation: '', agent: '' })
-  const selectedMapCommune = buildParams().get('commune') || ''
-  const managedCommunes = user?.managedCommunes?.length ? user.managedCommunes : (user?.commune && user.commune !== 'ALL' ? [user.commune] : [])
-  const mapAllowedCommunes = selectedMapCommune ? [selectedMapCommune] : managedCommunes
 
   const loadCenters = async () => {
     const response = await fetch(`/api/csvr/centers?${buildParams().toString()}`)

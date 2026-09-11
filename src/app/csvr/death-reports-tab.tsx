@@ -2,7 +2,6 @@
 
 import React, { useEffect, useState } from 'react'
 import { toast } from 'sonner'
-import { useAppStore } from '@/lib/store'
 import LocationPicker from './location-picker'
 
 interface Report {
@@ -23,25 +22,17 @@ interface Report {
   handlingMode: string
 }
 
-interface Props { buildParams: () => URLSearchParams; onRefresh: () => void }
+interface Props { buildParams: () => URLSearchParams; onRefresh: () => void; mapAllowedCommunes: string[] }
 
 const input = 'w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-500 focus:ring-2 focus:ring-slate-100'
 const speciesLabels: Record<string, string> = { DOG: 'كلب', CAT: 'قط', HORSE: 'حصان', DONKEY: 'حمار', FARM: 'حيوان مزرعة', OTHER: 'أخرى' }
 
-export default function DeathReportsTab({ buildParams, onRefresh }: Props) {
-  const { user } = useAppStore()
+export default function DeathReportsTab({ buildParams, onRefresh, mapAllowedCommunes }: Props) {
   const [reports, setReports] = useState<Report[]>([])
   const [saving, setSaving] = useState(false)
   const [form, setForm] = useState({ reportedAt: new Date().toISOString().slice(0, 10), species: 'DOG', quantity: '1', quartier: '', location: '', latitude: '', longitude: '', apparentCause: '', accident: false, healthSuspicion: false, removalDate: '', team: '', destination: '', handlingMode: '', observations: '' })
 
-  const selectedMapCommune = buildParams().get('commune') || ''
-  const allowedCommunes = selectedMapCommune
-    ? [selectedMapCommune]
-    : user?.managedCommunes?.length
-    ? Array.from(new Set(user.managedCommunes))
-    : user?.commune && user.commune !== 'ALL'
-    ? [user.commune]
-    : []
+  const allowedCommunes = mapAllowedCommunes
 
   const load = async () => {
     const response = await fetch(`/api/csvr/death-reports?${buildParams().toString()}`)

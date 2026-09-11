@@ -973,7 +973,9 @@ export default function MapComponent({ interventions, quartiers, selectedCommune
   const territoryFilterRef = useRef<TerritoryFilter>(territoryFilter ?? DEFAULT_TERRITORY_FILTER)
   const nationalBoundariesVisibleRef = useRef(nationalBoundariesVisible)
   const enforcedCommuneRef = useRef(enforcedCommune)
-  const enforcedCommunesRef = useRef<string[]>(enforcedCommunes?.length ? enforcedCommunes : (enforcedCommune ? [enforcedCommune] : []))
+  const initialEnforcedCommunes = enforcedCommunes?.length ? enforcedCommunes : (enforcedCommune ? [enforcedCommune] : [])
+  const enforcedCommunesRef = useRef<string[]>(initialEnforcedCommunes)
+  const enforcedCommunesKey = initialEnforcedCommunes.join('|')
   const [complaints, setComplaints] = React.useState<ComplaintMapPoint[]>([])
 
   useEffect(() => {
@@ -981,13 +983,16 @@ export default function MapComponent({ interventions, quartiers, selectedCommune
     const loadComplaints = async () => {
       try {
         const params = new URLSearchParams()
+        if (selectedCommune && selectedCommune !== 'ALL') params.set('commune', selectedCommune)
         appendTerritoryParams(params, territoryFilter ?? DEFAULT_TERRITORY_FILTER)
         const response = await fetch(`/api/complaints?${params.toString()}`)
         if (!response.ok) return
         const data = await response.json() as { complaints?: ComplaintMapPoint[] }
+        const allowedCommunes = enforcedCommunesKey ? enforcedCommunesKey.split('|') : []
         const locatedComplaints = (data.complaints || []).filter((complaint) => (
           typeof complaint.latitude === 'number' && Number.isFinite(complaint.latitude) &&
-          typeof complaint.longitude === 'number' && Number.isFinite(complaint.longitude)
+          typeof complaint.longitude === 'number' && Number.isFinite(complaint.longitude) &&
+          (allowedCommunes.length === 0 || allowedCommunes.includes(complaint.commune))
         ))
         if (active) setComplaints(locatedComplaints)
       } catch {
@@ -1001,7 +1006,7 @@ export default function MapComponent({ interventions, quartiers, selectedCommune
       active = false
       window.clearInterval(refreshTimer)
     }
-  }, [territoryFilter])
+  }, [enforcedCommunesKey, selectedCommune, territoryFilter])
 
   // Disambiguates single vs double click on the map / commune layers.
   // A single click is delayed by ~280ms; if a second click arrives in that window,

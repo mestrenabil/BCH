@@ -18,6 +18,7 @@ interface Props {
   loading: boolean
   onRefresh: () => void
   buildParams: (extra?: Record<string, string>) => URLSearchParams
+  mapAllowedCommunes: string[]
 }
 
 interface AnimalDossierData {
@@ -57,7 +58,7 @@ const emptyForm = {
   shelterName: '', boxOrCage: '',
 }
 
-export default function AnimalsTab({ animals, loading, onRefresh, buildParams }: Props) {
+export default function AnimalsTab({ animals, loading, onRefresh, buildParams, mapAllowedCommunes }: Props) {
   const { user } = useAppStore()
   const [search, setSearch] = useState('')
   const [filterStatus, setFilterStatus] = useState('ALL')
@@ -71,8 +72,6 @@ export default function AnimalsTab({ animals, loading, onRefresh, buildParams }:
   const [statusChange, setStatusChange] = useState('')
 
   const managedCommunes = user?.managedCommunes?.length ? user.managedCommunes : (user?.commune && user.commune !== 'ALL' ? [user.commune] : [])
-  const selectedMapCommune = buildParams().get('commune') || ''
-  const mapAllowedCommunes = selectedMapCommune ? [selectedMapCommune] : managedCommunes
 
   const filtered = useMemo(() => {
     return animals.filter((a) => {

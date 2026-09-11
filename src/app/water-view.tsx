@@ -17,6 +17,7 @@ import type { WaterPoint, WaterMeasurement, WaterSample, WaterInspection, WaterT
 import WaterMapTab from './water/map-tab'
 import WaterIncidentsTab from './water/water-incidents-tab'
 import WaterLaboratoriesTab from './water/water-laboratories-tab'
+import { useMapTerritoryScope } from '@/hooks/use-map-territory-scope'
 
 interface Props {
   selectedCommune: string
@@ -174,12 +175,7 @@ export default function WaterView({ selectedCommune, territoryFilter, useTerrito
     return { nonConfMeas, openIncidents, criticalInc }
   }, [measurements, incidents])
 
-  const accountCommunes = useMemo(() => {
-    if (selectedCommune !== 'ALL') return [selectedCommune]
-    if (user?.managedCommunes?.length) return Array.from(new Set(user.managedCommunes))
-    if (user?.commune && user.commune !== 'ALL') return [user.commune]
-    return []
-  }, [selectedCommune, user?.commune, user?.managedCommunes])
+  const { allowedCommunes: accountCommunes } = useMapTerritoryScope(user, selectedCommune, territoryFilter, useTerritoryFilter)
   const activeTab = TABS.find((tab) => tab.id === waterSubTab) || TABS[0]
   if (waterSubTab === 'incidents') return <WaterSideBySideLayout activeTab={waterSubTab} onNavigate={selectWaterSection}><WaterIncidentsTab incidents={waterIncidents} loading={loading} onRefresh={refresh} showCreate={showCreate === 'water-incidents'} setShowCreate={(value) => setShowCreate(value ? 'water-incidents' : null)} buildParams={buildParams} /></WaterSideBySideLayout>
   if (waterSubTab === 'laboratories') return <WaterSideBySideLayout activeTab={waterSubTab} onNavigate={selectWaterSection}><WaterLaboratoriesTab laboratories={waterLaboratories} loading={loading} onRefresh={refresh} showCreate={showCreate === 'water-laboratories'} setShowCreate={(value) => setShowCreate(value ? 'water-laboratories' : null)} buildParams={buildParams} /></WaterSideBySideLayout>

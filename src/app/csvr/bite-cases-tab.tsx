@@ -2,27 +2,24 @@
 
 import React, { useEffect, useState } from 'react'
 import { toast } from 'sonner'
-import { useAppStore } from '@/lib/store'
 import type { StrayAnimal } from './types'
 import LocationPicker from './location-picker'
 import VaccinationTracker from './vaccination-tracker'
 import { RABIES_EXPOSURE_LABELS, RABIES_PROTOCOL_LABELS, RABIES_ROUTE_LABELS, RABIES_VACCINE_LABELS } from './rabies-vaccination'
 
 interface BiteCase { id: string; reference: string; victimName: string; victimAge: number | null; victimCin: string; victimRegistrationNumber: string; victimAddress: string; guardianName: string; guardianPhone: string; declarantName: string; declarantPhone: string; medicalFacility: string; medicalReferralDate: string | null; exposureCategory: string; woundWashConfirmed: boolean; vaccineType: string; vaccineRoute: string; pepProtocol: string; rigIndicated: boolean; animalType: string; animalStatus: string; biteDate: string; biteLocation: string; commune: string; quartier: string; description: string; status: string; latitude: number | null; longitude: number | null; animal?: { csvrNumber: string; species: string } | null }
-interface Props { animals: StrayAnimal[]; buildParams: () => URLSearchParams; onRefresh: () => void }
+interface Props { animals: StrayAnimal[]; buildParams: () => URLSearchParams; onRefresh: () => void; mapAllowedCommunes: string[] }
 
 const input = 'w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-rose-400 focus:ring-2 focus:ring-rose-100'
 const animalTypes: Record<string, string> = { DOG: 'كلب', CAT: 'قط', MONKEY: 'قرد', OTHER: 'أخرى' }
 const statuses: Record<string, string> = { NEW: 'جديدة', REPORTED: 'مصرح بها', FOLLOWING: 'قيد المتابعة', VACCINATION_STARTED: 'بدأ التلقيح', VACCINATION_COMPLETE: 'اكتمل التلقيح', CLOSED: 'مغلقة', LOST_CONTACT: 'انقطع الاتصال' }
 
-export default function BiteCasesTab({ animals, buildParams, onRefresh }: Props) {
-  const { user } = useAppStore()
+export default function BiteCasesTab({ animals, buildParams, onRefresh, mapAllowedCommunes }: Props) {
   const [cases, setCases] = useState<BiteCase[]>([])
   const [saving, setSaving] = useState(false)
   const [selectedCase, setSelectedCase] = useState<BiteCase | null>(null)
   const [form, setForm] = useState({ victimName: '', victimAge: '', victimGender: 'M', victimPhone: '', victimCin: '', victimRegistrationNumber: '', victimAddress: '', guardianName: '', guardianPhone: '', declarantName: '', declarantPhone: '', medicalFacility: '', medicalReferralDate: '', exposureCategory: 'UNKNOWN', woundWashConfirmed: false, vaccineType: 'UNKNOWN', vaccineRoute: 'UNKNOWN', pepProtocol: 'PENDING_ASSESSMENT', rigIndicated: false, rigAdministered: false, rigType: '', rigDate: '', woundWashDate: '', woundCareNotes: '', vaccinationNotes: '', animalType: 'DOG', animalStatus: 'UNKNOWN', biteDate: new Date().toISOString().slice(0, 10), biteLocation: '', quartier: '', description: '', animalId: '', latitude: '', longitude: '' })
-  const selectedMapCommune = buildParams().get('commune') || ''
-  const allowedCommunes = selectedMapCommune ? [selectedMapCommune] : user?.managedCommunes?.length ? Array.from(new Set(user.managedCommunes)) : user?.commune && user.commune !== 'ALL' ? [user.commune] : []
+  const allowedCommunes = mapAllowedCommunes
 
   const load = async () => {
     const response = await fetch(`/api/bite-cases?${buildParams().toString()}`)

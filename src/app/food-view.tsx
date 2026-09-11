@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useCallback, useEffect, useMemo } from 'react'
+import React, { useState, useCallback, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { toast } from 'sonner'
 import { useAppStore, type FoodSubTab } from '@/lib/store'
@@ -9,6 +9,7 @@ import DashboardTab from './food/dashboard-tab'
 import ListTab from './food/list-tab'
 import MapTab from './food/map-tab'
 import type { FoodReport } from './food/types'
+import { useMapTerritoryScope } from '@/hooks/use-map-territory-scope'
 
 interface FoodViewProps {
   selectedCommune: string
@@ -56,11 +57,7 @@ export default function FoodView({ selectedCommune, territoryFilter, useTerritor
 
   useEffect(() => { refresh() }, [refresh])
 
-  const mapAllowedCommunes = useMemo(() => {
-    if (selectedCommune !== 'ALL') return [selectedCommune]
-    if (user?.managedCommunes?.length) return Array.from(new Set(user.managedCommunes))
-    return user?.commune && user.commune !== 'ALL' ? [user.commune] : []
-  }, [selectedCommune, user?.commune, user?.managedCommunes])
+  const { allowedCommunes: mapAllowedCommunes } = useMapTerritoryScope(user, selectedCommune, territoryFilter, useTerritoryFilter)
 
   // إحصائيات سريعة للترويسة
   const stats = React.useMemo(() => {

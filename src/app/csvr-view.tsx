@@ -6,6 +6,7 @@ import { toast } from 'sonner'
 import { useAppStore, type CsvrSubTab } from '@/lib/store'
 import { appendTerritoryParams, ALL_TERRITORIES, hasTerritorySelection, type TerritoryCatalog, type TerritoryFilter } from '@/lib/geography'
 import { COMMUNE_LABELS, COMMUNE_COLORS } from '@/lib/constants'
+import { useMapTerritoryScope } from '@/hooks/use-map-territory-scope'
 import DashboardTab from './csvr/dashboard-tab'
 import AlertsTab from './csvr/alerts-tab'
 import ReportsTab from './csvr/reports-tab'
@@ -176,14 +177,7 @@ export default function CsvrView({ selectedCommune, territoryFilter, useTerritor
   useEffect(() => { refresh() }, [refresh])
 
   const activeTab = TABS.find((tab) => tab.id === csvrSubTab) || TABS[0]
-  const mapAllowedCommunes = useMemo(() => {
-    const accountCommunes = user?.managedCommunes?.length
-      ? Array.from(new Set(user.managedCommunes))
-      : (user?.commune && user.commune !== 'ALL' ? [user.commune] : [])
-    if (user && user.role !== 'admin' && accountCommunes.length > 0) return accountCommunes
-    if (selectedCommune !== 'ALL') return [selectedCommune]
-    return []
-  }, [selectedCommune, user?.commune, user?.managedCommunes, user?.role])
+  const { allowedCommunes: mapAllowedCommunes } = useMapTerritoryScope(user, selectedCommune, territoryFilter, useTerritoryFilter)
 
   return (
     <div className="space-y-4">
@@ -366,13 +360,14 @@ export default function CsvrView({ selectedCommune, territoryFilter, useTerritor
               loading={loading}
               onRefresh={refresh}
               buildParams={buildParams}
+              mapAllowedCommunes={mapAllowedCommunes}
             />
           )}
           {csvrSubTab === 'care' && (
             <CareTab animals={animals} onRefresh={refresh} />
           )}
           {csvrSubTab === 'centers' && (
-            <CentersTab animals={animals} buildParams={buildParams} onRefresh={refresh} />
+            <CentersTab animals={animals} buildParams={buildParams} onRefresh={refresh} mapAllowedCommunes={mapAllowedCommunes} />
           )}
           {csvrSubTab === 'transport' && (
             <TransportTab animals={animals} onRefresh={refresh} />
@@ -384,13 +379,13 @@ export default function CsvrView({ selectedCommune, territoryFilter, useTerritor
             <HealthTab animals={animals} onRefresh={refresh} />
           )}
           {csvrSubTab === 'bites' && (
-            <BiteCasesTab animals={animals} buildParams={buildParams} onRefresh={refresh} />
+            <BiteCasesTab animals={animals} buildParams={buildParams} onRefresh={refresh} mapAllowedCommunes={mapAllowedCommunes} />
           )}
           {csvrSubTab === 'deaths' && (
-            <DeathReportsTab buildParams={buildParams} onRefresh={refresh} />
+            <DeathReportsTab buildParams={buildParams} onRefresh={refresh} mapAllowedCommunes={mapAllowedCommunes} />
           )}
           {csvrSubTab === 'hotspots' && (
-            <HotspotsTab buildParams={buildParams} onRefresh={refresh} />
+            <HotspotsTab buildParams={buildParams} onRefresh={refresh} mapAllowedCommunes={mapAllowedCommunes} />
           )}
           {csvrSubTab === 'partners' && (
             <PartnersTab buildParams={buildParams} onRefresh={refresh} />
@@ -405,7 +400,7 @@ export default function CsvrView({ selectedCommune, territoryFilter, useTerritor
             <CampaignsTab buildParams={buildParams} onRefresh={refresh} />
           )}
           {csvrSubTab === 'followup' && (
-            <CampaignFollowupTab buildParams={buildParams} onRefresh={refresh} />
+            <CampaignFollowupTab buildParams={buildParams} onRefresh={refresh} mapAllowedCommunes={mapAllowedCommunes} />
           )}
           {csvrSubTab === 'exports' && (
             <ExportsTab reports={reports} animals={animals} missions={missions} buildParams={buildParams} />

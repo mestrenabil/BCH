@@ -2,30 +2,21 @@
 
 import React, { useEffect, useState } from 'react'
 import { toast } from 'sonner'
-import { useAppStore } from '@/lib/store'
 import LocationPicker from './location-picker'
 
 interface Hotspot { id: string; reference: string; name: string; commune: string; quartier: string; location: string; priority: string; status: string; reportCount: number; groupCount: number; biteCount: number; interventionCount: number; nextReviewDate?: string | null }
-interface Props { buildParams: () => URLSearchParams; onRefresh: () => void }
+interface Props { buildParams: () => URLSearchParams; onRefresh: () => void; mapAllowedCommunes: string[] }
 
 const input = 'w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-100'
 const priorities: Record<string, string> = { LOW: 'ضعيفة', MODERATE: 'متوسطة', HIGH: 'مرتفعة', CRITICAL: 'حرجة' }
 const statuses: Record<string, string> = { ACTIVE: 'نشطة', MONITORING: 'قيد المراقبة', RESOLVED: 'محلولة', ARCHIVED: 'مؤرشفة' }
 
-export default function HotspotsTab({ buildParams, onRefresh }: Props) {
-  const { user } = useAppStore()
+export default function HotspotsTab({ buildParams, onRefresh, mapAllowedCommunes }: Props) {
   const [hotspots, setHotspots] = useState<Hotspot[]>([])
   const [saving, setSaving] = useState(false)
   const [form, setForm] = useState({ name: '', quartier: '', location: '', latitude: '', longitude: '', priority: 'MODERATE', status: 'ACTIVE', reportCount: '0', groupCount: '0', biteCount: '0', interventionCount: '0', lastReviewDate: '', nextReviewDate: '', resolutionNotes: '', notes: '' })
 
-  const selectedMapCommune = buildParams().get('commune') || ''
-  const allowedCommunes = selectedMapCommune
-    ? [selectedMapCommune]
-    : user?.managedCommunes?.length
-    ? Array.from(new Set(user.managedCommunes))
-    : user?.commune && user.commune !== 'ALL'
-    ? [user.commune]
-    : []
+  const allowedCommunes = mapAllowedCommunes
 
   const load = async () => {
     const response = await fetch(`/api/csvr/hotspots?${buildParams().toString()}`)

@@ -14,6 +14,7 @@ import SanitaryMapTab from './sanitary/map-tab'
 import SanitarySettingsTab from './sanitary/settings-tab'
 import type { Establishment, Inspection, HealthCard, Sample } from './sanitary/types'
 import type { SanitaryDashboardMetrics } from './sanitary/metrics'
+import { useMapTerritoryScope } from '@/hooks/use-map-territory-scope'
 
 interface SanitaryViewProps {
   selectedCommune: string
@@ -45,7 +46,7 @@ export default function SanitaryView({ selectedCommune, territoryFilter, useTerr
   const contentTopRef = useRef<HTMLElement>(null)
   const previousSubTabRef = useRef(sanitarySubTab)
 
-  const allowedCommunes = user?.managedCommunes?.length ? Array.from(new Set(user.managedCommunes)) : user?.commune && user.commune !== 'ALL' ? [user.commune] : []
+  const { allowedCommunes } = useMapTerritoryScope(user, selectedCommune, territoryFilter, useTerritoryFilter)
 
   useEffect(() => {
     if (previousSubTabRef.current === sanitarySubTab) return

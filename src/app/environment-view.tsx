@@ -17,6 +17,7 @@ import type { EnvironmentalDossier, EnvironmentalInspection, EnvironmentalProgra
 import EnvironmentDossierDetail from './environment/detail-tab'
 import EnvironmentSettingsTab from './environment/settings-tab'
 import EnvironmentMapTab from './environment/map-tab'
+import { useMapTerritoryScope } from '@/hooks/use-map-territory-scope'
 
 interface Props {
   selectedCommune: string
@@ -85,12 +86,7 @@ export default function EnvironmentView({ selectedCommune, territoryFilter, useT
     window.setTimeout(() => contentTopRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 0)
   }, [setEnvironmentSubTab])
 
-  const accountCommunes = useMemo(() => {
-    if (selectedCommune !== 'ALL') return [selectedCommune]
-    if (user?.managedCommunes?.length) return Array.from(new Set(user.managedCommunes))
-    if (user?.commune && user.commune !== 'ALL') return [user.commune]
-    return []
-  }, [selectedCommune, user?.commune, user?.managedCommunes])
+  const { allowedCommunes: accountCommunes } = useMapTerritoryScope(user, selectedCommune, territoryFilter, useTerritoryFilter)
 
   const buildParams = useCallback((extra?: Record<string, string>) => {
     const params = new URLSearchParams()
