@@ -1490,9 +1490,9 @@ export default function MapComponent({ interventions, quartiers, selectedCommune
     // Add scale control
     L.control.scale({ position: 'bottomleft', imperial: false, metric: true }).addTo(map)
 
-    // Professional tile layers
-    const lightLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-      attribution: '© OpenStreetMap © CARTO',
+    // طبقات الخريطة الأساسية
+    const streetLayer = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap contributors',
       maxZoom: 19,
     })
 
@@ -1506,8 +1506,8 @@ export default function MapComponent({ interventions, quartiers, selectedCommune
       maxZoom: 19,
     })
 
-    tileLayersRef.current = { street: lightLayer, satellite: satelliteLayer, dark: darkLayer }
-    lightLayer.addTo(map)
+    tileLayersRef.current = { street: streetLayer, satellite: satelliteLayer, dark: darkLayer }
+    streetLayer.addTo(map)
 
     const communeLayerGroup = L.layerGroup().addTo(map)
     communeLayerGroupRef.current = communeLayerGroup
@@ -1618,7 +1618,7 @@ export default function MapComponent({ interventions, quartiers, selectedCommune
 
     // Layer control
     L.control.layers(
-      { '🗺️ خريطة عادية': lightLayer, '🛰️ صورة ساتلية': satelliteLayer, '🌙 خريطة داكنة': darkLayer },
+      { '🗺️ OpenStreetMap': streetLayer, '🛰️ صورة ساتلية': satelliteLayer, '🌙 خريطة داكنة': darkLayer },
       { '🏛️ الحدود الجماعية': communeLayerGroup, '🇲🇦 الجهات • الأقاليم • الجماعات': territorialLayerGroup },
       { position: 'bottomleft' }
     ).addTo(map)
