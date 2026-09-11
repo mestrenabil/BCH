@@ -1167,7 +1167,7 @@ export default function HomePage() {
       <AnimatePresence>
         {isFormOpen && (
           <InterventionFormDialog interventionId={editingInterventionId} quartiers={quartiers}
-            mapClickCoords={mapClickCoords} presetDate={presetDate} hideTypeField={!editingInterventionId && (currentView === 'interventions' || currentView === 'gis')} userCommune={isCommuneGroupManager ? 'ALL' : user?.commune || 'ALL'} allowedCommunes={accountCommunes} territoryFilter={territoryFilter} isGeneralManager={isGeneralManager || isCommuneGroupManager}
+            mapClickCoords={mapClickCoords} presetDate={presetDate} userCommune={isCommuneGroupManager ? 'ALL' : user?.commune || 'ALL'} allowedCommunes={accountCommunes} territoryFilter={territoryFilter} isGeneralManager={isGeneralManager || isCommuneGroupManager}
             onClose={() => { setIsFormOpen(false); setEditingInterventionId(null); setMapClickCoords(null); setPresetDate(null) }}
             onSave={async () => { await fetchStats(); await fetchInterventions() }} />
         )}
@@ -1275,9 +1275,9 @@ interface DropdownProduct {
   id: string; nom: string; categorie: string; unite: string; quantiteStock: number; prixUnitaire: number; reference: string
 }
 
-function InterventionFormDialog({ interventionId, quartiers, mapClickCoords, presetDate, hideTypeField = false, userCommune, allowedCommunes, territoryFilter, isGeneralManager, onClose, onSave }: {
+function InterventionFormDialog({ interventionId, quartiers, mapClickCoords, presetDate, userCommune, allowedCommunes, territoryFilter, isGeneralManager, onClose, onSave }: {
   interventionId: string | null; quartiers: Quartier[]
-  mapClickCoords: MapClickCoords | null; presetDate: string | null; hideTypeField?: boolean; userCommune: string
+  mapClickCoords: MapClickCoords | null; presetDate: string | null; userCommune: string
   allowedCommunes: string[]
   territoryFilter: TerritoryFilter; isGeneralManager: boolean
   onClose: () => void; onSave: () => Promise<void>
@@ -1453,6 +1453,19 @@ function InterventionFormDialog({ interventionId, quartiers, mapClickCoords, pre
     setFormData(prev => ({ ...prev, [field]: value }))
   }
 
+  const handleGisLayerChange = (gisLayer: string) => {
+    const interventionTypeByLayer: Record<string, string> = {
+      deratisation: 'DERATISATION',
+      desinsectisation: 'DESINSECTISATION',
+      desinfection: 'DESINFECTION',
+    }
+    setFormData((previous) => ({
+      ...previous,
+      gisLayer,
+      type: interventionTypeByLayer[gisLayer] || previous.type,
+    }))
+  }
+
   const handleCoordinatePick = (location: MapClickCoords) => {
     setCoordinatesFromMap(true)
     setFormData(prev => ({
@@ -1546,25 +1559,13 @@ function InterventionFormDialog({ interventionId, quartiers, mapClickCoords, pre
                 </div>
               </motion.div>
             )}
-            <div className={hideTypeField ? '' : 'grid grid-cols-2 gap-4'}>
-              {!hideTypeField && (
-                <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-1.5">نوع التدخل *</label>
-                  <select value={formData.type} onChange={(e) => updateField('type', e.target.value)} required
-                    className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-300">
-                    <option value="DERATISATION">🐀 مكافحة القوارض</option>
-                    <option value="DESINSECTISATION">🦟 مكافحة الحشرات</option>
-                    <option value="DESINFECTION">🧴 التطهير والتعقيم</option>
-                  </select>
-                </div>
-              )}
+            <div>
               <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-1.5">نوع التدخل</label>
-                <select value={formData.gisLayer} onChange={(e) => updateField('gisLayer', e.target.value)}
+                <label className="block text-sm font-semibold text-slate-700 mb-1.5">نوع التدخل *</label>
+                <select value={formData.gisLayer} onChange={(e) => handleGisLayerChange(e.target.value)} required
                   className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-300">
                   {GIS_LAYERS.map((layer) => <option key={layer.key} value={layer.key}>{layer.icon} {layer.label}</option>)}
                 </select>
-                <p className="mt-1 text-[10px] text-slate-400">يحدد تصنيف التدخل الظاهر في الخريطة</p>
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
