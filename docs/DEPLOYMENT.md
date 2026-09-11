@@ -138,19 +138,19 @@ npm run build
 cat > ecosystem.config.js << 'EOF'
 module.exports = {
   apps: [{
-    name: 'bch-health',
+    name: 'BCH',
     script: 'node_modules/next/dist/bin/next',
-    args: 'start -p 3000 -H 127.0.0.1',
-    cwd: '/home/bch/BCH',
+    args: 'start -p 3002 -H 127.0.0.1',
+    cwd: '/var/www/BCH',
     env: {
       NODE_ENV: 'production',
-      DATABASE_URL: 'postgresql://bch_user:password@localhost:5432/bch_health?schema=public',
+      DATABASE_URL: 'postgresql://bch_user:password@localhost:5432/bch_staging?schema=public',
     },
     instances: 1,
     autorestart: true,
     max_memory_restart: '1G',
-    error_file: '/home/bch/BCH/logs/error.log',
-    out_file: '/home/bch/BCH/logs/output.log',
+    error_file: '/var/www/BCH/logs/error.log',
+    out_file: '/var/www/BCH/logs/output.log',
     log_date_format: 'YYYY-MM-DD HH:mm:ss',
   }]
 }
@@ -206,7 +206,7 @@ server {
 
     # الوكيل العكسي لـ Next.js
     location / {
-        proxy_pass http://127.0.0.1:3000;
+        proxy_pass http://127.0.0.1:3002;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection 'upgrade';
@@ -219,7 +219,7 @@ server {
 
     # الملفات الثابتة (أداء)
     location /_next/static/ {
-        proxy_pass http://127.0.0.1:3000;
+        proxy_pass http://127.0.0.1:3002;
         expires 365d;
         add_header Cache-Control "public, immutable";
     }
@@ -250,10 +250,10 @@ DATE=$(date +%F)
 mkdir -p "$BACKUP_DIR"
 
 # قاعدة البيانات
-PGPASSWORD="your-password" pg_dump -U bch_user -h localhost bch_health | gzip > "$BACKUP_DIR/db-$DATE.sql.gz"
+PGPASSWORD="your-password" pg_dump -U bch_user -h localhost bch_staging | gzip > "$BACKUP_DIR/db-$DATE.sql.gz"
 
 # الملفات
-tar -czf "$BACKUP_DIR/storage-$DATE.tar.gz" -C /home/bch/BCH storage/
+tar -czf "$BACKUP_DIR/storage-$DATE.tar.gz" -C /var/www/BCH storage/
 
 # احتفظ بآخر 7 أيام فقط
 find "$BACKUP_DIR" -name "*.gz" -mtime +7 -delete
@@ -274,7 +274,7 @@ crontab -e
 ## 8. التحديث
 
 ```bash
-cd /home/bch/BCH
+cd /var/www/BCH
 
 # اسحب التحديثات
 git pull origin main
@@ -290,21 +290,21 @@ npx prisma migrate deploy   # أو: npx prisma db push
 npm run build
 
 # أعد التشغيل
-pm2 restart bch-health
+pm2 restart BCH
 ```
 
 ### سكريبت تحديث سريع
 ```bash
-# /home/bch/update.sh
+# /root/update.sh
 #!/bin/bash
 set -e
-cd /home/bch/BCH
+cd /var/www/BCH
 git pull
 npm install
 npx prisma generate
 npx prisma db push
 npm run build
-pm2 restart bch-health
+pm2 restart BCH
 echo "Update completed successfully"
 ```
 
@@ -317,7 +317,7 @@ echo "Update completed successfully"
 #### إعداد الخادم مرة واحدة
 
 ```bash
-cd /home/bch/BCH
+cd /var/www/BCH
 chmod +x scripts/deploy-production.sh
 git remote set-url origin git@github.com:mestrnabil/BCH.git
 ```
@@ -330,13 +330,12 @@ git remote set-url origin git@github.com:mestrnabil/BCH.git
 
 أضف الأسرار التالية في إعدادات المستودع أو في Environment باسم `production`:
 
-- `DEPLOY_HOST`: عنوان IP أو اسم الخادم.
-- `DEPLOY_USER`: مستخدم النشر، مثل `bch`.
-- `DEPLOY_SSH_KEY`: المفتاح الخاص الذي يسمح لـ GitHub Actions بالدخول إلى الخادم.
-- `DEPLOY_KNOWN_HOSTS`: ناتج `ssh-keyscan -H <عنوان-الخادم>` بعد التحقق من بصمة الخادم يدوياً.
+- `SERVER_HOST`: عنوان IP أو اسم الخادم.
+- `SERVER_USER`: مستخدم النشر.
+- `SERVER_SSH_KEY`: المفتاح الخاص الذي يسمح لـ GitHub Actions بالدخول إلى الخادم.
 
-ويمكن إضافة متغير مستودع باسم `DEPLOY_PATH` إذا كان مسار التطبيق مختلفاً عن
-`/home/bch/BCH`.
+يمكن إضافة `SERVER_PORT` إذا لم يكن منفذ SSH هو `22`. ويوصى بإضافة
+`SERVER_KNOWN_HOSTS` من ناتج `ssh-keyscan -H <عنوان-الخادم>` بعد التحقق من بصمة الخادم يدوياً.
 
 #### طريقة العمل اليومية
 
@@ -359,10 +358,10 @@ git push -u origin feat/my-change
 ```bash
 # حالة التطبيق
 pm2 status
-pm2 logs bch-health --lines 50
+pm2 logs BCH --lines 50
 
 # فحص الصحة
-curl http://localhost:3000/api/health
+curl http://localhost:3002/api/health
 
 # مراقبة النظام
 htop
@@ -378,10 +377,10 @@ sudo systemctl status postgresql
 
 | المشكلة | الحل |
 |---|---|
-| `ECONNREFUSED 127.0.0.1:3000` | `pm2 restart bch-health` |
+| `ECONNREFUSED 127.0.0.1:3002` | `pm2 restart BCH` |
 | `Database connection failed` | تحقق من `DATABASE_URL` + `pg_hba.conf` |
 | `502 Bad Gateway` | تأكد أن Next.js يعمل: `pm2 status` |
-| الصفحة البيضاء | تحقق من السجلات: `pm2 logs bch-health` |
+| الصفحة البيضاء | تحقق من السجلات: `pm2 logs BCH` |
 | رفع الملفات يفشل | `client_max_body_size` في Nginx |
 | SSL منتهي | `sudo certbot renew` |
 

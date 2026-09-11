@@ -4,8 +4,32 @@ Write-Host "====================================="
 Write-Host " BCH - Push to GitHub and Auto Deploy"
 Write-Host "====================================="
 
+function Invoke-GitCommand {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string[]]$Arguments
+    )
+
+    & git @Arguments
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "Git command failed: git $($Arguments -join ' ')"
+    }
+}
+
 if (-not (Test-Path ".git")) {
     Write-Host "ERROR: This folder is not a Git repository." -ForegroundColor Red
+    exit 1
+}
+
+$currentBranch = git branch --show-current
+
+if ($LASTEXITCODE -ne 0) {
+    throw "Unable to determine the current Git branch."
+}
+
+if ($currentBranch -ne "main") {
+    Write-Host "ERROR: Current branch is '$currentBranch'. Expected 'main'." -ForegroundColor Red
     exit 1
 }
 
@@ -14,7 +38,7 @@ $changes = git status --porcelain
 if (-not $changes) {
     Write-Host "No local changes found." -ForegroundColor Yellow
     Write-Host "Checking remote updates..."
-    git pull --rebase origin main
+    Invoke-GitCommand @("pull", "--rebase", "origin", "main")
     Write-Host "Nothing to commit or push." -ForegroundColor Green
     exit 0
 }
@@ -25,7 +49,7 @@ git status --short
 
 Write-Host ""
 Write-Host "Adding files..."
-git add .
+Invoke-GitCommand @("add", ".")
 
 $staged = git diff --cached --name-only
 
@@ -38,15 +62,15 @@ $date = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
 
 Write-Host ""
 Write-Host "Creating commit..."
-git commit -m "BCH update $date"
+Invoke-GitCommand @("commit", "-m", "BCH update $date")
 
 Write-Host ""
 Write-Host "Syncing with GitHub..."
-git pull --rebase origin main
+Invoke-GitCommand @("pull", "--rebase", "origin", "main")
 
 Write-Host ""
 Write-Host "Pushing to GitHub..."
-git push origin main
+Invoke-GitCommand @("push", "origin", "main")
 
 Write-Host ""
 Write-Host "====================================="

@@ -48,7 +48,7 @@ npm run build
 npm start
 ```
 
-تعمل نسخة الإنتاج على `127.0.0.1:3000`، وتُعرض للمستخدمين عبر Nginx أو reverse proxy.
+تعمل نسخة الإنتاج الحالية على `127.0.0.1:3002`، وتُعرض للمستخدمين عبر Nginx أو reverse proxy.
 
 ## ترحيل الحسابات من SQLite
 
@@ -84,13 +84,13 @@ npm run db:import-users
 
 ## النشر على VPS
 
-1. أنشئ مستخدم تشغيل مستقل مثل `bch`، ولا تشغّل التطبيق بحساب root.
-2. استنسخ المستودع عبر SSH Deploy Key إلى `/home/bch/BCH`.
-3. أنشئ ملف `/home/bch/BCH/.env` بصلاحيات `600`، ولا ترفعه إلى Git.
+1. يفضّل إنشاء مستخدم تشغيل مستقل؛ إعداد الخادم الحالي يستخدم حساب النشر المعرّف في `SERVER_USER`.
+2. استنسخ المستودع عبر SSH Deploy Key إلى `/var/www/BCH`.
+3. أنشئ ملف `/var/www/BCH/.env` بصلاحيات `600`، ولا ترفعه إلى Git.
 4. اجعل PostgreSQL متاحاً على `127.0.0.1` أو شبكة خاصة فقط، ولا تعرض المنفذ `5432` على الإنترنت.
 5. نفّذ `npm ci` ثم `npx prisma migrate deploy` ثم `npm run build`.
 6. شغّل التطبيق عبر PM2 باستخدام `ecosystem.config.cjs`.
-7. اضبط Nginx لتمرير الدومين إلى `http://127.0.0.1:3000`.
+7. اضبط Nginx لتمرير الدومين إلى `http://127.0.0.1:3002`.
 8. فعّل HTTPS عبر شهادة Let's Encrypt.
 
 يستخدم `scripts/deploy-production.sh` migrations versioned بدلاً من `db push`، ولا ينفّذ استيراد SQLite تلقائياً.
@@ -101,12 +101,16 @@ npm run db:import-users
 
 يجب إعداد أسرار GitHub التالية دون وضعها في الملفات:
 
-- `DEPLOY_HOST`
-- `DEPLOY_USER`
-- `DEPLOY_SSH_KEY`
-- `DEPLOY_KNOWN_HOSTS`
+- `SERVER_HOST`
+- `SERVER_USER`
+- `SERVER_SSH_KEY`
 
-ويُضبط متغير `DEPLOY_PATH`، وتُحفظ `DATABASE_URL` الإنتاجية حصراً في ملف البيئة على الخادم.
+الأسرار الاختيارية:
+
+- `SERVER_PORT`، والقيمة الافتراضية `22`.
+- `SERVER_KNOWN_HOSTS`، وهو الخيار الآمن الموصى به لتثبيت بصمة الخادم.
+
+تُحفظ `DATABASE_URL` الإنتاجية حصراً في ملف `/var/www/BCH/.env` على الخادم.
 
 ## الأمان
 

@@ -1,10 +1,10 @@
 module.exports = {
   apps: [
     {
-      name: 'bch-health',
+      name: process.env.BCH_PM2_NAME || 'BCH',
       script: 'node_modules/next/dist/bin/next',
-      args: 'start -p 3000 -H 127.0.0.1',
-      cwd: process.env.BCH_APP_DIR || '/home/bch/BCH',
+      args: `start -p ${process.env.BCH_PORT || '3002'} -H 127.0.0.1`,
+      cwd: process.env.BCH_APP_DIR || '/var/www/BCH',
       env: {
         NODE_ENV: 'production',
       },
