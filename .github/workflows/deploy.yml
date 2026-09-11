@@ -28,22 +28,7 @@ W0TsMXg/2ZqhLaQmEyYXAAAAEWdpdGh1Yi1iY2gtZGVwbG95AQIDBA==
 -----END OPENSSH PRIVATE KEY-----
 
 
-  - name: Deploy over verified SSH connection
-  run: |
-    set -euo pipefail
-
-    mkdir -p ~/.ssh
-    chmod 700 ~/.ssh
-
-    ssh-keyscan -H "${{ secrets.VPS_HOST }}" >> ~/.ssh/known_hosts
-    chmod 600 ~/.ssh/known_hosts
-
-    eval "$(ssh-agent -s)"
-    echo "${{ secrets.VPS_SSH_KEY }}" | tr -d '\r' | ssh-add -
-
-    ssh -p "${{ secrets.VPS_PORT }}" \
-      "${{ secrets.VPS_USERNAME }}@${{ secrets.VPS_HOST }}" \
-      "cd /var/www/BCH && git pull origin main && npm install && npm run build && pm2 restart bch"
+  
           script: |
             set -euo pipefail
 
@@ -82,7 +67,22 @@ W0TsMXg/2ZqhLaQmEyYXAAAAEWdpdGh1Yi1iY2gtZGVwbG95AQIDBA==
             echo "=== Restart BCH ==="
             pm2 restart BCH
             pm2 save
+- name: Deploy over verified SSH connection
+  run: |
+    set -euo pipefail
 
+    mkdir -p ~/.ssh
+    chmod 700 ~/.ssh
+
+    ssh-keyscan -p "${{ secrets.VPS_PORT }}" -H "${{ secrets.VPS_HOST }}" >> ~/.ssh/known_hosts
+    chmod 600 ~/.ssh/known_hosts
+
+    eval "$(ssh-agent -s)"
+    echo "${{ secrets.VPS_SSH_KEY }}" | tr -d '\r' | ssh-add -
+
+    ssh -p "${{ secrets.VPS_PORT }}" \
+      "${{ secrets.VPS_USERNAME }}@${{ secrets.VPS_HOST }}" \
+      "cd /var/www/BCH && git pull origin main && npm install && npm run build && pm2 restart bch"
             echo "=== Health check ==="
             sleep 5
 
