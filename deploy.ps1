@@ -1,4 +1,9 @@
 $ErrorActionPreference = "Stop"
+$LocalUrl = "http://localhost:3000"
+$LocalHealthUrl = "$LocalUrl/api/health"
+$LocalStartupTimeoutSeconds = 120
+$ProductionUrl = "https://bch.dabahelp.com"
+$DeploymentTimeoutSeconds = 900
 
 Write-Host "====================================="
 Write-Host " BCH - Push to GitHub and Auto Deploy"
@@ -15,6 +20,132 @@ function Invoke-GitCommand {
     if ($LASTEXITCODE -ne 0) {
         throw "Git command failed: git $($Arguments -join ' ')"
     }
+}
+
+function Get-CurrentCommit {
+    $commit = & git rev-parse HEAD
+    if ($LASTEXITCODE -ne 0) {
+        throw "Unable to determine the current Git commit."
+    }
+    return $commit.Trim()
+}
+
+function Test-LocalSite {
+    try {
+        $health = Invoke-RestMethod -Uri $LocalHealthUrl -Method Get -TimeoutSec 5
+        return $health.status -eq "ok" -and $health.database -eq "ok"
+    }
+    catch {
+        return $false
+    }
+}
+
+function Test-LocalHttpServer {
+    try {
+        Invoke-WebRequest -Uri $LocalUrl -Method Get -UseBasicParsing -TimeoutSec 5 | Out-Null
+        return $true
+    }
+    catch {
+        return $null -ne $_.Exception.Response
+    }
+}
+
+function Start-LocalPreview {
+    if (-not (Test-Path -LiteralPath ".env")) {
+        Write-Host "Local environment is not configured. Starting the one-time setup..." -ForegroundColor Yellow
+        & (Join-Path $PSScriptRoot "scripts\setup-local.ps1")
+        if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath ".env")) {
+            throw "Local environment setup did not complete."
+        }
+    }
+
+    if (-not (Test-LocalSite)) {
+        if (Test-LocalHttpServer) {
+            throw "A local server is running, but its database is unavailable. Stop the old npm process, then run deploy.ps1 again."
+        }
+
+        Write-Host ""
+        Write-Host "Starting the local preview..." -ForegroundColor Cyan
+
+        $npmCommand = Get-Command npm.cmd -ErrorAction Stop
+        $localProcess = Start-Process `
+            -FilePath $npmCommand.Source `
+            -ArgumentList @("run", "dev") `
+            -WorkingDirectory (Get-Location).Path `
+            -WindowStyle Hidden `
+            -PassThru
+
+        $deadline = (Get-Date).AddSeconds($LocalStartupTimeoutSeconds)
+        while ((Get-Date) -lt $deadline) {
+            if ($localProcess.HasExited) {
+                throw "The local development server stopped before it became ready."
+            }
+            if (Test-LocalSite) {
+                break
+            }
+            Start-Sleep -Seconds 2
+            $localProcess.Refresh()
+        }
+
+        if (-not (Test-LocalSite)) {
+            throw "The local preview did not start within $LocalStartupTimeoutSeconds seconds."
+        }
+    }
+    else {
+        Write-Host "The local preview is already running." -ForegroundColor Green
+    }
+
+    Write-Host "Opening $LocalUrl in the default browser..." -ForegroundColor Cyan
+    Start-Process "$LocalUrl`?preview=$([DateTimeOffset]::UtcNow.ToUnixTimeSeconds())"
+}
+
+function Confirm-ProductionDeployment {
+    Write-Host ""
+    Write-Host "Review the platform in the browser before continuing." -ForegroundColor Yellow
+    $answer = Read-Host "Deploy these changes to production? Type Y to deploy"
+    return $answer.Trim().ToUpperInvariant() -eq "Y"
+}
+
+function Wait-ForProductionCommit {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$ExpectedCommit
+    )
+
+    $healthUrl = "$ProductionUrl/api/health"
+    $deadline = (Get-Date).AddSeconds($DeploymentTimeoutSeconds)
+    $attempt = 0
+
+    Write-Host ""
+    Write-Host "Waiting for GitHub Actions to deploy commit $($ExpectedCommit.Substring(0, 7))..." -ForegroundColor Cyan
+
+    while ((Get-Date) -lt $deadline) {
+        $attempt++
+        try {
+            $cacheBuster = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
+            $health = Invoke-RestMethod -Uri "$healthUrl`?t=$cacheBuster" -Method Get -TimeoutSec 15
+            if ($health.status -eq "ok" -and $health.release -eq $ExpectedCommit) {
+                Write-Host "Production is running the expected commit." -ForegroundColor Green
+                return $true
+            }
+
+            $currentRelease = if ($health.release) { $health.release.ToString().Substring(0, [Math]::Min(7, $health.release.ToString().Length)) } else { "unknown" }
+            Write-Host "Attempt ${attempt}: deployment still in progress (server: $currentRelease)."
+        }
+        catch {
+            Write-Host "Attempt ${attempt}: production is not ready yet."
+        }
+
+        Start-Sleep -Seconds 10
+    }
+
+    Write-Warning "Deployment confirmation timed out. Check GitHub Actions if the new version is not visible."
+    return $false
+}
+
+function Open-ProductionSite {
+    Write-Host "Opening $ProductionUrl in the default browser..." -ForegroundColor Cyan
+    Start-Process $ProductionUrl
 }
 
 if (-not (Test-Path ".git")) {
@@ -40,12 +171,20 @@ if (-not $changes) {
     Write-Host "Checking remote updates..."
     Invoke-GitCommand @("pull", "--rebase", "origin", "main")
     Write-Host "Nothing to commit or push." -ForegroundColor Green
+    Start-LocalPreview
     exit 0
 }
 
 Write-Host ""
 Write-Host "Changes detected:"
 git status --short
+
+Start-LocalPreview
+
+if (-not (Confirm-ProductionDeployment)) {
+    Write-Host "Deployment cancelled. Your local changes were not committed or pushed." -ForegroundColor Yellow
+    exit 0
+}
 
 Write-Host ""
 Write-Host "Adding files..."
@@ -72,8 +211,18 @@ Write-Host ""
 Write-Host "Pushing to GitHub..."
 Invoke-GitCommand @("push", "origin", "main")
 
+$expectedCommit = Get-CurrentCommit
+$deploymentReady = Wait-ForProductionCommit -ExpectedCommit $expectedCommit
+
 Write-Host ""
 Write-Host "====================================="
 Write-Host "Push completed successfully." -ForegroundColor Green
-Write-Host "GitHub Actions will deploy to the VPS automatically."
+if ($deploymentReady) {
+    Write-Host "Deployment completed and verified on the VPS." -ForegroundColor Green
+}
+else {
+    Write-Host "The push succeeded, but deployment was not confirmed before timeout." -ForegroundColor Yellow
+}
 Write-Host "====================================="
+
+Open-ProductionSite

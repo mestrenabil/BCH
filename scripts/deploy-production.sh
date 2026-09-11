@@ -42,6 +42,7 @@ set +a
 export BCH_APP_DIR="$APP_DIR"
 export BCH_PORT="$PORT"
 export BCH_PM2_NAME="$PM2_NAME"
+export APP_RELEASE="$(git rev-parse HEAD)"
 
 npm ci
 npx prisma generate

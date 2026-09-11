@@ -7,6 +7,7 @@ module.exports = {
       cwd: process.env.BCH_APP_DIR || '/var/www/BCH',
       env: {
         NODE_ENV: 'production',
+        APP_RELEASE: process.env.APP_RELEASE || 'unknown',
       },
       instances: 1,
       autorestart: true,

@@ -22,7 +22,7 @@
 ## الإعداد المحلي
 
 1. انسخ `.env.example` إلى `.env`.
-2. عيّن `DATABASE_URL` إلى قاعدة PostgreSQL محلية أو staging، ولا تحفظ كلمة المرور في Git.
+2. على Windows شغّل `npm run local:setup` مرة واحدة. ينشئ السكربت قاعدة `bch_local` وملف `.env` غير المتتبّع ويطلب بيانات المسؤول المحلي داخل نافذة الطرفية. وفي الأنظمة الأخرى، عيّن `DATABASE_URL` إلى PostgreSQL محلية ولا تحفظ كلمة المرور في Git.
 3. ثبّت الاعتماديات عبر `npm ci`.
 4. ولّد Prisma Client عبر `npx prisma generate`.
 5. طبّق migrations على قاعدة فارغة أو staging عبر `npx prisma migrate deploy`.
@@ -98,6 +98,8 @@ npm run db:import-users
 ## GitHub Actions
 
 يعمل Workflow الموجود في `.github/workflows/deploy-production.yml` عند الدفع إلى الفرع `main`. يتحقق من البناء والاختبارات ويطبق migrations على قاعدة CI مؤقتة، ثم ينشر إلى VPS بعد نجاح التحقق.
+
+على Windows يكفي تشغيل `.\deploy.ps1`: يشغّل السكربت نسخة محلية ويفتح `http://localhost:3000` أولاً للمعاينة، ولا يجمع التغييرات أو يدفعها إلا بعد موافقة المستخدم. بعد الموافقة ينتظر حتى يؤكد مسار الصحة أن الخادم يشغّل commit نفسه، ثم يفتح منصة الإنتاج تلقائياً. وإذا لم توجد تغييرات، يزامن المستودع ويفتح المعاينة المحلية فقط.
 
 يجب إعداد أسرار GitHub التالية دون وضعها في الملفات:
 

@@ -15,7 +15,9 @@
     "db:migrate": "prisma migrate dev",
     "db:reset": "prisma migrate reset",
     "db:import-users": "node scripts/import-users-from-sqlite.cjs",
-    "db:seed:2025": "node scripts/seed-2025.cjs"
+    "db:seed:2025": "node scripts/seed-2025.cjs",
+    "local:setup": "powershell -ExecutionPolicy Bypass -File scripts/setup-local.ps1",
+    "local:reset-postgres-password": "powershell -ExecutionPolicy Bypass -File scripts/reset-local-postgres-password.ps1"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

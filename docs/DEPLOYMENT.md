@@ -339,6 +339,8 @@ git remote set-url origin git@github.com:mestrnabil/BCH.git
 
 #### طريقة العمل اليومية
 
+على Windows يمكن تشغيل `.\deploy.ps1` من جذر المشروع. يفتح السكربت نسخة `localhost:3000` للمعاينة أولاً وينتظر موافقة المستخدم قبل أي commit أو push. بعد الموافقة والدفع، ينتظر ظهور رقم commit المطلوب في `/api/health` ثم يفتح منصة الإنتاج تلقائياً في المتصفح الافتراضي.
+
 ```bash
 git checkout -b feat/my-change
 # عدّل واختبر محلياً على localhost
