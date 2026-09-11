@@ -17,9 +17,16 @@ jobs:
       - name: Deploy BCH to VPS
         uses: appleboy/ssh-action@v1
         with:
-          host: ${{ secrets.SERVER_HOST }}
-          username: ${{ secrets.SERVER_USER }}
-          key: ${{ secrets.SERVER_SSH_KEY}} 
+          host:  173.249.8.125
+          username:  root 
+          key: -----BEGIN OPENSSH PRIVATE KEY-----
+b3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAAAMwAAAAtzc2gtZW
+QyNTUxOQAAACCTWuF9vBfx54+1U2LwalP4BFtE7DF4P9maoS2kJhMmFwAAAJhDMOmFQzDp
+hQAAAAtzc2gtZWQyNTUxOQAAACCTWuF9vBfx54+1U2LwalP4BFtE7DF4P9maoS2kJhMmFw
+AAAECouoeB8rDYMxjuYmvRrue4E2XgG9RUhjhTyOu3Rr+DNJNa4X28F/Hnj7VTYvBqU/gE
+W0TsMXg/2ZqhLaQmEyYXAAAAEWdpdGh1Yi1iY2gtZGVwbG95AQIDBA==
+-----END OPENSSH PRIVATE KEY-----
+  
           script: |
             set -euo pipefail
 
