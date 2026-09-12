@@ -107,7 +107,7 @@ export default function EnvironmentMapTab({ selectedCommune, territoryFilter, us
       }
       if (cancelled) return
       const bounds = L.latLngBounds([])
-      for (const commune of allowedCommunes) { const boundary = await getBoundary(commune); if (!boundary || cancelled) continue; if (boundary.geometry) L.geoJSON(boundary.geometry, { style: { color: '#b45309', weight: 3, opacity: 0.95, fillColor: '#f59e0b', fillOpacity: 0.08 } }).addTo(boundariesRef.current); if (boundary.bounds) bounds.extend(boundary.bounds) }
+      for (const commune of allowedCommunes) { const boundary = await getBoundary(commune); if (!boundary || cancelled) continue; if (boundary.geometry) L.geoJSON(boundary.geometry, { style: { color: '#047857', weight: 6, opacity: 1, fillColor: '#10b981', fillOpacity: 0.16, dashArray: '0' }, interactive: false }).addTo(boundariesRef.current); if (boundary.bounds) bounds.extend(boundary.bounds) }
       if (bounds.isValid()) map.fitBounds(bounds, { padding: [24, 24], maxZoom: 15 })
       const focusedPoint = focusDossierId ? points.find((point) => point.layer === 'environmentalDossiers' && point.id === focusDossierId && visible[point.layer]) : null
       if (focusedPoint) {

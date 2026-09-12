@@ -1096,14 +1096,21 @@ export default function MapComponent({ interventions, quartiers, selectedCommune
     layerGroup.clearLayers()
     if (!visible) {
       const managedCommunes = enforcedCommunesRef.current
-      if (managedCommunes.length > 1) {
+      if (managedCommunes.length > 0) {
         const managedFeatures = boundaryData.commune.features.filter((feature) => {
           const properties = feature.properties as { name?: string; nameAr?: string; nameFr?: string } | null
           return [properties?.nameAr, properties?.name, properties?.nameFr].some((name) => name && managedCommunes.includes(name))
         }).map((feature) => canonicalCommuneGeometry(feature, 'commune'))
         if (managedFeatures.length > 0) {
           const managedLayer = L.geoJSON({ type: 'FeatureCollection', features: managedFeatures } as GeoJSON.FeatureCollection, {
-            style: { ...TERRITORIAL_LAYER_STYLES.commune, weight: 4, fillOpacity: 0.15 },
+            style: {
+              color: '#047857',
+              weight: 6,
+              opacity: 1,
+              fillColor: '#10b981',
+              fillOpacity: 0.16,
+              dashArray: '0',
+            },
             onEachFeature: (feature, layer) => {
               // Forward clicks to intervention form when click-to-add is enabled (no population popup)
               // Single click opens the form; double click zooms in (native Leaflet).
@@ -1137,7 +1144,7 @@ export default function MapComponent({ interventions, quartiers, selectedCommune
           })
           managedLayer.addTo(layerGroup)
           const bounds = managedLayer.getBounds()
-          if (fitBounds && bounds.isValid()) map.fitBounds(bounds, { padding: [30, 30], maxZoom: 11 })
+          if (fitBounds && bounds.isValid()) map.fitBounds(bounds, { padding: [40, 40], maxZoom: managedCommunes.length === 1 ? 14 : 11 })
           return
         }
       }

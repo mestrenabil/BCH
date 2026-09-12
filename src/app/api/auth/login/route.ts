@@ -13,6 +13,11 @@ import {
   verifyPassword,
   hashPassword,
 } from '@/lib/auth'
+import { recordActivity } from '@/lib/activity-log'
+import {
+  detectAnalyticsDevice,
+  hashAnalyticsIdentifier,
+} from '@/lib/platform-analytics'
 
 export async function POST(request: NextRequest) {
   try {
@@ -60,6 +65,31 @@ export async function POST(request: NextRequest) {
 
     // Create session
     const token = await createSession(user.id)
+
+    // تسجيل دخول إحصائي وتدقيقي دون الاحتفاظ بعنوان IP الخام.
+    await Promise.allSettled([
+      db.platformVisit.create({
+        data: {
+          kind: 'LOGIN',
+          path: '/auth/login',
+          visitorHash: hashAnalyticsIdentifier(`${clientIp}:${user.id}`),
+          sessionHash: hashAnalyticsIdentifier(token),
+          userId: user.id,
+          userName: user.nom,
+          userRole: user.role,
+          commune: user.commune === 'ALL' ? 'الإدارة العامة' : user.commune,
+          device: detectAnalyticsDevice(request.headers.get('user-agent') || ''),
+          lastSeenAt: new Date(),
+        },
+      }),
+      recordActivity({
+        user: { id: user.id, nom: user.nom },
+        action: 'LOGIN',
+        entityType: 'SESSION',
+        entityId: user.id,
+        commune: user.commune,
+      }),
+    ])
 
     // Set cookie
     const response = NextResponse.json({

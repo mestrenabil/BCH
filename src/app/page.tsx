@@ -18,6 +18,7 @@ import TerritoryScopeFilter from '@/components/territory-scope-filter'
 import { ALL_TERRITORIES, appendTerritoryParams, DEFAULT_TERRITORY_FILTER, type TerritoryCatalog, type TerritoryFilter } from '@/lib/geography'
 import { communeNamesMatch, findMatchingCommune } from '@/lib/commune-names'
 import { parseNavVisibilityJson } from '@/lib/user-nav-settings'
+import { trackPlatformVisit } from '@/lib/platform-analytics-client'
 
 // Dynamic imports for extracted views (code-split to reduce initial bundle)
 type CoordinatePickerMapProps = {
@@ -502,6 +503,11 @@ export default function HomePage() {
     setCurrentView('dashboard')
     toast.success('تم تسجيل الخروج بنجاح')
   }, [setUser, setSelectedCommune, setTerritoryFilter, setCurrentView])
+
+  useEffect(() => {
+    if (!isAuthenticated || user?.role === 'agent') return
+    trackPlatformVisit(`/app/${currentView}`, selectedCommune === 'ALL' ? '' : selectedCommune)
+  }, [currentView, isAuthenticated, selectedCommune, user?.role])
 
   const isGeneralManager = user?.role === 'admin' && user?.commune === 'ALL'
   // المدير العام ومجموعة الجماعات فقط يمكنهما التبديل بين أكثر من جماعة.

@@ -404,19 +404,6 @@ function DashboardView({ stats, onNavigate, selectedCommune, canSeeAllCommunes, 
               {COMMUNE_LABELS[selectedCommune]}
             </motion.span>
           )}
-          <button
-            onClick={() => {
-              document.body.classList.add('classic-print-active')
-              window.print()
-              setTimeout(() => {
-                document.body.classList.remove('classic-print-active')
-              }, 100)
-            }}
-            className="no-print inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white border border-slate-200 text-sm font-medium text-slate-600 hover:bg-emerald-50 hover:text-emerald-600 hover:border-emerald-200 transition-all shadow-sm"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5 4v3H4a2 2 0 00-2 2v3a2 2 0 002 2h1v2a2 2 0 002 2h6a2 2 0 002-2v-2h1a2 2 0 002-2V9a2 2 0 00-2-2h-1V4a2 2 0 00-2-2H7a2 2 0 00-2 2zm8 0H7v3h6V4zm0 8H7v4h6v-4z" clipRule="evenodd" /></svg>
-            طباعة التقرير
-          </button>
         </div>
       </motion.div>
 

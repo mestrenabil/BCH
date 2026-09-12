@@ -115,7 +115,7 @@ export default function SanitaryMapTab({ selectedCommune, territoryFilter, useTe
         markersRef.current.addLayer(marker)
       }
       const bounds = L.latLngBounds([])
-      if (mapSettings.showBoundary) for (const commune of allowedCommunes) { const boundary = await getBoundary(commune); if (!boundary || cancelled) continue; if (boundary.geometry) L.geoJSON(boundary.geometry, { style: { color: '#0f766e', weight: 3, opacity: 0.95, fillColor: '#2dd4bf', fillOpacity: 0.08 } }).addTo(boundariesRef.current); if (boundary.bounds) bounds.extend(boundary.bounds) }
+      if (mapSettings.showBoundary) for (const commune of allowedCommunes) { const boundary = await getBoundary(commune); if (!boundary || cancelled) continue; if (boundary.geometry) L.geoJSON(boundary.geometry, { style: { color: '#047857', weight: 6, opacity: 1, fillColor: '#10b981', fillOpacity: 0.16, dashArray: '0' }, interactive: false }).addTo(boundariesRef.current); if (boundary.bounds) bounds.extend(boundary.bounds) }
       if (!cancelled && bounds.isValid()) map.fitBounds(bounds, { padding: [24, 24], maxZoom: 15 })
     }
     void render().catch(() => undefined)

@@ -5,6 +5,7 @@ import { FormEvent, useEffect, useRef, useState } from 'react'
 import catalogJson from '../../../public/geography/catalog.json'
 import type { TerritoryCatalog } from '@/lib/geography'
 import { displayCommuneName, displayLinkedCommune, type PublicLanguage } from '@/lib/public-territory'
+import { trackPlatformVisit } from '@/lib/platform-analytics-client'
 
 const COMMUNES = Array.from(new Set((catalogJson as TerritoryCatalog).communes.map((commune) => (
   commune.nameAr || commune.name || commune.nameFr
@@ -184,6 +185,10 @@ export default function PublicComplaintPage({ onEmployeeLogin }: PublicComplaint
   const [detectedCommuneInfo, setDetectedCommuneInfo] = useState<{ commune: string; province?: string; region?: string } | null>(null)
   const [detectingCommune, setDetectingCommune] = useState(false)
   const [locationWarning, setLocationWarning] = useState('')
+
+  useEffect(() => {
+    trackPlatformVisit(window.location.pathname, detectedCommuneInfo?.commune || '')
+  }, [detectedCommuneInfo?.commune])
 
   const detectCommune = async (lat: number, lng: number) => {
     setDetectingCommune(true)

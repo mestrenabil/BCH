@@ -14,6 +14,7 @@ import {
 import { UserManagementSection } from './users-view-lite'
 import { BackupManagementSection } from './backup-management-section'
 import { DemoDataManagementSection } from './demo-data-management-section'
+import { PlatformAnalyticsSection } from './platform-analytics-section'
 
 const NAV_SETTINGS_ITEMS: { id: ViewType; label: string; icon: string }[] = [
   { id: 'dashboard', label: 'لوحة القيادة', icon: '📊' },
@@ -1106,6 +1107,9 @@ function SettingsView() {
           </div>
         </motion.div>
       )}
+
+      {/* User Management — prominent section */}
+      {user?.role === 'admin' && <PlatformAnalyticsSection />}
 
       {/* User Management — prominent section */}
       <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.08 }}

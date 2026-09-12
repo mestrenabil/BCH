@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useRef, useState } from 'react'
 import catalogJson from '../../../public/geography/catalog.json'
 import type { TerritoryCatalog } from '@/lib/geography'
+import { trackPlatformVisit } from '@/lib/platform-analytics-client'
 
 const COMMUNES = Array.from(new Set((catalogJson as TerritoryCatalog).communes.map((commune) => (
   commune.nameAr || commune.name || commune.nameFr
@@ -94,6 +95,9 @@ export default function PublicStrayAnimalPage() {
 
   // ===== اكتشاف الجماعة تلقائياً من الإحداثيات =====
   const [detectedCommuneInfo, setDetectedCommuneInfo] = useState<{ commune: string; province?: string; region?: string } | null>(null)
+  useEffect(() => {
+    trackPlatformVisit(window.location.pathname, detectedCommuneInfo?.commune || '')
+  }, [detectedCommuneInfo?.commune])
   const [detectingCommune, setDetectingCommune] = useState(false)
   const [locationWarning, setLocationWarning] = useState('')
 

@@ -5,7 +5,7 @@ const globalForPrisma = globalThis as unknown as {
   prismaSchemaVersion: string | undefined
 }
 
-const PRISMA_SCHEMA_VERSION = 'csvr-identification-v1'
+const PRISMA_SCHEMA_VERSION = 'platform-analytics-v1'
 
 // Force new PrismaClient if the cached one doesn't have the latest models
 // This handles the case where schema changes generate a new client but the
@@ -17,6 +17,9 @@ if (globalForPrisma.prisma && globalForPrisma.prismaSchemaVersion !== PRISMA_SCH
 if (globalForPrisma.prisma) {
   try {
     const cached = globalForPrisma.prisma as unknown as Record<string, unknown>
+    if (!cached.platformVisit) {
+      globalForPrisma.prisma = undefined
+    }
     if (!cached.activityLog || !cached.interventionComment || !cached.workOrder || !cached.workOrderPhoto || !cached.strayReport || !cached.captureMission || !cached.strayAnimal || !cached.strayAnimalTransport || !cached.strayAnimalHealthAlert || !cached.strayAnimalDeathReport || !cached.strayAnimalHotspot || !cached.strayPartner || !cached.strayAnimalIdentification || !cached.csvrSettings || !cached.foodReport || !cached.foodReportPhoto || !cached.dossier || !cached.dossierEvent || !cached.establishment || !cached.inspection || !cached.finding || !cached.correctiveAction || !cached.counterVisit || !cached.healthCard || !cached.sample || !cached.waterPoint || !cached.waterMeasurement || !cached.pool || !cached.sanitationIncident || !cached.pestProduct || !cached.pestStockMovement || !cached.biteCase || !cached.deathCase || !cached.burialDossier || !cached.cemetery || !cached.corpseTransport || !cached.exhumationDossier || !cached.environmentalDossier || !cached.pollutionIncident || !cached.wasteBlackSpot || !cached.naturalSite || !cached.awarenessCampaign || !cached.authorizationDossier || !cached.sanitaryOpinion || !cached.committeeVisit || !cached.team || !cached.productCategory || !cached.documentCategory) {
       globalForPrisma.prisma = undefined
     }
