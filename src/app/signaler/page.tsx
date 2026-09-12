@@ -1,7 +1,7 @@
 'use client'
 
 import dynamic from 'next/dynamic'
-import { FormEvent, useEffect, useRef, useState } from 'react'
+import { FormEvent, useEffect, useState } from 'react'
 import catalogJson from '../../../public/geography/catalog.json'
 import type { TerritoryCatalog } from '@/lib/geography'
 import { displayCommuneName, displayLinkedCommune, type PublicLanguage } from '@/lib/public-territory'
@@ -61,6 +61,33 @@ const PUBLIC_COPY: Record<PublicLanguage, {
     successTitle: 'Tu reporte ha sido registrado', keepReference: 'Conserva esta referencia para consultar su estado:', emailSent: 'La referencia también se ha enviado a tu correo electrónico.', emailNotConfigured: 'El reporte se registró, pero el servicio de correo no está configurado. Conserva la referencia mostrada arriba.', emailFailed: 'El reporte se registró, pero no se pudo enviar el correo. Conserva la referencia mostrada arriba.', whatsapp: '💬 Enviar la referencia por WhatsApp', newReport: 'Enviar otro reporte',
     formTitle: 'Detalles del reporte', formSubtitle: 'Completa la información necesaria para que el equipo pueda tramitarlo.', fullName: 'Nombre completo *', phone: 'Teléfono', email: 'Correo para recibir la referencia *', selectedType: 'Tipo seleccionado', changeType: 'Cambiar tipo', priority: 'Nivel de prioridad', commune: 'Comuna *', chooseCommune: '— Elegir comuna —', autoDetected: '✓ Detectada automáticamente', neighborhood: 'Barrio', description: 'Descripción del problema *', descriptionPlaceholder: 'Describe el lugar, la naturaleza del problema y cualquier información útil para el equipo de campo.', reportLocation: '📍 Ubicación del reporte', editLocation: 'Editar ubicación', latitude: 'Latitud', longitude: 'Longitud', send: '📨 Enviar reporte', sending: 'Enviando…', protected: 'Los reportes son gestionados por la oficina comunal de higiene · Tus datos están protegidos',
     trackingTitle: 'Consultar el estado del reporte', trackingSubtitle: 'Introduce la referencia mostrada después del envío. No se necesita nombre ni teléfono.', trackingPlaceholder: 'SIG-2026-…', track: 'Consultar estado', tracking: 'Verificando…', statusReceived: 'Reporte recibido', statusProcessing: 'Reporte en proceso', statusDone: 'Reporte tramitado', statusRejected: 'No se pudo aceptar el reporte', locationOutside: '⚠️ La ubicación está fuera de las comunas conocidas. Elige una ubicación en Marruecos.', locationFailed: 'Ubicación seleccionada, pero no se pudo vincular a una comuna conocida.', locationUnavailable: 'No se pudo detectar la comuna automáticamente. Elígela en la lista.', connectionFailed: 'No se puede conectar con el servicio. Inténtalo más tarde.', invalidTracking: 'No se puede consultar el reporte.',
+  },
+}
+
+const LOCATION_PERMISSION_COPY: Record<PublicLanguage, {
+  title: string
+  description: string
+  allow: string
+}> = {
+  ar: {
+    title: 'حدد جماعتك تلقائياً',
+    description: 'اسمح بتحديد موقعك لعرضه على الخريطة وربطه بجماعتك. يمكنك بعد ذلك تغيير موقع التدخل بالنقر على الخريطة.',
+    allow: '📡 السماح بتحديد موقعي',
+  },
+  fr: {
+    title: 'Détecter automatiquement votre commune',
+    description: 'Autorisez la localisation pour afficher votre position et identifier votre commune. Vous pourrez ensuite déplacer le lieu du signalement sur la carte.',
+    allow: '📡 Autoriser ma localisation',
+  },
+  en: {
+    title: 'Detect your commune automatically',
+    description: 'Allow location access to show your position and identify your commune. You can then adjust the report location on the map.',
+    allow: '📡 Allow my location',
+  },
+  es: {
+    title: 'Detectar tu comuna automáticamente',
+    description: 'Permite la ubicación para mostrar tu posición e identificar tu comuna. Después podrás ajustar el lugar del reporte en el mapa.',
+    allow: '📡 Permitir mi ubicación',
   },
 }
 
@@ -164,7 +191,9 @@ export default function PublicComplaintPage({ onEmployeeLogin }: PublicComplaint
 
   const [mapFocus, setMapFocus] = useState<{ lat: number; lng: number; token: number } | null>(null)
   const [locationConfirmed, setLocationConfirmed] = useState(false)
+  const [showLocationRequest, setShowLocationRequest] = useState(false)
   const copy = PUBLIC_COPY[language]
+  const locationPermissionCopy = LOCATION_PERMISSION_COPY[language]
   const typeOptions = PUBLIC_TYPE_OPTIONS[language]
   const priorityOptions = PUBLIC_PRIORITY_OPTIONS[language]
   const isRtl = language === 'ar'
@@ -234,22 +263,55 @@ export default function PublicComplaintPage({ onEmployeeLogin }: PublicComplaint
       (position) => {
         const lat = position.coords.latitude
         const lng = position.coords.longitude
+        setShowLocationRequest(false)
         selectLocation(lat, lng, true)
       },
-      () => setLocationWarning(copy.locationUnavailable),
+      () => {
+        setShowLocationRequest(true)
+        setLocationWarning(copy.locationUnavailable)
+      },
       { enableHighAccuracy: true, timeout: 10_000, maximumAge: 60_000 },
     )
   }
 
-  const autoLocationRequested = useRef(false)
   useEffect(() => {
-    if (autoLocationRequested.current || !navigator.geolocation) return
-    autoLocationRequested.current = true
-    navigator.geolocation.getCurrentPosition(
-      (position) => selectLocation(position.coords.latitude, position.coords.longitude, true),
-      () => undefined,
-      { enableHighAccuracy: true, timeout: 10_000, maximumAge: 60_000 },
-    )
+    let cancelled = false
+    const detectSilentlyWhenAllowed = async () => {
+      if (!navigator.geolocation) {
+        if (!cancelled) setShowLocationRequest(true)
+        return
+      }
+
+      try {
+        if (!navigator.permissions?.query) {
+          if (!cancelled) setShowLocationRequest(true)
+          return
+        }
+        const permission = await navigator.permissions.query({ name: 'geolocation' })
+        if (cancelled) return
+        if (permission.state !== 'granted') {
+          setShowLocationRequest(true)
+          return
+        }
+
+        navigator.geolocation.getCurrentPosition(
+          (position) => {
+            if (cancelled) return
+            setShowLocationRequest(false)
+            selectLocation(position.coords.latitude, position.coords.longitude, true)
+          },
+          () => {
+            if (!cancelled) setShowLocationRequest(true)
+          },
+          { enableHighAccuracy: true, timeout: 10_000, maximumAge: 60_000 },
+        )
+      } catch {
+        if (!cancelled) setShowLocationRequest(true)
+      }
+    }
+
+    void detectSilentlyWhenAllowed()
+    return () => { cancelled = true }
   }, [])
 
   const submitComplaint = async (event: FormEvent<HTMLFormElement>) => {
@@ -422,6 +484,25 @@ export default function PublicComplaintPage({ onEmployeeLogin }: PublicComplaint
                 </div>
               </div>}
             </div>
+
+            {showLocationRequest && !locationConfirmed && (
+              <div className="flex flex-col gap-4 rounded-2xl border-2 border-blue-200 bg-gradient-to-l from-blue-50 to-cyan-50 p-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-start gap-3">
+                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-xl text-white">📍</span>
+                  <div>
+                    <p className="font-black text-blue-950">{locationPermissionCopy.title}</p>
+                    <p className="mt-1 max-w-2xl text-xs leading-6 text-blue-800">{locationPermissionCopy.description}</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={captureLocation}
+                  className="shrink-0 rounded-xl bg-blue-600 px-4 py-3 text-xs font-extrabold text-white shadow-sm transition hover:bg-blue-700"
+                >
+                  {locationPermissionCopy.allow}
+                </button>
+              </div>
+            )}
 
             <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3">
               <div className="flex items-center gap-2">

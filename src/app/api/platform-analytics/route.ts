@@ -144,7 +144,7 @@ export async function GET(request: NextRequest) {
       pages: [...pageMap.entries()]
         .map(([path, value]) => ({ path, visits: value.visits, visitors: value.visitors.size }))
         .sort((a, b) => b.visits - a.visits)
-        .slice(0, 12),
+        .slice(0, 5),
       devices: [...deviceMap.entries()]
         .map(([device, visits]) => ({ device, visits }))
         .sort((a, b) => b.visits - a.visits),
