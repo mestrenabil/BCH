@@ -33,11 +33,13 @@ interface CreatingState {
   lng: number
   type: CreateType
   detectedCommune?: string
+  detectedQuartier?: string
 }
 
 interface GeoResult {
   found: boolean
   commune?: string
+  quartier?: string
   region?: string
   province?: string
 }
@@ -157,7 +159,7 @@ async function reverseGeocode(lat: number, lng: number): Promise<GeoResult> {
     const res = await fetch(`/api/geocode/reverse?lat=${lat}&lng=${lng}`)
     if (!res.ok) return { found: false }
     const data = await res.json()
-    if (data.found) return { found: true, commune: data.commune, region: data.region, province: data.province }
+    if (data.found) return { found: true, commune: data.commune, quartier: data.quartier || undefined, region: data.region, province: data.province }
     return { found: false }
   } catch {
     return { found: false }
@@ -335,6 +337,7 @@ export default function MapTab({ reports, animals, missions, onRefresh, buildPar
           : '<div style="background:#fef3c7;color:#92400e;font-size:11px;padding:4px 8px;border-radius:6px;margin:4px 0;">⚠️ خارج نطاق جماعة معروفة</div>'
         // خزّن الجماعة المكتشفة على العلامة لاستخدامها لاحقاً
         marker.__detectedCommune = (geo.found && geo.commune) ? geo.commune : undefined
+        marker.__detectedQuartier = (geo.found && geo.quartier) ? geo.quartier : undefined
         marker.__canCreate = isAllowedLocation
         marker.setPopupContent(renderPopup(communeHtml, isAllowedLocation))
       }
@@ -376,12 +379,13 @@ export default function MapTab({ reports, animals, missions, onRefresh, buildPar
       if (!clickMarkerRef.current) return
       const ll = clickMarkerRef.current.getLatLng()
       const detectedCommune = clickMarkerRef.current.__detectedCommune
+      const detectedQuartier = clickMarkerRef.current.__detectedQuartier
       const scopedCommunes = allowedCommunesRef.current
       if (clickMarkerRef.current.__canCreate === false || (scopedCommunes.length > 0 && (!detectedCommune || !scopedCommunes.includes(detectedCommune)))) {
         toast.error('لا يمكن إنشاء سجل خارج حدود جماعة الحساب')
         return
       }
-      setCreating({ lat: ll.lat, lng: ll.lng, type, detectedCommune })
+      setCreating({ lat: ll.lat, lng: ll.lng, type, detectedCommune, detectedQuartier })
       // أغلق popup لكن أبقِ العلامة كمرجع بصري حتى ينتهي المستخدم
       if (mapRef.current) mapRef.current.closePopup()
     }
@@ -734,9 +738,9 @@ export default function MapTab({ reports, animals, missions, onRefresh, buildPar
   // reset عند فتح النموذج
   useEffect(() => {
     if (!creating) return
-    if (creating.type === 'report') setReportForm(emptyReportForm)
-    if (creating.type === 'animal') setAnimalForm(emptyAnimalForm)
-    if (creating.type === 'mission') setMissionForm(emptyMissionForm)
+    if (creating.type === 'report') setReportForm({ ...emptyReportForm, quartier: creating.detectedQuartier || '' })
+    if (creating.type === 'animal') setAnimalForm({ ...emptyAnimalForm, captureLocation: creating.detectedQuartier || '' })
+    if (creating.type === 'mission') setMissionForm({ ...emptyMissionForm, quartier: creating.detectedQuartier || '' })
   }, [creating])
 
   // ===== SUBMIT HANDLERS =====

@@ -11,12 +11,14 @@ import {
   COMMUNE_LABELS, COMMUNE_COLORS,
 } from '@/lib/constants'
 import type { FoodReport } from './types'
+import LocationPicker from '../csvr/location-picker'
 
 interface Props {
   reports: FoodReport[]
   loading: boolean
   onRefresh: () => void
   buildParams: (extra?: Record<string, string>) => URLSearchParams
+  mapAllowedCommunes: string[]
   externalFilter?: { type?: string; status?: string } | null
   onClearExternalFilter?: () => void
 }
@@ -59,7 +61,7 @@ function exportCSV(rows: FoodReport[]) {
   toast.success(`تم تصدير ${rows.length} بلاغ`)
 }
 
-export default function ListTab({ reports, loading, onRefresh, buildParams, externalFilter, onClearExternalFilter }: Props) {
+export default function ListTab({ reports, loading, onRefresh, buildParams, mapAllowedCommunes, externalFilter, onClearExternalFilter }: Props) {
   const [search, setSearch] = useState('')
   const [filterStatus, setFilterStatus] = useState('ALL')
   const [filterType, setFilterType] = useState('ALL')
@@ -350,6 +352,7 @@ export default function ListTab({ reports, loading, onRefresh, buildParams, exte
             onClose={() => setShowCreate(false)}
             onCreated={() => { setShowCreate(false); onRefresh() }}
             buildParams={buildParams}
+            mapAllowedCommunes={mapAllowedCommunes}
           />
         )}
       </AnimatePresence>
@@ -358,10 +361,11 @@ export default function ListTab({ reports, loading, onRefresh, buildParams, exte
 }
 
 // ===== نموذج إنشاء بلاغ داخلي =====
-function CreateModal({ onClose, onCreated, buildParams }: {
+function CreateModal({ onClose, onCreated, buildParams, mapAllowedCommunes }: {
   onClose: () => void
   onCreated: () => void
   buildParams: (extra?: Record<string, string>) => URLSearchParams
+  mapAllowedCommunes: string[]
 }) {
   const accountCommune = buildParams().get('commune') || ''
   const [form, setForm] = useState({
@@ -373,6 +377,8 @@ function CreateModal({ onClose, onCreated, buildParams }: {
     quartier: '',
     adresse: '',
     commune: '',
+    latitude: '',
+    longitude: '',
   })
   const [saving, setSaving] = useState(false)
 
@@ -390,7 +396,7 @@ function CreateModal({ onClose, onCreated, buildParams }: {
       const res = await fetch('/api/food-reports', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...form, commune }),
+        body: JSON.stringify({ ...form, commune, latitude: form.latitude || null, longitude: form.longitude || null }),
       })
       if (!res.ok) {
         const err = await res.json().catch(() => null)
@@ -480,7 +486,14 @@ function CreateModal({ onClose, onCreated, buildParams }: {
             <div>
               <label className="text-xs font-bold text-slate-600 block mb-1">العنوان</label>
               <input value={form.adresse} onChange={(e) => setForm({ ...form, adresse: e.target.value })}
-                className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-rose-300" />
+              className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-rose-300" />
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-rose-100 bg-rose-50/60 p-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div><p className="text-xs font-bold text-slate-700">📍 تحديد الجماعة والحي من الخريطة</p><p className="mt-0.5 text-[10px] text-slate-500">اختيار النقطة يملأ الجماعة والحي والإحداثيات تلقائياً.</p></div>
+              <LocationPicker latitude={form.latitude} longitude={form.longitude} allowedCommunes={mapAllowedCommunes} label="تحديد الموقع" title="موقع البلاغ الغذائي" onSelect={({ latitude, longitude, commune, quartier }) => setForm({ ...form, commune, quartier: quartier || form.quartier, latitude: String(latitude), longitude: String(longitude) })} />
             </div>
           </div>
 

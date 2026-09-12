@@ -67,7 +67,7 @@ export async function POST(request: NextRequest) {
     const { user } = authResult
 
     const body = await request.json()
-    const { nomCitoyen, telephone, adresse, quartier, commune, type, description, priorite, observations, territoryFilter } = body
+    const { nomCitoyen, telephone, adresse, quartier, commune, type, description, priorite, observations, latitude, longitude, territoryFilter } = body
 
     if (!nomCitoyen || !type || !description) {
       return NextResponse.json({ error: 'يرجى ملء جميع الحقول المطلوبة' }, { status: 400 })
@@ -99,6 +99,8 @@ export async function POST(request: NextRequest) {
         adresse: adresse || '',
         quartier: quartier || null,
         commune: enforcedCommune,
+        latitude: latitude == null || latitude === '' ? null : Number(latitude),
+        longitude: longitude == null || longitude === '' ? null : Number(longitude),
         type,
         description,
         priorite: priorite || 'NORMALE',

@@ -30,7 +30,7 @@ const speciesLabels: Record<string, string> = { DOG: 'كلب', CAT: 'قط', HORS
 export default function DeathReportsTab({ buildParams, onRefresh, mapAllowedCommunes }: Props) {
   const [reports, setReports] = useState<Report[]>([])
   const [saving, setSaving] = useState(false)
-  const [form, setForm] = useState({ reportedAt: new Date().toISOString().slice(0, 10), species: 'DOG', quantity: '1', quartier: '', location: '', latitude: '', longitude: '', apparentCause: '', accident: false, healthSuspicion: false, removalDate: '', team: '', destination: '', handlingMode: '', observations: '' })
+  const [form, setForm] = useState({ reportedAt: new Date().toISOString().slice(0, 10), species: 'DOG', quantity: '1', commune: '', quartier: '', location: '', latitude: '', longitude: '', apparentCause: '', accident: false, healthSuspicion: false, removalDate: '', team: '', destination: '', handlingMode: '', observations: '' })
 
   const allowedCommunes = mapAllowedCommunes
 
@@ -48,7 +48,7 @@ export default function DeathReportsTab({ buildParams, onRefresh, mapAllowedComm
       const response = await fetch('/api/csvr/death-reports', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...form, commune: buildParams().get('commune') || allowedCommunes[0] || '' }),
+        body: JSON.stringify({ ...form, commune: form.commune || buildParams().get('commune') || allowedCommunes[0] || '' }),
       })
       const data = await response.json().catch(() => ({}))
       if (!response.ok) { toast.error(data.error || 'تعذر التسجيل'); return }
@@ -83,7 +83,7 @@ export default function DeathReportsTab({ buildParams, onRefresh, mapAllowedComm
             allowedCommunes={allowedCommunes}
             label="حدد النقطة من الخريطة"
             className="shrink-0"
-            onSelect={({ latitude, longitude }) => setForm({ ...form, latitude: String(latitude), longitude: String(longitude) })}
+            onSelect={({ latitude, longitude, commune, quartier }) => setForm({ ...form, commune, quartier: quartier || form.quartier, latitude: String(latitude), longitude: String(longitude) })}
           />
         </div>
         <input placeholder="السبب الظاهر" value={form.apparentCause} onChange={(event) => setForm({ ...form, apparentCause: event.target.value })} className={input} />

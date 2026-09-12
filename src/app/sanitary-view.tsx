@@ -170,7 +170,7 @@ export default function SanitaryView({ selectedCommune, territoryFilter, useTerr
           )}
           {sanitarySubTab === 'map' && <SanitaryMapTab selectedCommune={selectedCommune} territoryFilter={territoryFilter} useTerritoryFilter={useTerritoryFilter} allowedCommunes={allowedCommunes} selectedYear={selectedYear} />}
           {sanitarySubTab === 'establishments' && (
-            <EstablishmentsTab establishments={establishments} loading={loading} onRefresh={refresh} buildParams={buildParams} />
+            <EstablishmentsTab establishments={establishments} loading={loading} onRefresh={refresh} buildParams={buildParams} allowedCommunes={allowedCommunes} />
           )}
           {sanitarySubTab === 'inspections' && (
             <InspectionsTab inspections={inspections} establishments={establishments} loading={loading} onRefresh={refresh} buildParams={buildParams} />

@@ -14,7 +14,7 @@ const statuses: Record<string, string> = { ACTIVE: 'نشطة', MONITORING: 'قي
 export default function HotspotsTab({ buildParams, onRefresh, mapAllowedCommunes }: Props) {
   const [hotspots, setHotspots] = useState<Hotspot[]>([])
   const [saving, setSaving] = useState(false)
-  const [form, setForm] = useState({ name: '', quartier: '', location: '', latitude: '', longitude: '', priority: 'MODERATE', status: 'ACTIVE', reportCount: '0', groupCount: '0', biteCount: '0', interventionCount: '0', lastReviewDate: '', nextReviewDate: '', resolutionNotes: '', notes: '' })
+  const [form, setForm] = useState({ name: '', commune: '', quartier: '', location: '', latitude: '', longitude: '', priority: 'MODERATE', status: 'ACTIVE', reportCount: '0', groupCount: '0', biteCount: '0', interventionCount: '0', lastReviewDate: '', nextReviewDate: '', resolutionNotes: '', notes: '' })
 
   const allowedCommunes = mapAllowedCommunes
 
@@ -29,7 +29,7 @@ export default function HotspotsTab({ buildParams, onRefresh, mapAllowedCommunes
     event.preventDefault()
     setSaving(true)
     try {
-      const response = await fetch('/api/csvr/hotspots', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...form, commune: buildParams().get('commune') || allowedCommunes[0] || '' }) })
+      const response = await fetch('/api/csvr/hotspots', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...form, commune: form.commune || buildParams().get('commune') || allowedCommunes[0] || '' }) })
       const data = await response.json().catch(() => ({}))
       if (!response.ok) { toast.error(data.error || 'تعذر التسجيل'); return }
       toast.success('تم إنشاء النقطة الساخنة')
@@ -50,7 +50,7 @@ export default function HotspotsTab({ buildParams, onRefresh, mapAllowedCommunes
         <div className="flex items-center gap-2 rounded-xl border border-amber-100 bg-amber-50/50 p-2 sm:col-span-2">
           <input placeholder="خط العرض" value={form.latitude} onChange={(event) => setForm({ ...form, latitude: event.target.value })} className={input} />
           <input placeholder="خط الطول" value={form.longitude} onChange={(event) => setForm({ ...form, longitude: event.target.value })} className={input} />
-          <LocationPicker latitude={form.latitude} longitude={form.longitude} allowedCommunes={allowedCommunes} label="📍 تحديد الإحداثيات تلقائياً" className="shrink-0" onSelect={({ latitude, longitude }) => setForm({ ...form, latitude: String(latitude), longitude: String(longitude) })} />
+          <LocationPicker latitude={form.latitude} longitude={form.longitude} allowedCommunes={allowedCommunes} label="📍 تحديد الإحداثيات تلقائياً" className="shrink-0" onSelect={({ latitude, longitude, commune, quartier }) => setForm({ ...form, commune, quartier: quartier || form.quartier, latitude: String(latitude), longitude: String(longitude) })} />
         </div>
         <input type="number" min="0" placeholder="عدد البلاغات" value={form.reportCount} onChange={(event) => setForm({ ...form, reportCount: event.target.value })} className={input} />
         <input type="number" min="0" placeholder="عدد المجموعات" value={form.groupCount} onChange={(event) => setForm({ ...form, groupCount: event.target.value })} className={input} />

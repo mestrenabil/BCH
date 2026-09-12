@@ -6,6 +6,7 @@ import { toast } from 'sonner'
 import { useAppStore, type CommuneType } from '@/lib/store'
 import { appendTerritoryParams } from '@/lib/geography'
 import { territoryCommuneName, useTerritoryCommunes } from '@/hooks/use-territory-communes'
+import LocationPicker from './csvr/location-picker'
 import {
   TYPE_LABELS, TYPE_COLORS, TYPE_ICONS,
   COMMUNE_LABELS, COMMUNE_COLORS,
@@ -141,6 +142,8 @@ function ComplaintsView() {
     telephone: '',
     quartier: '',
     commune: '',
+    latitude: '',
+    longitude: '',
     type: 'DERATISATION',
     description: '',
     priorite: 'NORMALE',
@@ -273,7 +276,7 @@ function ComplaintsView() {
       if (res.ok) {
         toast.success('تم إنشاء الشكاية بنجاح')
         setShowAddDialog(false)
-        setAddForm({ nomCitoyen: '', telephone: '', quartier: '', commune: accessibleCommuneNames.length === 1 ? accessibleCommuneNames[0] : '', type: 'DERATISATION', description: '', priorite: 'NORMALE', observations: '' })
+        setAddForm({ nomCitoyen: '', telephone: '', quartier: '', commune: accessibleCommuneNames.length === 1 ? accessibleCommuneNames[0] : '', latitude: '', longitude: '', type: 'DERATISATION', description: '', priorite: 'NORMALE', observations: '' })
         await refreshComplaints()
       } else {
         const data = await res.json()
@@ -798,7 +801,6 @@ function ComplaintsView() {
                     </p>
                   </div>
                 </div>
-
                 <div className="bg-slate-50 rounded-xl p-3">
                   <p className="text-[10px] text-slate-400 font-medium">الوصف</p>
                   <p className="text-xs text-slate-700 mt-0.5 whitespace-pre-wrap">{detailComplaint.description}</p>
@@ -1039,6 +1041,12 @@ function ComplaintsView() {
                       {accessibleCommuneNames.length !== 1 && <option value="">اختر الجماعة</option>}
                       {accessibleCommuneNames.map((commune) => <option key={commune} value={commune}>جماعة {commune}</option>)}
                     </select>
+                  </div>
+                </div>
+                <div className="rounded-xl border border-amber-100 bg-amber-50/60 p-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div><p className="text-xs font-bold text-slate-700">📍 تحديد الجماعة والحي من الخريطة</p><p className="mt-0.5 text-[10px] text-slate-500">سيتم ملء الجماعة والحي والإحداثيات تلقائياً.</p></div>
+                    <LocationPicker latitude={addForm.latitude} longitude={addForm.longitude} allowedCommunes={accessibleCommuneNames} label="تحديد الموقع" title="موقع الشكاية" onSelect={({ latitude, longitude, commune, quartier }) => setAddForm({ ...addForm, commune, quartier: quartier || addForm.quartier, latitude: String(latitude), longitude: String(longitude) })} />
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-3">

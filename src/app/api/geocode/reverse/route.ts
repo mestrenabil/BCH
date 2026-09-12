@@ -1,6 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCommuneForPoint } from '@/lib/commune-boundaries'
 import { loadTerritoryCatalog } from '@/lib/geography'
+import { db } from '@/lib/db'
+
+function distanceInMeters(lat1: number, lng1: number, lat2: number, lng2: number) {
+  const earthRadius = 6_371_000
+  const toRadians = (value: number) => value * Math.PI / 180
+  const deltaLat = toRadians(lat2 - lat1)
+  const deltaLng = toRadians(lng2 - lng1)
+  const a = Math.sin(deltaLat / 2) ** 2 +
+    Math.cos(toRadians(lat1)) * Math.cos(toRadians(lat2)) * Math.sin(deltaLng / 2) ** 2
+  return earthRadius * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+}
 
 /**
  * بحث عكسي جغرافي: من إحداثيات (lat/lng) → الجماعة + الإقليم + الجهة.
@@ -46,9 +57,21 @@ export async function GET(request: NextRequest) {
       // تجاهل — الكتالوج غير ضروري للنتيجة الأساسية
     }
 
+    // اختيار أقرب حي مسجل داخل الجماعة نفسها لإكمال النماذج آلياً.
+    const quartiers = await db.quartier.findMany({
+      where: { commune: result.commune },
+      select: { nom: true, latitude: true, longitude: true },
+    })
+    const nearestQuartier = quartiers
+      .filter((quartier) => Number.isFinite(quartier.latitude) && Number.isFinite(quartier.longitude) && (quartier.latitude !== 0 || quartier.longitude !== 0))
+      .map((quartier) => ({ ...quartier, distance: distanceInMeters(lat, lng, quartier.latitude, quartier.longitude) }))
+      .sort((first, second) => first.distance - second.distance)[0]
+
     return NextResponse.json({
       found: true,
       commune: result.commune,
+      quartier: nearestQuartier?.nom || null,
+      quartierDistanceMeters: nearestQuartier ? Math.round(nearestQuartier.distance) : null,
       code: result.code,
       nameFr: result.nameFr,
       region,

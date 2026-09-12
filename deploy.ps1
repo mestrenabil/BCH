@@ -50,6 +50,56 @@ function Test-LocalHttpServer {
     }
 }
 
+function Stop-StaleLocalPreview {
+    $listener = Get-NetTCPConnection -LocalPort 3000 -State Listen -ErrorAction SilentlyContinue |
+        Select-Object -First 1
+
+    if (-not $listener) {
+        return $true
+    }
+
+    $processes = @()
+    $currentProcessId = [int]$listener.OwningProcess
+
+    while ($currentProcessId -gt 0) {
+        $process = Get-CimInstance Win32_Process -Filter "ProcessId = $currentProcessId" -ErrorAction SilentlyContinue
+        if (-not $process) {
+            break
+        }
+
+        $processes += $process
+        if ($process.CommandLine -match 'npm-cli\.js"?\s+run\s+dev') {
+            break
+        }
+
+        $currentProcessId = [int]$process.ParentProcessId
+    }
+
+    $normalizedProjectPath = $PSScriptRoot.TrimEnd('\')
+    $belongsToProject = $processes | Where-Object {
+        $_.CommandLine -and $_.CommandLine.IndexOf($normalizedProjectPath, [StringComparison]::OrdinalIgnoreCase) -ge 0
+    }
+
+    if (-not $belongsToProject) {
+        return $false
+    }
+
+    Write-Host "Stopping the stale BCH local server..." -ForegroundColor Yellow
+    foreach ($process in $processes) {
+        Stop-Process -Id $process.ProcessId -Force -ErrorAction SilentlyContinue
+    }
+
+    $deadline = (Get-Date).AddSeconds(10)
+    while ((Get-Date) -lt $deadline) {
+        if (-not (Get-NetTCPConnection -LocalPort 3000 -State Listen -ErrorAction SilentlyContinue)) {
+            return $true
+        }
+        Start-Sleep -Milliseconds 300
+    }
+
+    return $false
+}
+
 function Start-LocalPreview {
     if (-not (Test-Path -LiteralPath ".env")) {
         Write-Host "Local environment is not configured. Starting the one-time setup..." -ForegroundColor Yellow
@@ -61,7 +111,9 @@ function Start-LocalPreview {
 
     if (-not (Test-LocalSite)) {
         if (Test-LocalHttpServer) {
-            throw "A local server is running, but its database is unavailable. Stop the old npm process, then run deploy.ps1 again."
+            if (-not (Stop-StaleLocalPreview)) {
+                throw "Port 3000 is used by another application. Stop it or change its port, then run deploy.ps1 again."
+            }
         }
 
         Write-Host ""

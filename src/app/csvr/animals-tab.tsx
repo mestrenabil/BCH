@@ -50,6 +50,7 @@ const CAPTURE_STATE_OPTIONS = ['', 'CALME', 'PEUREUX', 'AGRESSIF', 'BLESSE', 'MA
 const SIZE_LABELS: Record<string, string> = { SMALL: 'صغير', MEDIUM: 'متوسط', LARGE: 'كبير', '': '—' }
 
 const emptyForm = {
+  commune: '',
   species: 'DOG', breed: '', sex: 'UNKNOWN', estimatedAge: '', weight: '', size: '',
   primaryColor: '', secondaryColors: '', distinctiveMarks: '',
   microchipNumber: '', tagNumber: '', collarNumber: '',
@@ -105,7 +106,7 @@ export default function AnimalsTab({ animals, loading, onRefresh, buildParams, m
     setSubmitting(true)
     try {
       const params = buildParams()
-      const commune = params.get('commune') || managedCommunes[0] || ''
+      const commune = form.commune || params.get('commune') || managedCommunes[0] || ''
       const body: Record<string, unknown> = {
         ...form,
         commune,
@@ -260,7 +261,7 @@ export default function AnimalsTab({ animals, loading, onRefresh, buildParams, m
                       latitude={form.captureLatitude}
                       longitude={form.captureLongitude}
                       allowedCommunes={mapAllowedCommunes}
-                      onSelect={({ latitude, longitude }) => setForm({ ...form, captureLatitude: String(latitude), captureLongitude: String(longitude) })}
+                      onSelect={({ latitude, longitude, commune, quartier }) => setForm({ ...form, commune, captureQuartier: quartier || form.captureQuartier, captureLatitude: String(latitude), captureLongitude: String(longitude) })}
                     />
                   </div>
                   <div className="grid grid-cols-2 gap-3">

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-require-imports -- CommonJS bootstrap runs directly under Node.js. */
 const crypto = require('crypto')
 const { PrismaClient } = require('@prisma/client')
 

@@ -6,12 +6,19 @@ import { toast } from 'sonner'
 interface LocationPickerProps {
   latitude?: string | number | null
   longitude?: string | number | null
-  onSelect: (coordinates: { latitude: number; longitude: number }) => void
+  onSelect: (location: LocationSelection) => void
   allowedCommunes?: string[]
   label?: string
   title?: string
   description?: string
   className?: string
+}
+
+export interface LocationSelection {
+  latitude: number
+  longitude: number
+  commune: string
+  quartier: string
 }
 
 function parseCoordinate(value: string | number | null | undefined) {
@@ -78,7 +85,8 @@ export default function LocationPicker({ latitude, longitude, onSelect, allowedC
       }
       if (boundaryLayer.getLayers().length) boundaryLayer.addTo(map)
 
-      const placeMarker = (nextLatitude: number, nextLongitude: number, focus = true) => {
+      const placeMarker = (location: LocationSelection, focus = true) => {
+        const { latitude: nextLatitude, longitude: nextLongitude } = location
         if (markerRef.current) markerRef.current.remove()
         markerRef.current = L.circleMarker([nextLatitude, nextLongitude], {
           radius: 10,
@@ -97,22 +105,30 @@ export default function LocationPicker({ latitude, longitude, onSelect, allowedC
         if (focus) map.setView([nextLatitude, nextLongitude], Math.max(map.getZoom(), 16))
         const coordinates = { latitude: Number(nextLatitude.toFixed(6)), longitude: Number(nextLongitude.toFixed(6)) }
         setSelected(coordinates)
-        callbackRef.current(coordinates)
+        callbackRef.current({ ...location, ...coordinates })
       }
 
-      const isLocationAllowed = async (nextLatitude: number, nextLongitude: number) => {
-        if (!scopeCommunes.length) return true
+      const resolveLocation = async (nextLatitude: number, nextLongitude: number): Promise<LocationSelection | null> => {
         try {
           const response = await fetch(`/api/geocode/reverse?lat=${nextLatitude}&lng=${nextLongitude}`)
-          const data = response.ok ? await response.json() as { found?: boolean; commune?: string } : null
-          if (!data?.found || !data.commune || !scopeCommunes.includes(data.commune)) {
-            toast.error('موقعك الحالي خارج حدود جماعة الحساب')
-            return false
+          const data = response.ok ? await response.json() as { found?: boolean; commune?: string; quartier?: string | null } : null
+          if (!data?.found || !data.commune) {
+            toast.error('تعذر تحديد الجماعة من هذه النقطة')
+            return null
           }
-          return true
+          if (scopeCommunes.length > 0 && !scopeCommunes.includes(data.commune)) {
+            toast.error('الموقع المحدد خارج النطاق الترابي للحساب')
+            return null
+          }
+          return {
+            latitude: nextLatitude,
+            longitude: nextLongitude,
+            commune: data.commune,
+            quartier: data.quartier || '',
+          }
         } catch {
-          toast.error('تعذر التحقق من نطاق موقعك الحالي')
-          return false
+          toast.error('تعذر تحديد الجماعة والحي من الموقع')
+          return null
         }
       }
 
@@ -126,7 +142,8 @@ export default function LocationPicker({ latitude, longitude, onSelect, allowedC
             if (cancelled || !mapRef.current) return
             const nextLatitude = position.coords.latitude
             const nextLongitude = position.coords.longitude
-            if (await isLocationAllowed(nextLatitude, nextLongitude)) placeMarker(nextLatitude, nextLongitude)
+            const location = await resolveLocation(nextLatitude, nextLongitude)
+            if (location) placeMarker(location)
           },
           () => toast.error('تعذر الوصول إلى موقعك الحالي. تحقق من صلاحية GPS.'),
           { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 },
@@ -134,11 +151,14 @@ export default function LocationPicker({ latitude, longitude, onSelect, allowedC
       }
       locateCurrentPositionRef.current = locateCurrentPosition
 
-      if (hasCurrentLocation) placeMarker(currentLatitude, currentLongitude, !hasScopeBounds)
+      if (hasCurrentLocation) {
+        const location = await resolveLocation(currentLatitude, currentLongitude)
+        if (location) placeMarker(location, !hasScopeBounds)
+      }
       else locateCurrentPosition()
       map.on('click', async (event: { latlng: { lat: number; lng: number } }) => {
-        if (!(await isLocationAllowed(event.latlng.lat, event.latlng.lng))) return
-        placeMarker(event.latlng.lat, event.latlng.lng)
+        const location = await resolveLocation(event.latlng.lat, event.latlng.lng)
+        if (location) placeMarker(location)
       })
       map.on('dblclick', () => map.zoomIn(1, { animate: true }))
       setTimeout(() => { if (!cancelled) map.invalidateSize() }, 100)

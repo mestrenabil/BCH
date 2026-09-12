@@ -13,6 +13,7 @@ import {
 } from '@/lib/constants'
 import { UserManagementSection } from './users-view-lite'
 import { BackupManagementSection } from './backup-management-section'
+import { DemoDataManagementSection } from './demo-data-management-section'
 
 const NAV_SETTINGS_ITEMS: { id: ViewType; label: string; icon: string }[] = [
   { id: 'dashboard', label: 'لوحة القيادة', icon: '📊' },
@@ -1750,6 +1751,8 @@ function SettingsView() {
       </motion.div>
 
       <BackupManagementSection />
+
+      {user?.role === 'admin' && <DemoDataManagementSection />}
 
       {/* الواجهة القديمة مخفية للمحافظة على توافق موضعي مؤقت أثناء الانتقال للمكوّن الموحّد. */}
       <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }}

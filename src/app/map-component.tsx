@@ -733,7 +733,11 @@ function buildNewInterventionPopup(lat: number, lng: number, commune: string | n
   const isOutsideCommune = !commune
   const today = new Date().toISOString().split('T')[0]
 
-  const quartierOptions = quartiers.map(q => `<option value="${q.nom}">${q.nom}</option>`).join('')
+  const detectedQuartier = findNearbyQuartier(lat, lng, commune, quartiers)
+  const quartierOptions = quartiers
+    .filter((quartier) => !commune || quartier.commune === commune)
+    .map(q => `<option value="${escapeHtml(q.nom)}" ${q.nom === detectedQuartier ? 'selected' : ''}>${escapeHtml(q.nom)}</option>`)
+    .join('')
 
   // Commune select options - auto-select detected commune
   const knownCommunes = ['سلا', 'سيدي أبي القنادل', 'عامر', 'السهول']
@@ -840,7 +844,7 @@ function buildNewInterventionPopup(lat: number, lng: number, commune: string | n
         <div>
           <label style="${labelStyle}">${requiredStar}الحي</label>
           <select name="quartier" style="${selectStyle}" required>
-            <option value="">اختر الحي</option>
+            <option value="" ${detectedQuartier ? '' : 'selected'}>اختر الحي</option>
             ${quartierOptions}
           </select>
         </div>

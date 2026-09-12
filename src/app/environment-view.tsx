@@ -18,6 +18,7 @@ import EnvironmentDossierDetail from './environment/detail-tab'
 import EnvironmentSettingsTab from './environment/settings-tab'
 import EnvironmentMapTab from './environment/map-tab'
 import { useMapTerritoryScope } from '@/hooks/use-map-territory-scope'
+import LocationPicker from './csvr/location-picker'
 
 interface Props {
   selectedCommune: string
@@ -192,10 +193,10 @@ export default function EnvironmentView({ selectedCommune, territoryFilter, useT
               {environmentSubTab === 'followup' && <FollowUpsTab data={followUps} dossiers={dossiers} onRefresh={refresh} onOpenDossiers={() => setEnvironmentSubTab('dossiers')} onOpenDossier={(id: string) => { const dossier = dossiers.find((item) => item.id === id); if (dossier) { setSelectedDossier(dossier); setEnvironmentSubTab('detail') } }} onOpenMap={(id: string) => { setMapFocusDossierId(id); setEnvironmentSubTab('map') }} />}
               {environmentSubTab === 'complaints' && <EnvironmentalComplaintsTab complaints={complaints} dossiers={dossiers} onRefresh={refresh} onOpenDossier={(id: string) => { const dossier = dossiers.find((item) => item.id === id); if (dossier) { setSelectedDossier(dossier); setEnvironmentSubTab('detail') } }} onOpenMap={(id: string) => { setMapFocusDossierId(id); setEnvironmentSubTab('map') }} />}
           {environmentSubTab === 'establishments' && <EnvironmentalEstablishmentsTab data={establishments} loading={loading} />}
-          {environmentSubTab === 'pollution' && <PollutionTab data={pollution} dossiers={dossiers} loading={loading} onRefresh={refresh} buildParams={buildParams} showCreate={showCreate === 'pollution'} setShowCreate={(v) => setShowCreate(v ? 'pollution' : null)} onOpenDossier={(id: string) => { const dossier = dossiers.find((item) => item.id === id); if (dossier) { setSelectedDossier(dossier); setEnvironmentSubTab('detail') } }} onOpenMap={(id: string) => { setMapFocusDossierId(id); setEnvironmentSubTab('map') }} />}
+          {environmentSubTab === 'pollution' && <PollutionTab data={pollution} dossiers={dossiers} loading={loading} onRefresh={refresh} buildParams={buildParams} allowedCommunes={accountCommunes} showCreate={showCreate === 'pollution'} setShowCreate={(v) => setShowCreate(v ? 'pollution' : null)} onOpenDossier={(id: string) => { const dossier = dossiers.find((item) => item.id === id); if (dossier) { setSelectedDossier(dossier); setEnvironmentSubTab('detail') } }} onOpenMap={(id: string) => { setMapFocusDossierId(id); setEnvironmentSubTab('map') }} />}
           {environmentSubTab === 'water' && <EnvironmentalWaterMonitoringTab waterPoints={waterPoints} measurements={waterMeasurements} loading={loading} onRefresh={refresh} onOpenWaterOffice={() => setCurrentView('water')} />}
-          {environmentSubTab === 'waste' && <WasteTab data={waste} dossiers={dossiers} loading={loading} onRefresh={refresh} buildParams={buildParams} showCreate={showCreate === 'waste'} setShowCreate={(v) => setShowCreate(v ? 'waste' : null)} onOpenDossier={(id: string) => { const dossier = dossiers.find((item) => item.id === id); if (dossier) { setSelectedDossier(dossier); setEnvironmentSubTab('detail') } }} onOpenMap={(id: string) => { setMapFocusDossierId(id); setEnvironmentSubTab('map') }} />}
-          {environmentSubTab === 'sites' && <SitesTab data={sites} dossiers={dossiers} loading={loading} onRefresh={refresh} buildParams={buildParams} showCreate={showCreate === 'site'} setShowCreate={(v) => setShowCreate(v ? 'site' : null)} onOpenDossier={(id: string) => { const dossier = dossiers.find((item) => item.id === id); if (dossier) { setSelectedDossier(dossier); setEnvironmentSubTab('detail') } }} onOpenMap={(id: string) => { setMapFocusDossierId(id); setEnvironmentSubTab('map') }} />}
+          {environmentSubTab === 'waste' && <WasteTab data={waste} dossiers={dossiers} loading={loading} onRefresh={refresh} buildParams={buildParams} allowedCommunes={accountCommunes} showCreate={showCreate === 'waste'} setShowCreate={(v) => setShowCreate(v ? 'waste' : null)} onOpenDossier={(id: string) => { const dossier = dossiers.find((item) => item.id === id); if (dossier) { setSelectedDossier(dossier); setEnvironmentSubTab('detail') } }} onOpenMap={(id: string) => { setMapFocusDossierId(id); setEnvironmentSubTab('map') }} />}
+          {environmentSubTab === 'sites' && <SitesTab data={sites} dossiers={dossiers} loading={loading} onRefresh={refresh} buildParams={buildParams} allowedCommunes={accountCommunes} showCreate={showCreate === 'site'} setShowCreate={(v) => setShowCreate(v ? 'site' : null)} onOpenDossier={(id: string) => { const dossier = dossiers.find((item) => item.id === id); if (dossier) { setSelectedDossier(dossier); setEnvironmentSubTab('detail') } }} onOpenMap={(id: string) => { setMapFocusDossierId(id); setEnvironmentSubTab('map') }} />}
               {environmentSubTab === 'vigilance' && <VigilanceTab dossiers={dossiers} pollution={pollution} waste={waste} waterPoints={waterPoints} waterMeasurements={waterMeasurements} onNavigate={selectEnvironmentSection} />}
           {environmentSubTab === 'campaigns' && <CampaignsTab data={campaigns} dossiers={dossiers} programs={programs} loading={loading} onRefresh={refresh} buildParams={buildParams} showCreate={showCreate === 'campaign'} setShowCreate={(v) => setShowCreate(v ? 'campaign' : null)} />}
               {environmentSubTab === 'settings' && <EnvironmentSettingsTab selectedCommune={selectedCommune} />}
@@ -438,7 +439,7 @@ function ProgramsTab({ data, dossiers, loading, onRefresh, buildParams, showCrea
 }
 
 // ===== Pollution Tab =====
-function PollutionTab({ data, dossiers, loading, onRefresh, buildParams, showCreate, setShowCreate, onOpenDossier, onOpenMap }: any) {
+function PollutionTab({ data, dossiers, loading, onRefresh, buildParams, allowedCommunes, showCreate, setShowCreate, onOpenDossier, onOpenMap }: any) {
   const [filterType, setFilterType] = useState('ALL')
   const [filterSeverity, setFilterSeverity] = useState('ALL')
   const [filterStatus, setFilterStatus] = useState('ALL')
@@ -482,12 +483,12 @@ function PollutionTab({ data, dossiers, loading, onRefresh, buildParams, showCre
         })}
       </div>
     )}
-    <Modal open={showCreate} onClose={() => setShowCreate(false)} title="🏭 حادث تلوث جديد"><PollutionForm buildParams={buildParams} onCreated={() => { setShowCreate(false); onRefresh() }} /></Modal>
+    <Modal open={showCreate} onClose={() => setShowCreate(false)} title="🏭 حادث تلوث جديد"><PollutionForm buildParams={buildParams} allowedCommunes={allowedCommunes} onCreated={() => { setShowCreate(false); onRefresh() }} /></Modal>
   </div>
 }
 
 // ===== Waste Tab =====
-function WasteTab({ data, dossiers, loading, onRefresh, buildParams, showCreate, setShowCreate, onOpenDossier, onOpenMap }: any) {
+function WasteTab({ data, dossiers, loading, onRefresh, buildParams, allowedCommunes, showCreate, setShowCreate, onOpenDossier, onOpenMap }: any) {
   const [filterRecurring, setFilterRecurring] = useState(false)
   const [filterStatus, setFilterStatus] = useState('ALL')
   const [linkingId, setLinkingId] = useState<string | null>(null)
@@ -523,12 +524,12 @@ function WasteTab({ data, dossiers, loading, onRefresh, buildParams, showCreate,
         })}
       </div>
     )}
-    <Modal open={showCreate} onClose={() => setShowCreate(false)} title="🗑️ نقطة رمي جديدة"><WasteForm buildParams={buildParams} onCreated={() => { setShowCreate(false); onRefresh() }} /></Modal>
+    <Modal open={showCreate} onClose={() => setShowCreate(false)} title="🗑️ نقطة رمي جديدة"><WasteForm buildParams={buildParams} allowedCommunes={allowedCommunes} onCreated={() => { setShowCreate(false); onRefresh() }} /></Modal>
   </div>
 }
 
 // ===== Sites Tab =====
-function SitesTab({ data, dossiers, loading, onRefresh, buildParams, showCreate, setShowCreate, onOpenDossier, onOpenMap }: any) {
+function SitesTab({ data, dossiers, loading, onRefresh, buildParams, allowedCommunes, showCreate, setShowCreate, onOpenDossier, onOpenMap }: any) {
   const [filterStatus, setFilterStatus] = useState('ALL')
   const [filterProtection, setFilterProtection] = useState('ALL')
   const [linkingId, setLinkingId] = useState<string | null>(null)
@@ -564,7 +565,7 @@ function SitesTab({ data, dossiers, loading, onRefresh, buildParams, showCreate,
         })}
       </div>
     )}
-    <Modal open={showCreate} onClose={() => setShowCreate(false)} title="🌳 موقع طبيعي جديد"><SiteForm buildParams={buildParams} onCreated={() => { setShowCreate(false); onRefresh() }} /></Modal>
+    <Modal open={showCreate} onClose={() => setShowCreate(false)} title="🌳 موقع طبيعي جديد"><SiteForm buildParams={buildParams} allowedCommunes={allowedCommunes} onCreated={() => { setShowCreate(false); onRefresh() }} /></Modal>
   </div>
 }
 
@@ -606,13 +607,14 @@ function DossierForm({ buildParams, allowedCommunes = [], onCreated }: any) {
   const [locationPickerOpen, setLocationPickerOpen] = useState(false)
   const calculatedRiskScore = Math.max(0, Math.min(100, (Number(f.probability) || 1) * (Number(f.severity) || 1) * 4))
   const calculatedRiskLevel = calculatedRiskScore >= 80 ? 'CRITICAL' : calculatedRiskScore >= 48 ? 'HIGH' : calculatedRiskScore >= 24 ? 'MEDIUM' : 'LOW'
-  const handleLocationSelect = useCallback((latitude: number, longitude: number) => {
-    setF((current) => ({ ...current, latitude: latitude.toFixed(6), longitude: longitude.toFixed(6) }))
+  const handleLocationSelect = useCallback((latitude: number, longitude: number, commune: string, quartier: string) => {
+    setF((current) => ({ ...current, commune, quartier: quartier || current.quartier, latitude: latitude.toFixed(6), longitude: longitude.toFixed(6) }))
   }, [])
   const submit = (e: React.FormEvent) => { e.preventDefault(); if (!f.title.trim()) { toast.error('العنوان مطلوب'); return }; const p = buildParams(); submitForm('/api/env-dossiers', { ...f, riskScore: calculatedRiskScore, riskLevel: calculatedRiskLevel, commune: f.commune || accountCommune || p.get('commune') || 'ALL', servicesConcerned: f.servicesConcerned.split(',').map((item) => item.trim()).filter(Boolean) }, () => onCreated(), setSaving) }
   return <form onSubmit={submit} className="space-y-3">
     <div><label className="text-xs font-bold text-slate-600 block mb-1">العنوان *</label><input value={f.title} onChange={(e) => setF({ ...f, title: e.target.value })} className={inp} /></div>
     <div className="grid grid-cols-2 gap-2"><div><label className="text-xs font-bold text-slate-600 block mb-1">الفئة</label><select value={f.category} onChange={(e) => setF({ ...f, category: e.target.value })} className={inp}>{Object.entries(ENV_DOSSIER_CATEGORY_LABELS).map(([k, v]) => <option key={k} value={k}>{ENV_DOSSIER_CATEGORY_ICONS[k]} {v}</option>)}</select></div><div><label className="text-xs font-bold text-slate-600 block mb-1">الجماعة</label><input value={f.commune || accountCommune} onChange={(e) => setF({ ...f, commune: e.target.value })} placeholder="كود الجماعة" className={inp} /></div></div>
+    <div><label className="text-xs font-bold text-slate-600 block mb-1">الحي</label><input value={f.quartier} onChange={(e) => setF({ ...f, quartier: e.target.value })} className={inp} placeholder="يُملأ تلقائياً عند تحديد الموقع" /></div>
     <div className="rounded-xl border border-amber-200 bg-amber-50/60 p-3"><div className="flex items-center justify-between gap-3"><div><p className="text-xs font-bold text-amber-800">🧮 التقييم العلمي للخطر</p><p className="mt-1 text-[10px] text-amber-700">الاحتمال × شدة الأثر × 4 = درجة من 100</p></div><div className="text-left"><b className="text-2xl text-amber-800">{calculatedRiskScore}/100</b><p className="text-[10px] font-bold text-amber-700">{calculatedRiskLevel === 'CRITICAL' ? 'حرج' : calculatedRiskLevel === 'HIGH' ? 'عالٍ' : calculatedRiskLevel === 'MEDIUM' ? 'متوسط' : 'منخفض'}</p></div></div></div>
     <div className="grid grid-cols-2 gap-2"><div><label className="text-xs font-bold text-slate-600 block mb-1">الاحتمال 1–5</label><input type="number" min="1" max="5" value={f.probability} onChange={(e) => setF({ ...f, probability: e.target.value })} className={inp} /></div><div><label className="text-xs font-bold text-slate-600 block mb-1">شدة الأثر 1–5</label><input type="number" min="1" max="5" value={f.severity} onChange={(e) => setF({ ...f, severity: e.target.value })} className={inp} /></div></div>
     <div className="grid grid-cols-2 gap-2"><div><label className="text-xs font-bold text-slate-600 block mb-1">النطاق</label><select value={f.extent} onChange={(e) => setF({ ...f, extent: e.target.value })} className={inp}><option value="LOCAL">محلي</option><option value="QUARTER">حي</option><option value="COMMUNAL">جماعي</option><option value="INTERCOMMUNAL">بين جماعات</option></select></div><div><label className="text-xs font-bold text-slate-600 block mb-1">مهلة المعالجة</label><input type="date" value={f.dueDate} onChange={(e) => setF({ ...f, dueDate: e.target.value })} className={inp} /></div></div>
@@ -628,7 +630,7 @@ function DossierForm({ buildParams, allowedCommunes = [], onCreated }: any) {
   </form>
 }
 
-function EnvironmentalLocationPicker({ commune, allowedCommunes = [], latitude, longitude, onSelect, onClose }: { commune: string; allowedCommunes?: string[]; latitude: string; longitude: string; onSelect: (latitude: number, longitude: number) => void; onClose: () => void }) {
+function EnvironmentalLocationPicker({ commune, allowedCommunes = [], latitude, longitude, onSelect, onClose }: { commune: string; allowedCommunes?: string[]; latitude: string; longitude: string; onSelect: (latitude: number, longitude: number, commune: string, quartier: string) => void; onClose: () => void }) {
   const containerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<any>(null)
   const markerRef = useRef<any>(null)
@@ -677,23 +679,24 @@ function EnvironmentalLocationPicker({ commune, allowedCommunes = [], latitude, 
       }
       if (hasInitialLocation) placeMarker(initialLocation.latitude, initialLocation.longitude)
       map.on('click', async (event: { latlng: { lat: number; lng: number } }) => {
-        if (scopeCommunes.length) {
-          try {
-            const response = await fetch(`/api/geocode/reverse?lat=${event.latlng.lat}&lng=${event.latlng.lng}`)
-            const data = response.ok ? await response.json() as { found?: boolean; commune?: string } : null
-            if (!data?.found || !data.commune || !scopeCommunes.includes(data.commune)) {
-              toast.error('لا يمكن اختيار موقع خارج حدود جماعة الحساب')
-              return
-            }
-          } catch {
-            toast.error('تعذر التحقق من نطاق الموقع')
+        try {
+          const response = await fetch(`/api/geocode/reverse?lat=${event.latlng.lat}&lng=${event.latlng.lng}`)
+          const data = response.ok ? await response.json() as { found?: boolean; commune?: string; quartier?: string | null } : null
+          if (!data?.found || !data.commune) {
+            toast.error('تعذر تحديد الجماعة من هذه النقطة')
             return
           }
+          if (scopeCommunes.length && !scopeCommunes.includes(data.commune)) {
+            toast.error('لا يمكن اختيار موقع خارج حدود جماعة الحساب')
+            return
+          }
+          const nextLocation = { latitude: event.latlng.lat, longitude: event.latlng.lng }
+          setSelected(nextLocation)
+          onSelect(nextLocation.latitude, nextLocation.longitude, data.commune, data.quartier || '')
+          placeMarker(nextLocation.latitude, nextLocation.longitude)
+        } catch {
+          toast.error('تعذر تحديد الجماعة والحي من الموقع')
         }
-        const nextLocation = { latitude: event.latlng.lat, longitude: event.latlng.lng }
-        setSelected(nextLocation)
-        onSelect(nextLocation.latitude, nextLocation.longitude)
-        placeMarker(nextLocation.latitude, nextLocation.longitude)
       })
       map.on('dblclick', () => map.zoomIn(1, { animate: true }))
       for (const delay of [100, 400, 1000]) invalidateTimers.push(window.setTimeout(() => map.invalidateSize(), delay))
@@ -731,8 +734,8 @@ function EnvironmentalEstablishmentsTab({ data, loading }: { data: Array<{ id: s
   return <div className="space-y-3"><div className="flex items-center gap-2"><input value={search} onChange={(event) => setSearch(event.target.value)} className="flex-1 rounded-xl border border-slate-200 px-3 py-2 text-sm" placeholder="🔍 بحث عن مؤسسة أو نشاط أو حي" /><span className="text-xs text-slate-400">{filtered.length} منشأة</span></div>{filtered.length === 0 ? <Empty icon="🏭" text="لا توجد منشآت ذات أثر بيئي ضمن النطاق" /> : <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">{filtered.map((establishment) => <div key={establishment.id} className="rounded-2xl border border-slate-100 bg-white p-4"><div className="flex items-start justify-between gap-2"><div><p className="font-bold text-slate-800">🏭 {establishment.name}</p><p className="text-[10px] text-slate-400">{establishment.reference} · {establishment.activity || 'النشاط غير محدد'}</p></div><span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${establishment.riskCategory === 'HIGH' || establishment.riskCategory === 'CRITICAL' ? 'bg-red-50 text-red-700' : 'bg-emerald-50 text-emerald-700'}`}>{establishment.riskCategory || 'غير مصنف'}</span></div><div className="mt-2 space-y-1 text-xs text-slate-500"><p>👤 {establishment.ownerName || 'المسؤول غير محدد'} {establishment.telephone ? `· ${establishment.telephone}` : ''}</p><p>📍 {establishment.quartier || establishment.adresse || establishment.commune}</p><p>🔍 {establishment._count?.inspections || 0} معاينة · خطر {establishment.riskScore || 0}/100</p></div>{establishment.latitude != null && establishment.longitude != null && <a className="mt-3 inline-block text-xs font-bold text-emerald-700 hover:underline" target="_blank" rel="noreferrer" href={`https://www.openstreetmap.org/?mlat=${establishment.latitude}&mlon=${establishment.longitude}#map=18/${establishment.latitude}/${establishment.longitude}`}>🗺️ فتح الموقع</a>}</div>)}</div>}</div>
 }
 
-function PollutionForm({ buildParams, onCreated }: any) {
-  const [f, setF] = useState({ type: 'AIR', commune: '', quartier: '', adresse: '', description: '', severity: 'LOW', pollutantName: '', company: '', source: 'INTERNAL' })
+function PollutionForm({ buildParams, allowedCommunes = [], onCreated }: any) {
+  const [f, setF] = useState({ type: 'AIR', commune: '', quartier: '', adresse: '', latitude: '', longitude: '', description: '', severity: 'LOW', pollutantName: '', company: '', source: 'INTERNAL' })
   const accountCommune = buildParams().get('commune') || ''
   const [saving, setSaving] = useState(false)
   const submit = (e: React.FormEvent) => { e.preventDefault(); if (!f.description.trim()) { toast.error('الوصف مطلوب'); return }; const p = buildParams(); submitForm('/api/pollution-incidents', { ...f, commune: f.commune || accountCommune || p.get('commune') || 'ALL' }, () => onCreated(), setSaving) }
@@ -741,25 +744,27 @@ function PollutionForm({ buildParams, onCreated }: any) {
     <div><label className="text-xs font-bold text-slate-600 block mb-1">الوصف *</label><textarea value={f.description} onChange={(e) => setF({ ...f, description: e.target.value })} rows={2} className={inp + ' resize-none'} /></div>
     <div className="grid grid-cols-2 gap-2"><div><label className="text-xs font-bold text-slate-600 block mb-1">الملوّث</label><input value={f.pollutantName} onChange={(e) => setF({ ...f, pollutantName: e.target.value })} className={inp} /></div><div><label className="text-xs font-bold text-slate-600 block mb-1">المصدر المتسبب</label><input value={f.company} onChange={(e) => setF({ ...f, company: e.target.value })} className={inp} /></div></div>
     <div className="grid grid-cols-2 gap-2"><div><label className="text-xs font-bold text-slate-600 block mb-1">الجماعة</label><input value={f.commune || accountCommune} onChange={(e) => setF({ ...f, commune: e.target.value })} placeholder="كود الجماعة" className={inp} /></div><div><label className="text-xs font-bold text-slate-600 block mb-1">الحي</label><input value={f.quartier} onChange={(e) => setF({ ...f, quartier: e.target.value })} className={inp} /></div></div>
+    <LocationPicker latitude={f.latitude} longitude={f.longitude} allowedCommunes={f.commune || accountCommune ? [f.commune || accountCommune] : allowedCommunes} label="تحديد الموقع والجماعة والحي" title="موقع حادث التلوث" onSelect={({ latitude, longitude, commune, quartier }) => setF({ ...f, commune, quartier: quartier || f.quartier, latitude: String(latitude), longitude: String(longitude) })} />
     <button type="submit" disabled={saving} className="w-full px-4 py-2 text-sm font-bold text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 disabled:opacity-50">{saving ? '...' : 'إنشاء'}</button>
   </form>
 }
 
-function WasteForm({ buildParams, onCreated }: any) {
-  const [f, setF] = useState({ commune: '', quartier: '', adresse: '', description: '', wasteType: 'MIXED', recurring: false, source: 'INTERNAL' })
+function WasteForm({ buildParams, allowedCommunes = [], onCreated }: any) {
+  const [f, setF] = useState({ commune: '', quartier: '', adresse: '', latitude: '', longitude: '', description: '', wasteType: 'MIXED', recurring: false, source: 'INTERNAL' })
   const accountCommune = buildParams().get('commune') || ''
   const [saving, setSaving] = useState(false)
   const submit = (e: React.FormEvent) => { e.preventDefault(); const p = buildParams(); submitForm('/api/waste-black-spots', { ...f, commune: f.commune || accountCommune || p.get('commune') || 'ALL' }, () => onCreated(), setSaving) }
   return <form onSubmit={submit} className="space-y-3">
     <div className="grid grid-cols-2 gap-2"><div><label className="text-xs font-bold text-slate-600 block mb-1">نوع النفايات</label><select value={f.wasteType} onChange={(e) => setF({ ...f, wasteType: e.target.value })} className={inp}>{Object.entries(WASTE_TYPE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div><div><label className="text-xs font-bold text-slate-600 block mb-1">متكررة؟</label><select value={f.recurring ? '1' : '0'} onChange={(e) => setF({ ...f, recurring: e.target.value === '1' })} className={inp}><option value="0">لا</option><option value="1">نعم</option></select></div></div>
     <div className="grid grid-cols-2 gap-2"><div><label className="text-xs font-bold text-slate-600 block mb-1">الجماعة</label><input value={f.commune || accountCommune} onChange={(e) => setF({ ...f, commune: e.target.value })} placeholder="كود الجماعة" className={inp} /></div><div><label className="text-xs font-bold text-slate-600 block mb-1">الحي</label><input value={f.quartier} onChange={(e) => setF({ ...f, quartier: e.target.value })} className={inp} /></div></div>
+    <LocationPicker latitude={f.latitude} longitude={f.longitude} allowedCommunes={f.commune || accountCommune ? [f.commune || accountCommune] : allowedCommunes} label="تحديد الموقع والجماعة والحي" title="موقع نقطة الرمي" onSelect={({ latitude, longitude, commune, quartier }) => setF({ ...f, commune, quartier: quartier || f.quartier, latitude: String(latitude), longitude: String(longitude) })} />
     <div><label className="text-xs font-bold text-slate-600 block mb-1">العنوان/الوصف</label><input value={f.description || f.adresse} onChange={(e) => setF({ ...f, description: e.target.value, adresse: e.target.value })} className={inp} /></div>
     <button type="submit" disabled={saving} className="w-full px-4 py-2 text-sm font-bold text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 disabled:opacity-50">{saving ? '...' : 'إنشاء'}</button>
   </form>
 }
 
-function SiteForm({ buildParams, onCreated }: any) {
-  const [f, setF] = useState({ name: '', type: 'FOREST', commune: '', quartier: '', adresse: '', area: '', description: '', protectionLevel: 'NONE', status: 'INTACT', threats: '' })
+function SiteForm({ buildParams, allowedCommunes = [], onCreated }: any) {
+  const [f, setF] = useState({ name: '', type: 'FOREST', commune: '', quartier: '', adresse: '', latitude: '', longitude: '', area: '', description: '', protectionLevel: 'NONE', status: 'INTACT', threats: '' })
   const accountCommune = buildParams().get('commune') || ''
   const [saving, setSaving] = useState(false)
   const submit = (e: React.FormEvent) => { e.preventDefault(); if (!f.name.trim()) { toast.error('الاسم مطلوب'); return }; const p = buildParams(); submitForm('/api/natural-sites', { ...f, commune: f.commune || accountCommune || p.get('commune') || 'ALL', area: f.area || null }, () => onCreated(), setSaving) }
@@ -767,6 +772,8 @@ function SiteForm({ buildParams, onCreated }: any) {
     <div><label className="text-xs font-bold text-slate-600 block mb-1">الاسم *</label><input value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} className={inp} /></div>
     <div className="grid grid-cols-2 gap-2"><div><label className="text-xs font-bold text-slate-600 block mb-1">النوع</label><select value={f.type} onChange={(e) => setF({ ...f, type: e.target.value })} className={inp}>{Object.entries(NATURAL_SITE_TYPE_LABELS).map(([k, v]) => <option key={k} value={k}>{NATURAL_SITE_TYPE_ICONS[k]} {v}</option>)}</select></div><div><label className="text-xs font-bold text-slate-600 block mb-1">مستوى الحماية</label><select value={f.protectionLevel} onChange={(e) => setF({ ...f, protectionLevel: e.target.value })} className={inp}>{Object.entries(SITE_PROTECTION_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div></div>
     <div className="grid grid-cols-2 gap-2"><div><label className="text-xs font-bold text-slate-600 block mb-1">المساحة (هكتار)</label><input type="number" step="0.1" value={f.area} onChange={(e) => setF({ ...f, area: e.target.value })} className={inp} /></div><div><label className="text-xs font-bold text-slate-600 block mb-1">الجماعة</label><input value={f.commune || accountCommune} onChange={(e) => setF({ ...f, commune: e.target.value })} placeholder="كود الجماعة" className={inp} /></div></div>
+    <div><label className="text-xs font-bold text-slate-600 block mb-1">الحي</label><input value={f.quartier} onChange={(e) => setF({ ...f, quartier: e.target.value })} className={inp} /></div>
+    <LocationPicker latitude={f.latitude} longitude={f.longitude} allowedCommunes={f.commune || accountCommune ? [f.commune || accountCommune] : allowedCommunes} label="تحديد الموقع والجماعة والحي" title="موقع المجال الطبيعي" onSelect={({ latitude, longitude, commune, quartier }) => setF({ ...f, commune, quartier: quartier || f.quartier, latitude: String(latitude), longitude: String(longitude) })} />
     <div><label className="text-xs font-bold text-slate-600 block mb-1">الوصف</label><textarea value={f.description} onChange={(e) => setF({ ...f, description: e.target.value })} rows={2} className={inp + ' resize-none'} /></div>
     <button type="submit" disabled={saving} className="w-full px-4 py-2 text-sm font-bold text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 disabled:opacity-50">{saving ? '...' : 'إنشاء'}</button>
   </form>

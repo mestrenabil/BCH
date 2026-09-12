@@ -18,6 +18,7 @@ import WaterMapTab from './water/map-tab'
 import WaterIncidentsTab from './water/water-incidents-tab'
 import WaterLaboratoriesTab from './water/water-laboratories-tab'
 import { useMapTerritoryScope } from '@/hooks/use-map-territory-scope'
+import LocationPicker from './csvr/location-picker'
 
 interface Props {
   selectedCommune: string
@@ -177,7 +178,7 @@ export default function WaterView({ selectedCommune, territoryFilter, useTerrito
 
   const { allowedCommunes: accountCommunes } = useMapTerritoryScope(user, selectedCommune, territoryFilter, useTerritoryFilter)
   const activeTab = TABS.find((tab) => tab.id === waterSubTab) || TABS[0]
-  if (waterSubTab === 'incidents') return <WaterSideBySideLayout activeTab={waterSubTab} onNavigate={selectWaterSection}><WaterIncidentsTab incidents={waterIncidents} loading={loading} onRefresh={refresh} showCreate={showCreate === 'water-incidents'} setShowCreate={(value) => setShowCreate(value ? 'water-incidents' : null)} buildParams={buildParams} /></WaterSideBySideLayout>
+  if (waterSubTab === 'incidents') return <WaterSideBySideLayout activeTab={waterSubTab} onNavigate={selectWaterSection}><WaterIncidentsTab incidents={waterIncidents} loading={loading} onRefresh={refresh} showCreate={showCreate === 'water-incidents'} setShowCreate={(value) => setShowCreate(value ? 'water-incidents' : null)} buildParams={buildParams} allowedCommunes={accountCommunes} /></WaterSideBySideLayout>
   if (waterSubTab === 'laboratories') return <WaterSideBySideLayout activeTab={waterSubTab} onNavigate={selectWaterSection}><WaterLaboratoriesTab laboratories={waterLaboratories} loading={loading} onRefresh={refresh} showCreate={showCreate === 'water-laboratories'} setShowCreate={(value) => setShowCreate(value ? 'water-laboratories' : null)} buildParams={buildParams} /></WaterSideBySideLayout>
   if (waterSubTab === 'settings') return <WaterSideBySideLayout activeTab={waterSubTab} onNavigate={selectWaterSection}><WaterSettingsTab selectedCommune={selectedCommune} /></WaterSideBySideLayout>
   return <div className="space-y-4" dir="rtl">
@@ -865,6 +866,9 @@ const inp = "w-full px-3 py-2 text-sm rounded-lg border border-slate-200 focus:o
 
 // ===== Forms =====
 function PointForm({ buildParams, onSubmit, saving }: any) {
+  const { user, selectedCommune, territoryFilter } = useAppStore()
+  const useTerritoryFilter = user?.role === 'admin' && user.commune === 'ALL'
+  const { allowedCommunes } = useMapTerritoryScope(user, selectedCommune, territoryFilter, useTerritoryFilter)
   const [f, setF] = useState({ name: '', type: 'NETWORK', commune: '', quartier: '', adresse: '', latitude: '', longitude: '', operator: '', description: '' })
   const accountCommune = buildParams().get('commune') || ''
   const submit = (e: React.FormEvent) => { e.preventDefault(); if (!f.name) { toast.error('الاسم مطلوب'); return }; const p = buildParams(); onSubmit({ ...f, commune: f.commune || accountCommune || p.get('commune') || 'ALL', latitude: f.latitude ? parseFloat(f.latitude) : null, longitude: f.longitude ? parseFloat(f.longitude) : null }) }
@@ -879,6 +883,19 @@ function PointForm({ buildParams, onSubmit, saving }: any) {
       <div><label className="text-xs font-bold text-slate-600 block mb-1">الحي</label><input value={f.quartier} onChange={(e) => setF({ ...f, quartier: e.target.value })} className={inp} /></div>
     </div>
     <div><label className="text-xs font-bold text-slate-600 block mb-1">العنوان</label><input value={f.adresse} onChange={(e) => setF({ ...f, adresse: e.target.value })} className={inp} /></div>
+    <div className="rounded-xl border border-sky-100 bg-sky-50/70 p-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div><p className="text-xs font-bold text-slate-700">📍 تحديد الجماعة والحي من الخريطة</p><p className="mt-0.5 text-[10px] text-slate-500">اختيار النقطة يملأ الجماعة والحي والإحداثيات تلقائياً.</p></div>
+        <LocationPicker
+          latitude={f.latitude}
+          longitude={f.longitude}
+          allowedCommunes={f.commune && f.commune !== 'ALL' ? [f.commune] : allowedCommunes}
+          label="تحديد من الخريطة"
+          title="موقع نقطة المياه"
+          onSelect={({ latitude, longitude, commune, quartier }) => setF((current) => ({ ...current, commune, quartier: quartier || current.quartier, latitude: String(latitude), longitude: String(longitude) }))}
+        />
+      </div>
+    </div>
     <button type="submit" disabled={saving} className="w-full px-4 py-2 text-sm font-bold text-white bg-sky-600 rounded-lg hover:bg-sky-700 disabled:opacity-50">{saving ? '...' : 'إنشاء'}</button>
   </form>
 }
@@ -930,9 +947,12 @@ function SampleForm({ waterPoints, pools, onSubmit, saving }: { waterPoints: Wat
 }
 
 function PoolForm({ buildParams, onSubmit, saving }: any) {
-  const [f, setF] = useState({ name: '', type: 'SWIMMING', commune: '', quartier: '', adresse: '', operator: '', waterType: 'TREATED' })
+  const { user, selectedCommune, territoryFilter } = useAppStore()
+  const useTerritoryFilter = user?.role === 'admin' && user.commune === 'ALL'
+  const { allowedCommunes } = useMapTerritoryScope(user, selectedCommune, territoryFilter, useTerritoryFilter)
+  const [f, setF] = useState({ name: '', type: 'SWIMMING', commune: '', quartier: '', adresse: '', latitude: '', longitude: '', operator: '', waterType: 'TREATED' })
   const accountCommune = buildParams().get('commune') || ''
-  const submit = (e: React.FormEvent) => { e.preventDefault(); if (!f.name) { toast.error('الاسم مطلوب'); return }; const p = buildParams(); onSubmit({ ...f, commune: f.commune || accountCommune || p.get('commune') || 'ALL' }) }
+  const submit = (e: React.FormEvent) => { e.preventDefault(); if (!f.name) { toast.error('الاسم مطلوب'); return }; const p = buildParams(); onSubmit({ ...f, commune: f.commune || accountCommune || p.get('commune') || 'ALL', latitude: f.latitude ? parseFloat(f.latitude) : null, longitude: f.longitude ? parseFloat(f.longitude) : null }) }
   return <form onSubmit={submit} className="space-y-3">
     <div><label className="text-xs font-bold text-slate-600 block mb-1">الاسم *</label><input value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} className={inp} /></div>
     <div className="grid grid-cols-2 gap-2">
@@ -942,6 +962,20 @@ function PoolForm({ buildParams, onSubmit, saving }: any) {
     <div className="grid grid-cols-2 gap-2">
       <div><label className="text-xs font-bold text-slate-600 block mb-1">الجماعة</label><input value={f.commune || accountCommune} onChange={(e) => setF({ ...f, commune: e.target.value })} placeholder="كود الجماعة" className={inp} /></div>
       <div><label className="text-xs font-bold text-slate-600 block mb-1">الحي</label><input value={f.quartier} onChange={(e) => setF({ ...f, quartier: e.target.value })} className={inp} /></div>
+    </div>
+    <div><label className="text-xs font-bold text-slate-600 block mb-1">العنوان</label><input value={f.adresse} onChange={(e) => setF({ ...f, adresse: e.target.value })} className={inp} /></div>
+    <div className="rounded-xl border border-cyan-100 bg-cyan-50/70 p-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div><p className="text-xs font-bold text-slate-700">📍 تحديد الجماعة والحي من الخريطة</p><p className="mt-0.5 text-[10px] text-slate-500">اختيار النقطة يملأ الجماعة والحي والإحداثيات تلقائياً.</p></div>
+        <LocationPicker
+          latitude={f.latitude}
+          longitude={f.longitude}
+          allowedCommunes={f.commune && f.commune !== 'ALL' ? [f.commune] : allowedCommunes}
+          label="تحديد من الخريطة"
+          title="موقع المسبح"
+          onSelect={({ latitude, longitude, commune, quartier }) => setF((current) => ({ ...current, commune, quartier: quartier || current.quartier, latitude: String(latitude), longitude: String(longitude) }))}
+        />
+      </div>
     </div>
     <button type="submit" disabled={saving} className="w-full px-4 py-2 text-sm font-bold text-white bg-sky-600 rounded-lg hover:bg-sky-700 disabled:opacity-50">{saving ? '...' : 'إنشاء'}</button>
   </form>

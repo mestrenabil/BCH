@@ -155,6 +155,7 @@ export default function FoodView({ selectedCommune, territoryFilter, useTerritor
               loading={loading}
               onRefresh={refresh}
               buildParams={buildParams}
+              mapAllowedCommunes={mapAllowedCommunes}
               externalFilter={externalFilter}
               onClearExternalFilter={() => setExternalFilter(null)}
             />

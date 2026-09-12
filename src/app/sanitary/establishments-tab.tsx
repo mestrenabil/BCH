@@ -17,6 +17,7 @@ interface Props {
   loading: boolean
   onRefresh: () => void
   buildParams: (extra?: Record<string, string>) => URLSearchParams
+  allowedCommunes: string[]
 }
 
 function fmtDate(d: string | null) {
@@ -24,7 +25,7 @@ function fmtDate(d: string | null) {
   return new Date(d).toLocaleDateString('ar-MA', { day: '2-digit', month: '2-digit', year: 'numeric' })
 }
 
-export default function EstablishmentsTab({ establishments, loading, onRefresh, buildParams }: Props) {
+export default function EstablishmentsTab({ establishments, loading, onRefresh, buildParams, allowedCommunes }: Props) {
   const [search, setSearch] = useState('')
   const [filterRisk, setFilterRisk] = useState('ALL')
   const [filterStatus, setFilterStatus] = useState('ALL')
@@ -132,7 +133,7 @@ export default function EstablishmentsTab({ establishments, loading, onRefresh, 
       {/* نموذج إنشاء */}
       <AnimatePresence>
         {showCreate && (
-          <CreateModal onClose={() => setShowCreate(false)} onCreated={() => { setShowCreate(false); onRefresh() }} buildParams={buildParams} />
+          <CreateModal onClose={() => setShowCreate(false)} onCreated={() => { setShowCreate(false); onRefresh() }} buildParams={buildParams} allowedCommunes={allowedCommunes} />
         )}
       </AnimatePresence>
     </div>
@@ -187,7 +188,7 @@ function DetailPanel({ establishment: e, onClose }: { establishment: Establishme
   )
 }
 
-function CreateModal({ onClose, onCreated, buildParams }: { onClose: () => void; onCreated: () => void; buildParams: (extra?: Record<string, string>) => URLSearchParams }) {
+function CreateModal({ onClose, onCreated, buildParams, allowedCommunes }: { onClose: () => void; onCreated: () => void; buildParams: (extra?: Record<string, string>) => URLSearchParams; allowedCommunes: string[] }) {
   const accountCommune = buildParams().get('commune') || ''
   const [form, setForm] = useState({
     name: '', activity: '', category: '', ownerName: '', ownerCin: '', telephone: '',
@@ -273,12 +274,12 @@ function CreateModal({ onClose, onCreated, buildParams }: { onClose: () => void;
               <LocationPicker
                 latitude={form.latitude}
                 longitude={form.longitude}
-                allowedCommunes={form.commune || accountCommune ? [form.commune || accountCommune] : []}
+                allowedCommunes={form.commune || accountCommune ? [form.commune || accountCommune] : allowedCommunes}
                 label="تحديد موقع المنشأة"
                 title="تحديد موقع المنشأة"
                 description="انقر على موقع المنشأة بدقة؛ ستظهر النقطة مع الإحداثيات ويمكن اعتمادها عند الإغلاق."
                 className="shrink-0"
-                onSelect={({ latitude, longitude }) => setForm({ ...form, latitude: String(latitude), longitude: String(longitude) })}
+                onSelect={({ latitude, longitude, commune, quartier }) => setForm({ ...form, commune, quartier: quartier || form.quartier, latitude: String(latitude), longitude: String(longitude) })}
               />
             </div>
             <div className="grid grid-cols-2 gap-2">
