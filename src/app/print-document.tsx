@@ -116,6 +116,12 @@ export default function PrintDocument({
     ? COMMUNE_NAMES_FR[filterCommune] || ''
     : 'Toutes les Communes'
   const communeNameAr = settings.communeNameAr || filterCommune
+  const kingdomNameAr = settings.kingdomNameAr || 'المملكة المغربية'
+  const kingdomNameFr = settings.kingdomNameFr || 'Royaume du Maroc'
+  const provinceNameAr = settings.provinceNameAr || 'العمالة أو الإقليم'
+  const provinceNameFr = settings.provinceNameFr || 'Préfecture / Province'
+  const serviceNameAr = settings.serviceNameAr || 'قسم الوقاية وحفظ الصحة'
+  const serviceNameFr = settings.serviceNameFr || "Service de prévention et d'hygiène"
 
   // Get default address info for commune
   const communeDefaults = filterCommune !== 'ALL' ? COMMUNE_DEFAULTS[filterCommune] : null
@@ -1117,10 +1123,10 @@ export default function PrintDocument({
         <table class="header-table" cellpadding="0" cellspacing="0">
           <tr>
             <td class="header-right">
-              <div class="kingdom-badge-ar">المملكة المغربية</div>
-              <div class="wilaya-name">عمالة سلا</div>
-              <div class="dept-name">قسم الوقاية وحفظ الصحة</div>
-              <div class="dept-name" style="font-size:8px;color:#9ca3af;font-style:italic;">Préfecture de Salé — Service de prévention et d'hygiène</div>
+              <div class="kingdom-badge-ar">${kingdomNameAr}</div>
+              <div class="wilaya-name">${provinceNameAr}</div>
+              <div class="dept-name">${serviceNameAr}</div>
+              <div class="dept-name" style="font-size:8px;color:#9ca3af;font-style:italic;">${provinceNameFr} — ${serviceNameFr}</div>
             </td>
             <td class="header-center">
               <div class="logo-section">
@@ -1131,10 +1137,10 @@ export default function PrintDocument({
               </div>
             </td>
             <td class="header-left">
-              <div class="kingdom-badge-fr">Royaume du Maroc</div>
-              <div class="wilaya-name" style="color:#475569;">Préfecture de Salé</div>
-              <div class="dept-name">Service de prévention et d'hygiène</div>
-              <div class="dept-name" style="font-size:8px;color:#9ca3af;">قسم الوقاية وحفظ الصحة</div>
+              <div class="kingdom-badge-fr">${kingdomNameFr}</div>
+              <div class="wilaya-name" style="color:#475569;">${provinceNameFr}</div>
+              <div class="dept-name">${serviceNameFr}</div>
+              <div class="dept-name" style="font-size:8px;color:#9ca3af;">${serviceNameAr}</div>
             </td>
           </tr>
         </table>
@@ -1284,7 +1290,7 @@ export default function PrintDocument({
     printWindow.document.write(html)
     printWindow.document.close()
     setTimeout(() => { printWindow.print() }, 1200)
-  }, [interventions, statsData, exportType, filterCommune, filterYear, filterType, filterStatut, filterFrom, filterTo, presidentName, responsableName, chefServiceName, communeDisplay, communeNameFr, communeNameAr, docReference, docDate, docDateFr, showWatermark, settings.watermarkText, communeAddress, communePhone, communeFax, communeEmail, communeDefaults])
+  }, [interventions, statsData, exportType, filterCommune, filterYear, filterType, filterStatut, filterFrom, filterTo, presidentName, responsableName, chefServiceName, communeDisplay, communeNameFr, communeNameAr, kingdomNameAr, kingdomNameFr, provinceNameAr, provinceNameFr, serviceNameAr, serviceNameFr, docReference, docDate, docDateFr, showWatermark, settings.watermarkText, communeAddress, communePhone, communeFax, communeEmail, communeDefaults])
 
   if (!isOpen) return null
 
@@ -1326,10 +1332,10 @@ export default function PrintDocument({
               <div className="p-4 border-b-2 border-emerald-600" data-print-header-border style={{ borderBottomWidth: '3px', borderBottomColor: '#059669' }}>
                 <div className="flex justify-between items-start">
                   <div className="text-right">
-                    <div className="inline-block bg-emerald-600 text-white text-[8px] font-bold px-2 py-0.5 rounded shadow-sm">المملكة المغربية</div>
-                    <div className="text-[11px] font-bold text-emerald-700 mt-1">عمالة سلا</div>
-                    <div className="text-[9px] text-slate-500">قسم الوقاية وحفظ الصحة</div>
-                    <div className="text-[7px] text-slate-400 italic">Préfecture de Salé — Service d&apos;Hygiène</div>
+                    <div className="inline-block bg-emerald-600 text-white text-[8px] font-bold px-2 py-0.5 rounded shadow-sm">{kingdomNameAr}</div>
+                    <div className="text-[11px] font-bold text-emerald-700 mt-1">{provinceNameAr}</div>
+                    <div className="text-[9px] text-slate-500">{serviceNameAr}</div>
+                    <div className="text-[7px] text-slate-400 italic">{provinceNameFr} — {serviceNameFr}</div>
                   </div>
                   <div className="text-center">
                     <div className="text-2xl"><span className="print-emoji">🏛️</span></div>
@@ -1340,10 +1346,10 @@ export default function PrintDocument({
                     </div>
                   </div>
                   <div className="text-left">
-                    <div className="inline-block bg-slate-600 text-white text-[8px] font-bold px-2 py-0.5 rounded shadow-sm">Royaume du Maroc</div>
-                    <div className="text-[11px] font-bold text-slate-600 mt-1">Préfecture de Salé</div>
-                    <div className="text-[9px] text-slate-400">Service d&apos;Hygiène</div>
-                    <div className="text-[7px] text-slate-400">قسم الوقاية وحفظ الصحة</div>
+                    <div className="inline-block bg-slate-600 text-white text-[8px] font-bold px-2 py-0.5 rounded shadow-sm">{kingdomNameFr}</div>
+                    <div className="text-[11px] font-bold text-slate-600 mt-1">{provinceNameFr}</div>
+                    <div className="text-[9px] text-slate-400">{serviceNameFr}</div>
+                    <div className="text-[7px] text-slate-400">{serviceNameAr}</div>
                   </div>
                 </div>
                 {/* Contact bar */}
@@ -1519,7 +1525,7 @@ export default function PrintDocument({
 
             {/* Footer */}
             <div className="mt-3 py-1.5 text-center border-t border-slate-100 text-[7px] text-slate-400">
-              <span dir="ltr">{communeNameFr}</span> — <span dir="rtl">مكتب حفظ الصحة الجماعي — عمالة سلا</span> | <span dir="ltr" className="font-mono">{docReference}</span> | <span dir="rtl">{docDate}</span>
+              <span dir="ltr">{communeNameFr}</span> — <span dir="rtl">{serviceNameAr} — {provinceNameAr}</span> | <span dir="ltr" className="font-mono">{docReference}</span> | <span dir="rtl">{docDate}</span>
             </div>
           </div>
 

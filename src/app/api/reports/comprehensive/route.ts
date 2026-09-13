@@ -1,6 +1,7 @@
 import { db } from '@/lib/db'
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth, getScopedCommuneFilter } from '@/lib/auth'
+import { createAdministrativeCsvHeader, getReportIdentity } from '@/lib/report-identity'
 
 // GET: إحصائيات شاملة عبر كل المكاتب
 // ?period=today|week|month|quarter|year|all&year=YYYY
@@ -163,7 +164,9 @@ export async function GET(request: NextRequest) {
 
     if (format === 'csv') {
       const escapeCsv = (value: unknown) => `"${String(value ?? '').replace(/"/g, '""')}"`
+      const identity = await getReportIdentity(typeof communeFilter === 'string' ? communeFilter : user.commune || 'ALL')
       const rows = [
+        ...createAdministrativeCsvHeader(identity, 'التقرير الإداري الشامل', scopeLabel),
         ['القسم', 'المكتب', 'عدد السجلات', 'الجماعة', 'الفترة'],
         ...sectionRows.map((row) => [row.section, row.office, row.total, scopeLabel, period]),
         [],

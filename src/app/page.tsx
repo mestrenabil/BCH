@@ -111,7 +111,8 @@ function LoginPage({ onLogin }: { onLogin: (user: AuthUser) => void }) {
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [isLoading, setIsLoading] = useState(false)
-  const [mode, setMode] = useState<'select' | 'login'>('select')
+  // الدخول موحّد لجميع الحسابات؛ يحدد الخادم الدور والجماعة بعد المصادقة.
+  const [mode, setMode] = useState<'select' | 'login'>('login')
 
   const handleSelectCommune = (key: string) => {
     setSelectedCommuneKey(key)
@@ -278,17 +279,6 @@ function LoginPage({ onLogin }: { onLogin: (user: AuthUser) => void }) {
               transition={{ duration: 0.3 }}
               className="bg-white/10 backdrop-blur-xl rounded-3xl border border-white/20 shadow-2xl p-8"
             >
-              {/* Back button */}
-              <button
-                onClick={() => { setMode('select'); setError(''); setPassword('') }}
-                className="flex items-center gap-2 text-emerald-200/70 hover:text-white transition-colors mb-6 text-sm"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 rotate-180" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clipRule="evenodd" />
-                </svg>
-                رجوع
-              </button>
-
               {/* Commune indicator */}
               {selectedCommuneKey !== 'ALL' && (
                 <div className="flex items-center justify-center gap-3 mb-6">
@@ -315,8 +305,8 @@ function LoginPage({ onLogin }: { onLogin: (user: AuthUser) => void }) {
                 <div className="mb-6 flex items-center justify-center gap-3">
                   <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-500/25 text-2xl">🔑</div>
                   <div>
-                    <div className="font-bold text-white">دخول عام</div>
-                    <div className="text-xs text-emerald-200/60">أدخل بيانات حسابك</div>
+                    <div className="font-bold text-white">دخول الموظفين</div>
+                    <div className="text-xs text-emerald-200/60">للموظف أو مسؤول الجماعة أو المسؤول العام</div>
                   </div>
                 </div>
               )}

@@ -84,6 +84,12 @@ export interface AppSettings {
   presidentName: string
   responsableName: string
   chefServiceName: string
+  kingdomNameAr: string
+  kingdomNameFr: string
+  provinceNameAr: string
+  provinceNameFr: string
+  serviceNameAr: string
+  serviceNameFr: string
   communeNameFr: string
   communeNameAr: string
   communeAddress: string
@@ -240,6 +246,12 @@ export const DEFAULT_SETTINGS: AppSettings = {
   presidentName: '',
   responsableName: '',
   chefServiceName: '',
+  kingdomNameAr: 'المملكة المغربية',
+  kingdomNameFr: 'Royaume du Maroc',
+  provinceNameAr: '',
+  provinceNameFr: '',
+  serviceNameAr: 'قسم الوقاية وحفظ الصحة',
+  serviceNameFr: "Service de prévention et d'hygiène",
   communeNameFr: '',
   communeNameAr: '',
   communeAddress: '',

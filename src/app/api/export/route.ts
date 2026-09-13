@@ -1,6 +1,7 @@
 import { db } from '@/lib/db'
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth, getCommuneFilter } from '@/lib/auth'
+import { createAdministrativeCsvHeader, getReportIdentity } from '@/lib/report-identity'
 
 export async function GET(request: NextRequest) {
   try {
@@ -63,6 +64,8 @@ export async function GET(request: NextRequest) {
 
     if (format === 'csv') {
       const BOM = '\uFEFF'
+      const scopeLabel = typeof communeFilter === 'string' ? communeFilter : user.commune === 'ALL' ? 'كل الجماعات' : user.commune
+      const identity = await getReportIdentity(typeof communeFilter === 'string' ? communeFilter : user.commune || 'ALL')
       const headers = ['المرجع', 'النوع', 'التاريخ', 'الحي', 'العنوان', 'الجماعة', 'الحالة', 'العون', 'المساحة', 'الملاحظات', 'المواد المستعملة']
       const rows = interventions.map(int => {
         const materialsStr = int.materials.map(m => `${m.product.nom}(${m.quantity} ${m.product.unite})`).join(' | ')
@@ -81,7 +84,10 @@ export async function GET(request: NextRequest) {
         ].map(v => `"${String(v).replace(/"/g, '""')}"`)
       })
 
-      const csv = BOM + [headers.join(','), ...rows.map(r => r.join(','))].join('\n')
+      const escapeCsv = (value: unknown) => `"${String(value ?? '').replace(/"/g, '""')}"`
+      const administrativeHeader = createAdministrativeCsvHeader(identity, 'تقرير التدخلات', scopeLabel)
+        .map((row) => row.map(escapeCsv).join(','))
+      const csv = BOM + [...administrativeHeader, headers.map(escapeCsv).join(','), ...rows.map(r => r.join(','))].join('\n')
       // Use ASCII-safe filename to avoid ByteString conversion error with Arabic chars
       const safeCommune = typeof communeFilter === 'string' ? encodeURIComponent(communeFilter) : ''
       return new NextResponse(csv, {

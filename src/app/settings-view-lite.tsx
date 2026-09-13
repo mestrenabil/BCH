@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { toast } from 'sonner'
 import { useAppStore, type CommuneType, type OverlaySectionKey, type ViewType, OVERLAY_SECTION_LABELS, DEFAULT_NAV_ORDER } from '@/lib/store'
 import { getYearOptions } from '@/lib/store'
-import { appendTerritoryParams, hasTerritorySelection } from '@/lib/geography'
+import { ALL_TERRITORIES, DEFAULT_TERRITORY_FILTER, appendTerritoryParams, hasTerritorySelection } from '@/lib/geography'
 import { territoryCommuneName, useTerritoryCommunes } from '@/hooks/use-territory-communes'
 import {
   type Quartier,
@@ -900,6 +900,7 @@ function SettingsView() {
   const [confirmResetData, setConfirmResetData] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [isAdminViewingCommune, setIsAdminViewingCommune] = useState<string | null>(null)
+  const { communes: nationalCommunes, isLoading: isLoadingNationalCommunes } = useTerritoryCommunes(DEFAULT_TERRITORY_FILTER, true)
 
   // For admin users: allow switching which commune's settings to view/edit
   const canSeeAllCommunes = user?.role === 'admin' || user?.commune === 'ALL'
@@ -919,14 +920,20 @@ function SettingsView() {
     }
   }, [settingsLoaded, loadSettings, user?.commune])
 
-  // Admin: load different commune's settings
+  const saveTimerRef = useRef<NodeJS.Timeout | null>(null)
+
+  // المسؤول العام: تحميل الإعدادات المشتركة أو إعدادات جماعة من الدليل الوطني
   const handleAdminSwitchCommune = async (commune: string) => {
-    setIsAdminViewingCommune(commune === 'ALL' ? null : commune)
-    await loadSettings(commune === 'ALL' ? undefined : commune)
+    if (saveTimerRef.current) {
+      clearTimeout(saveTimerRef.current)
+      saveTimerRef.current = null
+    }
+    setIsAdminViewingCommune(commune === ALL_TERRITORIES ? null : commune)
+    const loaded = await loadSettings(commune === ALL_TERRITORIES ? undefined : commune)
+    if (!loaded) toast.error('تعذر تحميل إعدادات الجماعة المختارة')
   }
 
   // Auto-save settings with debounce
-  const saveTimerRef = useRef<NodeJS.Timeout | null>(null)
   const handleUpdateAndSave = (partial: Partial<typeof settings>) => {
     updateSettings(partial)
     // Debounce save: 800ms after last change
@@ -1016,47 +1023,48 @@ function SettingsView() {
           className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
           <div className="bg-gradient-to-l from-emerald-700 to-teal-700 text-white px-6 py-4">
             <h3 className="font-bold text-base">🏛️ إعدادات الجماعة</h3>
-            <p className="text-emerald-200 text-xs mt-0.5">كل جماعة لها إعداداتها المنفصلة — اختر الجماعة لتعديل إعداداتها</p>
+            <p className="text-emerald-200 text-xs mt-0.5">طبّق إعدادات مشتركة أو خصّصها لجماعة محددة من الجماعات على المستوى الوطني</p>
           </div>
-          <div className="p-4">
-            <div className="flex flex-wrap gap-2">
-              {[
-                { key: 'ALL', label: 'عام (المشترك)', icon: '🌐', color: '#475569' },
-                ...Object.keys(COMMUNE_LABELS).map((commune) => ({
-                  key: commune,
-                  label: COMMUNE_LABELS[commune],
-                  icon: COMMUNE_USER_INFO[commune]?.icon || '🏘️',
-                  color: COMMUNE_COLORS[commune] || '#64748b',
-                })),
-              ].map((c) => (
-                <button key={c.key}
-                  onClick={() => handleAdminSwitchCommune(c.key)}
-                  className={`px-4 py-2.5 rounded-xl text-sm font-medium transition-all flex items-center gap-2 ${
-                    currentSettingsCommune === c.key
-                      ? 'text-white shadow-lg'
-                      : 'bg-slate-50 text-slate-600 border border-slate-200 hover:bg-slate-100'
-                  }`}
-                  style={currentSettingsCommune === c.key ? { backgroundColor: c.color } : {}}>
-                  <span>{c.icon}</span>
-                  {c.label}
-                </button>
-              ))}
+          <div className="p-4 space-y-4">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <button type="button" onClick={() => handleAdminSwitchCommune(ALL_TERRITORIES)}
+                className={`rounded-xl border-2 p-4 text-right transition-all ${currentSettingsCommune === ALL_TERRITORIES ? 'border-emerald-600 bg-emerald-50 text-emerald-900 shadow-sm' : 'border-slate-200 bg-white text-slate-600 hover:border-emerald-300'}`}>
+                <span className="block text-lg">🌐</span>
+                <span className="mt-1 block text-sm font-bold">إعدادات مشتركة</span>
+                <span className="mt-1 block text-xs opacity-75">تُطبّق كأساس على جميع الجماعات</span>
+              </button>
+              <div className={`rounded-xl border-2 p-4 ${currentSettingsCommune !== ALL_TERRITORIES ? 'border-emerald-600 bg-emerald-50' : 'border-slate-200 bg-white'}`}>
+                <label htmlFor="national-settings-commune" className="block text-sm font-bold text-slate-700">🏘️ جماعة محددة</label>
+                <select id="national-settings-commune" value={currentSettingsCommune === ALL_TERRITORIES ? '' : currentSettingsCommune}
+                  onChange={(event) => event.target.value && handleAdminSwitchCommune(event.target.value)}
+                  disabled={isLoadingNationalCommunes}
+                  className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-700 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 disabled:opacity-60">
+                  <option value="">{isLoadingNationalCommunes ? 'جارٍ تحميل الجماعات…' : '— اختر جماعة من الدليل الوطني —'}</option>
+                  {nationalCommunes.map((commune) => {
+                    const name = territoryCommuneName(commune)
+                    return <option key={commune.code} value={name}>{name}</option>
+                  })}
+                </select>
+              </div>
             </div>
+            <p className="text-xs font-medium text-slate-500">النطاق الحالي: <span className="font-bold text-emerald-700">{currentSettingsCommune === ALL_TERRITORIES ? 'مشترك بين جميع الجماعات' : currentSettingsCommune}</span></p>
           </div>
         </motion.div>
       )}
 
-      {/* Navigation visibility and order — managed by the general administrator */}
-      {user?.role === 'admin' && (
+      {/* التحكم في ظهور القوائم للمسؤول العام ولمسؤول الجماعة داخل نطاقه */}
+      {(user?.role === 'admin' || user?.role === 'responsable') && (
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.07 }}
           className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
           <div className="bg-gradient-to-l from-indigo-700 to-violet-700 text-white px-6 py-4">
-            <h3 className="font-bold text-base">🧭 أقسام مسؤولي الجماعات</h3>
-            <p className="text-indigo-200 text-xs mt-0.5">تحكم في ما يظهر لموظفي الجماعة المختارة من الأقسام وترتيبها حسب الأولوية</p>
+            <h3 className="font-bold text-base">🧭 التحكم في القوائم والأقسام</h3>
+            <p className="text-indigo-200 text-xs mt-0.5">حدد القوائم الظاهرة والمخفية ورتبها حسب أولوية العمل</p>
           </div>
           <div className="p-4 space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <p className="text-xs text-slate-500">إعداد «عام (المشترك)» يطبق على حسابات جميع الجماعات، ويمكن تخصيص إعدادات جماعة بعينها. يبقى وصول المدير العام كاملاً دائماً.</p>
+              <p className="text-xs text-slate-500">{user?.role === 'admin'
+                ? 'إعداد «عام (المشترك)» يطبق على جميع الجماعات، ويمكن تخصيص جماعة بعينها. يبقى وصول المدير العام كاملاً دائماً.'
+                : 'تُحفظ هذه الاختيارات لجماعتك فقط. لا يمكن إظهار قسم أخفاه المسؤول العام ضمن الإعدادات المشتركة، ويبقى قسم الإعدادات ظاهرًا دائمًا.'}</p>
               <div className="flex gap-2">
                 <button type="button" onClick={handleShowAllNav} className="px-3 py-2 rounded-lg bg-indigo-50 text-indigo-700 text-xs font-bold hover:bg-indigo-100">إظهار الكل</button>
                 <button type="button" onClick={handleResetNav} className="px-3 py-2 rounded-lg border border-slate-200 text-slate-600 text-xs font-bold hover:bg-slate-50">الافتراضي</button>
@@ -1680,6 +1688,36 @@ function SettingsView() {
               معلومات الجماعة
             </h4>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 mb-1.5">الدولة (عربي)</label>
+                <input type="text" value={settings.kingdomNameAr} onChange={(e) => handleUpdateAndSave({ kingdomNameAr: e.target.value })}
+                  placeholder="المملكة المغربية" className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50/50 text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-300 transition-all" />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 mb-1.5">الدولة (فرنسي)</label>
+                <input type="text" value={settings.kingdomNameFr} onChange={(e) => handleUpdateAndSave({ kingdomNameFr: e.target.value })}
+                  placeholder="Royaume du Maroc" dir="ltr" className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50/50 text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-300 transition-all" />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 mb-1.5">العمالة أو الإقليم (عربي)</label>
+                <input type="text" value={settings.provinceNameAr} onChange={(e) => handleUpdateAndSave({ provinceNameAr: e.target.value })}
+                  placeholder="عمالة أو إقليم ..." className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50/50 text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-300 transition-all" />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 mb-1.5">العمالة أو الإقليم (فرنسي)</label>
+                <input type="text" value={settings.provinceNameFr} onChange={(e) => handleUpdateAndSave({ provinceNameFr: e.target.value })}
+                  placeholder="Préfecture / Province de ..." dir="ltr" className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50/50 text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-300 transition-all" />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 mb-1.5">اسم المصلحة (عربي)</label>
+                <input type="text" value={settings.serviceNameAr} onChange={(e) => handleUpdateAndSave({ serviceNameAr: e.target.value })}
+                  placeholder="قسم الوقاية وحفظ الصحة" className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50/50 text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-300 transition-all" />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 mb-1.5">اسم المصلحة (فرنسي)</label>
+                <input type="text" value={settings.serviceNameFr} onChange={(e) => handleUpdateAndSave({ serviceNameFr: e.target.value })}
+                  placeholder="Service de prévention et d'hygiène" dir="ltr" className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50/50 text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-300 transition-all" />
+              </div>
               <div>
                 <label className="block text-xs font-semibold text-slate-500 mb-1.5">اسم الجماعة (عربي)</label>
                 <input type="text" value={settings.communeNameAr} onChange={(e) => handleUpdateAndSave({ communeNameAr: e.target.value })}

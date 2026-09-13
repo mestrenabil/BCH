@@ -1,6 +1,12 @@
 import { db } from '@/lib/db'
 import { NextRequest, NextResponse } from 'next/server'
 import { getManagedCommunes, requireAuth, type AuthUser } from '@/lib/auth'
+import catalogJson from '../../../../public/geography/catalog.json'
+import type { TerritoryCatalog } from '@/lib/geography'
+
+const NATIONAL_COMMUNE_NAMES = new Set(
+  (catalogJson as TerritoryCatalog).communes.flatMap((commune) => [commune.nameAr, commune.name, commune.nameFr].filter(Boolean)),
+)
 
 // Default settings values (same as frontend DEFAULT_SETTINGS)
 const DEFAULT_SETTINGS = {
@@ -43,6 +49,12 @@ const DEFAULT_SETTINGS = {
   presidentName: '',
   responsableName: '',
   chefServiceName: '',
+  kingdomNameAr: 'المملكة المغربية',
+  kingdomNameFr: 'Royaume du Maroc',
+  provinceNameAr: '',
+  provinceNameFr: '',
+  serviceNameAr: 'قسم الوقاية وحفظ الصحة',
+  serviceNameFr: "Service de prévention et d'hygiène",
   communeNameFr: '',
   communeNameAr: '',
   communeAddress: '',
@@ -57,7 +69,8 @@ const DEFAULT_SETTINGS = {
 
 function resolveSettingsCommune(user: AuthUser, requestedCommune?: string | null): string | null {
   if (user.role === 'admin') {
-    return requestedCommune || 'ALL'
+    const targetCommune = requestedCommune?.trim() || 'ALL'
+    return targetCommune === 'ALL' || NATIONAL_COMMUNE_NAMES.has(targetCommune) ? targetCommune : null
   }
 
   const managedCommunes = getManagedCommunes(user)
@@ -157,19 +170,6 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'الجماعة المطلوبة خارج نطاق الحساب' }, { status: 403 })
     }
 
-    const existingCommuneSettings = await db.communeSettings.findUnique({
-      where: { commune: targetCommune },
-    })
-
-    let existingSettings: Record<string, unknown> = {}
-    if (existingCommuneSettings) {
-      try {
-        existingSettings = JSON.parse(existingCommuneSettings.settings || '{}')
-      } catch {
-        existingSettings = {}
-      }
-    }
-
     // Non-admin users: force defaultCommune to their own commune
     if (user.role !== 'admin' && newSettings.defaultCommune) {
       newSettings.defaultCommune = targetCommune
@@ -184,10 +184,35 @@ export async function PUT(request: NextRequest) {
       }
     }
 
-    // Only the general administrator can control section visibility and order.
-    if (user.role !== 'admin') {
-      sanitized.navVisibility = existingSettings.navVisibility ?? DEFAULT_SETTINGS.navVisibility
-      sanitized.navOrder = existingSettings.navOrder ?? DEFAULT_SETTINGS.navOrder
+    // مسؤول الجماعة يخصص قوائم جماعته دون تجاوز ما أخفاه المسؤول العام.
+    if (user.role === 'responsable') {
+      const sharedRecord = await db.communeSettings.findUnique({ where: { commune: 'ALL' } })
+      let sharedSettings: Record<string, unknown> = {}
+      try {
+        sharedSettings = JSON.parse(sharedRecord?.settings || '{}')
+      } catch {
+        sharedSettings = {}
+      }
+      const sharedVisibility = sharedSettings.navVisibility && typeof sharedSettings.navVisibility === 'object' && !Array.isArray(sharedSettings.navVisibility)
+        ? sharedSettings.navVisibility as Record<string, unknown>
+        : {}
+      const requestedVisibility = sanitized.navVisibility && typeof sanitized.navVisibility === 'object' && !Array.isArray(sanitized.navVisibility)
+        ? sanitized.navVisibility as Record<string, unknown>
+        : {}
+      sanitized.navVisibility = Object.fromEntries(
+        Object.keys(DEFAULT_SETTINGS.navVisibility).map((key) => [
+          key,
+          key === 'settings' || (sharedVisibility[key] !== false && requestedVisibility[key] !== false),
+        ]),
+      )
+
+      const requestedOrder = Array.isArray(sanitized.navOrder)
+        ? sanitized.navOrder.filter((key): key is string => typeof key === 'string' && key in DEFAULT_SETTINGS.navVisibility)
+        : []
+      sanitized.navOrder = [
+        ...new Set(requestedOrder),
+        ...DEFAULT_SETTINGS.navOrder.filter((key) => !requestedOrder.includes(key)),
+      ]
     }
 
     // Upsert settings
