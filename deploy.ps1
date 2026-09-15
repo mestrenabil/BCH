@@ -110,7 +110,10 @@ function Start-LocalPreview {
     }
 
     if (-not (Test-LocalSite)) {
-        if (Test-LocalHttpServer) {
+        # قد تكون عملية Next معلقة على المنفذ دون أن تستجيب لـ HTTP؛ افحص المنفذ دائماً.
+        $hasLocalListener = $null -ne (Get-NetTCPConnection -LocalPort 3000 -State Listen -ErrorAction SilentlyContinue |
+            Select-Object -First 1)
+        if ($hasLocalListener -or (Test-LocalHttpServer)) {
             if (-not (Stop-StaleLocalPreview)) {
                 throw "Port 3000 is used by another application. Stop it or change its port, then run deploy.ps1 again."
             }
@@ -120,17 +123,31 @@ function Start-LocalPreview {
         Write-Host "Starting the local preview..." -ForegroundColor Cyan
 
         $npmCommand = Get-Command npm.cmd -ErrorAction Stop
+        $stdoutLog = Join-Path $PSScriptRoot ".local-preview.out.log"
+        $stderrLog = Join-Path $PSScriptRoot ".local-preview.err.log"
+        Remove-Item -LiteralPath $stdoutLog -Force -ErrorAction SilentlyContinue
+        Remove-Item -LiteralPath $stderrLog -Force -ErrorAction SilentlyContinue
+
+        # تشغيل ملف npm.cmd عبر cmd.exe أكثر ثباتاً من تشغيله مباشرة بواسطة Start-Process.
         $localProcess = Start-Process `
-            -FilePath $npmCommand.Source `
-            -ArgumentList @("run", "dev") `
+            -FilePath $env:ComSpec `
+            -ArgumentList @("/d", "/c", "`"$($npmCommand.Source)`" run dev") `
             -WorkingDirectory (Get-Location).Path `
             -WindowStyle Hidden `
+            -RedirectStandardOutput $stdoutLog `
+            -RedirectStandardError $stderrLog `
             -PassThru
 
         $deadline = (Get-Date).AddSeconds($LocalStartupTimeoutSeconds)
         while ((Get-Date) -lt $deadline) {
             if ($localProcess.HasExited) {
-                throw "The local development server stopped before it became ready."
+                $outputTail = if (Test-Path -LiteralPath $stdoutLog) { (Get-Content -LiteralPath $stdoutLog -Tail 30) -join [Environment]::NewLine } else { "" }
+                $errorTail = if (Test-Path -LiteralPath $stderrLog) { (Get-Content -LiteralPath $stderrLog -Tail 30) -join [Environment]::NewLine } else { "" }
+                $details = @($errorTail, $outputTail) | Where-Object { $_ } | Select-Object -First 1
+                if ($details) {
+                    Write-Host ""; Write-Host "Local preview error:" -ForegroundColor Red; Write-Host $details
+                }
+                throw "The local development server stopped before it became ready. See .local-preview.err.log and .local-preview.out.log."
             }
             if (Test-LocalSite) {
                 break
@@ -140,7 +157,9 @@ function Start-LocalPreview {
         }
 
         if (-not (Test-LocalSite)) {
-            throw "The local preview did not start within $LocalStartupTimeoutSeconds seconds."
+            $errorTail = if (Test-Path -LiteralPath $stderrLog) { (Get-Content -LiteralPath $stderrLog -Tail 30) -join [Environment]::NewLine } else { "" }
+            if ($errorTail) { Write-Host $errorTail -ForegroundColor Red }
+            throw "The local preview did not start within $LocalStartupTimeoutSeconds seconds. See the local preview log files."
         }
     }
     else {

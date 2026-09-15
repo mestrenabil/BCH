@@ -6,7 +6,7 @@ import {
   detectAnalyticsDevice,
   getAnalyticsClientIp,
   hashAnalyticsIdentifier,
-  normalizeAnalyticsCommune,
+  resolvePublicVisitorCommune,
   sanitizeAnalyticsPath,
   sanitizeReferrer,
 } from '@/lib/platform-analytics'
@@ -37,7 +37,7 @@ export async function POST(request: NextRequest) {
           : 'PUBLIC_SITE'
     const commune = user
       ? (user.commune === 'ALL' ? 'الإدارة العامة' : user.commune)
-      : normalizeAnalyticsCommune(body.commune)
+      : await resolvePublicVisitorCommune(request.headers, body.commune)
     const now = new Date()
     const recent = await db.platformVisit.findFirst({
       where: {

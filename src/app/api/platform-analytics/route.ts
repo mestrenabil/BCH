@@ -88,7 +88,7 @@ export async function GET(request: NextRequest) {
         if (event.kind === 'PLATFORM') daily.platform += 1
       }
 
-      const commune = event.commune || 'غير محدد'
+      const commune = event.commune || 'سجل قديم — الموقع غير متوفر'
       const communeEntry = communeMap.get(commune) || { visits: 0, visitors: new Set<string>() }
       communeEntry.visits += 1
       communeEntry.visitors.add(event.visitorHash)

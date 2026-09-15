@@ -1,6 +1,7 @@
 import crypto from 'crypto'
 import catalogJson from '../../public/geography/catalog.json'
 import type { TerritoryCatalog } from '@/lib/geography'
+import { getCommuneForPoint } from '@/lib/commune-boundaries'
 
 const catalog = catalogJson as TerritoryCatalog
 const communeNames = new Map<string, string>()
@@ -20,9 +21,43 @@ export function normalizeAnalyticsCommune(value: unknown): string {
 }
 
 export function getAnalyticsClientIp(headers: Headers): string {
-  return headers.get('x-real-ip')
+  return headers.get('cf-connecting-ip')
+    || headers.get('x-real-ip')
     || headers.get('x-forwarded-for')?.split(',')[0]?.trim()
     || 'unknown'
+}
+
+function finiteCoordinate(value: string | null): number | null {
+  if (!value) return null
+  const number = Number(value)
+  return Number.isFinite(number) ? number : null
+}
+
+/**
+ * يحدد جماعة الزائر من البيانات التي يضيفها CDN إلى الطلب.
+ * المعالجة محلية ولا يُرسل عنوان IP إلى أي طرف ثالث.
+ */
+export async function resolvePublicVisitorCommune(headers: Headers, suppliedCommune: unknown): Promise<string> {
+  const supplied = normalizeAnalyticsCommune(suppliedCommune)
+  if (supplied) return supplied
+
+  const country = (headers.get('cf-ipcountry') || headers.get('x-vercel-ip-country') || '').toUpperCase()
+  if (country && !['MA', 'XX', 'T1'].includes(country)) return 'خارج المغرب'
+
+  if (country === 'MA') {
+    const latitude = finiteCoordinate(headers.get('cf-iplatitude') || headers.get('x-vercel-ip-latitude'))
+    const longitude = finiteCoordinate(headers.get('cf-iplongitude') || headers.get('x-vercel-ip-longitude'))
+    if (latitude !== null && longitude !== null) {
+      const match = await getCommuneForPoint(latitude, longitude)
+      const commune = normalizeAnalyticsCommune(match?.commune)
+      if (commune) return commune
+    }
+
+    const city = normalizeAnalyticsCommune(headers.get('cf-ipcity') || headers.get('x-vercel-ip-city'))
+    return city || 'المغرب — تعذر تحديد الجماعة'
+  }
+
+  return 'تعذر تحديد الموقع'
 }
 
 export function hashAnalyticsIdentifier(value: string): string {

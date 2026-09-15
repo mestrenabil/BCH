@@ -404,7 +404,7 @@ function QuartierManagementSection() {
         <div className="flex items-center justify-between">
           <div>
             <h3 className="font-bold text-base">🏘️ إدارة الأحياء</h3>
-            <p className="text-teal-200 text-xs mt-0.5">إضافة وتعديل وحذف الأحياء السكنية</p>
+            <p className="text-teal-200 text-xs mt-0.5">{user?.role === 'admin' ? 'إضافة وتعديل وحذف الأحياء حسب الجماعة' : `إضافة وتعديل وحذف أحياء ${COMMUNE_LABELS[accountCommune] || accountCommune}`}</p>
           </div>
           <motion.button onClick={() => { setEditingQuartier(null); setShowForm(true) }}
             whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
@@ -420,13 +420,20 @@ function QuartierManagementSection() {
             <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="🔍 بحث عن حي..." className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none text-sm" />
           </div>
-          <select value={filterCommune} onChange={(e) => setFilterCommune(e.target.value)}
-            className="px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-teal-500/20">
-            <option value="ALL">كل الجماعات</option>
-            {useTerritoryFilter
-              ? scopedCommunes.map((commune) => <option key={commune.code} value={territoryCommuneName(commune)}>{territoryCommuneName(commune)}</option>)
-              : <><option value="سلا">جماعة سلا</option><option value="سيدي أبي القنادل">جماعة سيدي أبي القنادل</option><option value="عامر">جماعة عامر</option><option value="السهول">جماعة السهول</option></>}
-          </select>
+          {user?.role === 'admin' ? (
+            <select value={filterCommune} onChange={(e) => setFilterCommune(e.target.value)}
+              className="px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-teal-500/20">
+              <option value="ALL">كل الجماعات</option>
+              {useTerritoryFilter
+                ? scopedCommunes.map((commune) => <option key={commune.code} value={territoryCommuneName(commune)}>{territoryCommuneName(commune)}</option>)
+                : <><option value="سلا">جماعة سلا</option><option value="سيدي أبي القنادل">جماعة سيدي أبي القنادل</option><option value="عامر">جماعة عامر</option><option value="السهول">جماعة السهول</option></>}
+            </select>
+          ) : (
+            <div className="flex items-center gap-2 rounded-xl border border-teal-200 bg-teal-50 px-4 py-2.5 text-sm font-bold text-teal-800">
+              <span>🏛️</span>
+              <span>{COMMUNE_LABELS[accountCommune] || accountCommune}</span>
+            </div>
+          )}
         </div>
 
         {/* Stats Row */}
@@ -435,13 +442,14 @@ function QuartierManagementSection() {
             <span className="text-sm">🏘️</span>
             <span className="text-xs font-bold text-teal-700">{quartiers.length} حي</span>
           </div>
-          {Object.entries(COMMUNE_LABELS).map(([key, label]) => {
-            const count = quartiers.filter(q => q.commune === key).length
+          {Object.entries(groupedQuartiers).map(([key, items]) => {
+            const color = COMMUNE_COLORS[key] || '#0f766e'
             return (
               <div key={key} className="flex items-center gap-2 px-3 py-1.5 rounded-lg border"
-                style={{ backgroundColor: COMMUNE_COLORS[key as keyof typeof COMMUNE_COLORS] + '08', borderColor: COMMUNE_COLORS[key as keyof typeof COMMUNE_COLORS] + '20' }}>
-                <div className="w-2 h-2 rounded-full" style={{ backgroundColor: COMMUNE_COLORS[key as keyof typeof COMMUNE_COLORS] }} />
-                <span className="text-xs font-bold" style={{ color: COMMUNE_COLORS[key as keyof typeof COMMUNE_COLORS] }}>{count}</span>
+                title={COMMUNE_LABELS[key] || key}
+                style={{ backgroundColor: color + '08', borderColor: color + '20' }}>
+                <div className="w-2 h-2 rounded-full" style={{ backgroundColor: color }} />
+                <span className="text-xs font-bold" style={{ color }}>{items.length}</span>
               </div>
             )
           })}
@@ -524,7 +532,7 @@ function QuartierManagementSection() {
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-slate-500 mb-1.5">الجماعة *</label>
-                  <select name="commune" required defaultValue={accountCommune || editingQuartier?.commune || (mustChooseScopedCommune && scopedCommuneNames.length === 1 ? scopedCommuneNames[0] : '')}
+                  <select name="commune" required disabled={Boolean(accountCommune)} defaultValue={accountCommune || editingQuartier?.commune || (mustChooseScopedCommune && scopedCommuneNames.length === 1 ? scopedCommuneNames[0] : '')}
                     className="w-full px-3 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none text-sm">
                     {!accountCommune && <option value="">— اختر الجماعة —</option>}
                     {accountCommune
