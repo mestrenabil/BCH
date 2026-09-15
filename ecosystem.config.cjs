@@ -8,6 +8,12 @@ module.exports = {
       env: {
         NODE_ENV: 'production',
         APP_RELEASE: process.env.APP_RELEASE || 'unknown',
+        SMTP_HOST: process.env.SMTP_HOST || '',
+        SMTP_PORT: process.env.SMTP_PORT || '587',
+        SMTP_SECURE: process.env.SMTP_SECURE || 'false',
+        SMTP_USER: process.env.SMTP_USER || '',
+        SMTP_PASSWORD: process.env.SMTP_PASSWORD || '',
+        SMTP_FROM: process.env.SMTP_FROM || '',
       },
       instances: 1,
       autorestart: true,

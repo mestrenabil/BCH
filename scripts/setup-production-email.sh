@@ -13,6 +13,7 @@ fail() {
 cd "$APP_DIR" || fail "Application directory not found: $APP_DIR"
 test -f .env || fail "Production .env is missing"
 command -v node >/dev/null 2>&1 || fail "node is required"
+command -v npm >/dev/null 2>&1 || fail "npm is required"
 command -v pm2 >/dev/null 2>&1 || fail "pm2 is required"
 
 echo
@@ -88,7 +89,23 @@ transporter.verify()
   })
 NODE
 
+# قد يضمّن Next.js بعض متغيرات البيئة أثناء البناء، لذلك يجب إعادة البناء بعد إعداد SMTP.
+echo "[BCH email] Rebuilding the production application with SMTP settings..."
+npm run build
+
 pm2 reload ecosystem.config.cjs --only "$PM2_NAME" --update-env
 pm2 save
 
+pm2_process_id="$(pm2 pid "$PM2_NAME" | head -n 1)"
+[[ "$pm2_process_id" =~ ^[0-9]+$ ]] || fail "Unable to determine the PM2 process ID"
+
+for required_name in SMTP_HOST SMTP_PORT SMTP_SECURE SMTP_USER SMTP_PASSWORD SMTP_FROM; do
+  if ! tr '\0' '\n' < "/proc/$pm2_process_id/environ" |
+    cut -d= -f1 |
+    grep -Fxq "$required_name"; then
+    fail "PM2 process is missing $required_name"
+  fi
+done
+
+echo "[BCH email] PM2 has loaded all SMTP variables."
 echo "[BCH email] Production email is configured and the application was restarted."
