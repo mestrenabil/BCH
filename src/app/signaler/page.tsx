@@ -276,41 +276,27 @@ export default function PublicComplaintPage({ onEmployeeLogin }: PublicComplaint
 
   useEffect(() => {
     let cancelled = false
-    const detectSilentlyWhenAllowed = async () => {
-      if (!navigator.geolocation) {
-        if (!cancelled) setShowLocationRequest(true)
-        return
-      }
-
-      try {
-        if (!navigator.permissions?.query) {
-          if (!cancelled) setShowLocationRequest(true)
-          return
-        }
-        const permission = await navigator.permissions.query({ name: 'geolocation' })
-        if (cancelled) return
-        if (permission.state !== 'granted') {
-          setShowLocationRequest(true)
-          return
-        }
-
-        navigator.geolocation.getCurrentPosition(
-          (position) => {
-            if (cancelled) return
-            setShowLocationRequest(false)
-            selectLocation(position.coords.latitude, position.coords.longitude, true)
-          },
-          () => {
-            if (!cancelled) setShowLocationRequest(true)
-          },
-          { enableHighAccuracy: true, timeout: 10_000, maximumAge: 60_000 },
-        )
-      } catch {
-        if (!cancelled) setShowLocationRequest(true)
-      }
+    if (!navigator.geolocation) {
+      setShowLocationRequest(true)
+      setLocationWarning(copy.locationUnavailable)
+      return () => { cancelled = true }
     }
 
-    void detectSilentlyWhenAllowed()
+    // يطلب المتصفح الإذن تلقائياً عند فتح صفحة التبليغ، ثم يربط الموقع بالجماعة.
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        if (cancelled) return
+        setShowLocationRequest(false)
+        selectLocation(position.coords.latitude, position.coords.longitude, true)
+      },
+      () => {
+        if (cancelled) return
+        setShowLocationRequest(true)
+        setLocationWarning(copy.locationUnavailable)
+      },
+      { enableHighAccuracy: true, timeout: 10_000, maximumAge: 60_000 },
+    )
+
     return () => { cancelled = true }
   }, [])
 
