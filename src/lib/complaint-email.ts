@@ -8,6 +8,25 @@ type ComplaintReferenceEmail = {
   commune: string
 }
 
+function formatArabicCommune(commune: string): string {
+  const withoutPrefix = commune.trim().replace(/^جماعة\s+/u, '').trim()
+  const withoutWrappingQuotes = withoutPrefix
+    .replace(/^[\s'"«»‘’“”]+/u, '')
+    .replace(/[\s'"«»‘’“”]+$/u, '')
+    .trim()
+
+  return `جماعة ${withoutWrappingQuotes || withoutPrefix}`
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;')
+}
+
 function smtpConfiguration() {
   const host = process.env.SMTP_HOST?.trim()
   const from = process.env.SMTP_FROM?.trim()
@@ -35,6 +54,9 @@ export async function sendComplaintReferenceEmail({ recipient, reference, commun
   }
 
   try {
+    const communeLabel = formatArabicCommune(commune)
+    const safeCommuneLabel = escapeHtml(communeLabel)
+    const safeReference = escapeHtml(reference)
     const transporter = nodemailer.createTransport({
       host: configuration.host,
       port: configuration.port,
@@ -45,8 +67,8 @@ export async function sendComplaintReferenceEmail({ recipient, reference, commun
       from: configuration.from,
       to: recipient,
       subject: `تم استلام بلاغكم — المرجع ${reference}`,
-      text: `تم استلام بلاغكم لدى ${commune}. مرجع التتبع الخاص بكم هو: ${reference}. احتفظوا بهذا المرجع لتتبع حالة البلاغ عبر المنصة.`,
-      html: `<div dir="rtl" style="font-family:Arial,sans-serif;line-height:1.7;color:#1e293b"><h2>تم استلام بلاغكم</h2><p>توصلنا ببلاغكم لدى <strong>${commune}</strong>.</p><p>مرجع التتبع الخاص بكم:</p><p style="font-family:monospace;font-size:18px;font-weight:700;color:#047857">${reference}</p><p>يرجى الاحتفاظ به لتتبع حالة البلاغ عبر المنصة.</p></div>`,
+      text: `تم استلام بلاغكم لدى ${communeLabel}. مرجع التتبع الخاص بكم هو: ${reference}. احتفظوا بهذا المرجع لتتبع حالة البلاغ عبر المنصة.`,
+      html: `<div dir="rtl" style="font-family:Arial,sans-serif;line-height:1.8;color:#1e293b;max-width:620px;margin:auto"><div style="border:1px solid #d1fae5;border-radius:16px;overflow:hidden"><div style="background:#047857;color:#fff;padding:18px 24px"><h2 style="margin:0;font-size:20px">تم استلام بلاغكم بنجاح</h2></div><div style="padding:24px"><p>توصلنا ببلاغكم لدى <strong>${safeCommuneLabel}</strong>.</p><p style="margin-bottom:8px">مرجع التتبع الخاص بكم:</p><p style="direction:ltr;text-align:center;font-family:monospace;font-size:18px;font-weight:700;color:#047857;background:#ecfdf5;border-radius:10px;padding:14px">${safeReference}</p><p>يرجى الاحتفاظ بهذا المرجع لتتبع حالة البلاغ عبر المنصة.</p><p style="font-size:12px;color:#64748b">لا تشاركوا مرجع التتبع مع أشخاص غير معنيين.</p></div></div></div>`,
     })
     return 'SENT'
   } catch (error) {
