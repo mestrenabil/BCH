@@ -64,31 +64,54 @@ const PUBLIC_COPY: Record<PublicLanguage, {
   },
 }
 
-const LOCATION_PERMISSION_COPY: Record<PublicLanguage, {
+type LocationPermissionCopy = {
   title: string
   description: string
   allow: string
-}> = {
+  denied: string
+  unavailable: string
+  timeout: string
+}
+
+const LOCATION_PERMISSION_COPY: Record<PublicLanguage, LocationPermissionCopy> = {
   ar: {
     title: 'حدد جماعتك تلقائياً',
     description: 'اسمح بتحديد موقعك لعرضه على الخريطة وربطه بجماعتك. يمكنك بعد ذلك تغيير موقع التدخل بالنقر على الخريطة.',
     allow: '📡 السماح بتحديد موقعي',
+    denied: 'تم منع إذن الموقع. اضغط على رمز القفل بجانب عنوان الصفحة، واسمح للموقع بالوصول إلى موقعك، ثم أعد المحاولة.',
+    unavailable: 'تعذر الحصول على موقع جهازك. فعّل خدمة الموقع في إعدادات الجهاز، أو حدده يدوياً على الخريطة.',
+    timeout: 'استغرق تحديد الموقع وقتاً طويلاً. تأكد من تشغيل خدمة الموقع ثم أعد المحاولة.',
   },
   fr: {
     title: 'Détecter automatiquement votre commune',
     description: 'Autorisez la localisation pour afficher votre position et identifier votre commune. Vous pourrez ensuite déplacer le lieu du signalement sur la carte.',
     allow: '📡 Autoriser ma localisation',
+    denied: 'L’accès à la position est bloqué. Autorisez-le depuis l’icône de cadenas du navigateur, puis réessayez.',
+    unavailable: 'La position de votre appareil est indisponible. Activez le service de localisation ou choisissez le lieu sur la carte.',
+    timeout: 'La localisation a pris trop de temps. Vérifiez le service de localisation, puis réessayez.',
   },
   en: {
     title: 'Detect your commune automatically',
     description: 'Allow location access to show your position and identify your commune. You can then adjust the report location on the map.',
     allow: '📡 Allow my location',
+    denied: 'Location permission is blocked. Allow it from the browser lock icon, then try again.',
+    unavailable: 'Your device location is unavailable. Enable location services or select the place on the map.',
+    timeout: 'Location detection took too long. Check location services, then try again.',
   },
   es: {
     title: 'Detectar tu comuna automáticamente',
     description: 'Permite la ubicación para mostrar tu posición e identificar tu comuna. Después podrás ajustar el lugar del reporte en el mapa.',
     allow: '📡 Permitir mi ubicación',
+    denied: 'El permiso de ubicación está bloqueado. Permítelo desde el icono del candado del navegador y vuelve a intentarlo.',
+    unavailable: 'La ubicación del dispositivo no está disponible. Activa la ubicación o selecciona el lugar en el mapa.',
+    timeout: 'La detección de ubicación tardó demasiado. Comprueba la ubicación y vuelve a intentarlo.',
   },
+}
+
+function getLocationErrorMessage(error: GeolocationPositionError, messages: LocationPermissionCopy) {
+  if (error.code === error.PERMISSION_DENIED) return messages.denied
+  if (error.code === error.TIMEOUT) return messages.timeout
+  return messages.unavailable
 }
 
 const PUBLIC_TYPE_OPTIONS: Record<PublicLanguage, { value: string; label: string; icon: string; description: string }[]> = {
@@ -256,7 +279,7 @@ export default function PublicComplaintPage({ onEmployeeLogin }: PublicComplaint
 
   const captureLocation = () => {
     if (!navigator.geolocation) {
-      setLocationWarning(copy.locationUnavailable)
+      setLocationWarning(locationPermissionCopy.unavailable)
       return
     }
     navigator.geolocation.getCurrentPosition(
@@ -266,11 +289,11 @@ export default function PublicComplaintPage({ onEmployeeLogin }: PublicComplaint
         setShowLocationRequest(false)
         selectLocation(lat, lng, true)
       },
-      () => {
+      (error) => {
         setShowLocationRequest(true)
-        setLocationWarning(copy.locationUnavailable)
+        setLocationWarning(getLocationErrorMessage(error, locationPermissionCopy))
       },
-      { enableHighAccuracy: true, timeout: 10_000, maximumAge: 60_000 },
+      { enableHighAccuracy: true, timeout: 20_000, maximumAge: 300_000 },
     )
   }
 
@@ -278,7 +301,7 @@ export default function PublicComplaintPage({ onEmployeeLogin }: PublicComplaint
     let cancelled = false
     if (!navigator.geolocation) {
       setShowLocationRequest(true)
-      setLocationWarning(copy.locationUnavailable)
+      setLocationWarning(locationPermissionCopy.unavailable)
       return () => { cancelled = true }
     }
 
@@ -289,12 +312,12 @@ export default function PublicComplaintPage({ onEmployeeLogin }: PublicComplaint
         setShowLocationRequest(false)
         selectLocation(position.coords.latitude, position.coords.longitude, true)
       },
-      () => {
+      (error) => {
         if (cancelled) return
         setShowLocationRequest(true)
-        setLocationWarning(copy.locationUnavailable)
+        setLocationWarning(getLocationErrorMessage(error, locationPermissionCopy))
       },
-      { enableHighAccuracy: true, timeout: 10_000, maximumAge: 60_000 },
+      { enableHighAccuracy: false, timeout: 20_000, maximumAge: 300_000 },
     )
 
     return () => { cancelled = true }
