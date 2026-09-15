@@ -163,6 +163,38 @@ function normalizeWhatsAppNumber(value: string): string {
   return digits
 }
 
+const WHATSAPP_MESSAGE_COPY: Record<PublicLanguage, {
+  heading: string
+  reference: string
+  instruction: string
+  privacy: string
+}> = {
+  ar: {
+    heading: '✅ تم تسجيل بلاغك بنجاح',
+    reference: 'رقم التتبع',
+    instruction: 'احتفظ بهذا الرقم وأدخله في قسم «تتبع حالة البلاغ» داخل المنصة لمعرفة آخر المستجدات.',
+    privacy: '🔒 لا تشارك رقم التتبع مع أشخاص غير معنيين.',
+  },
+  fr: {
+    heading: '✅ Votre signalement a été enregistré',
+    reference: 'Référence de suivi',
+    instruction: 'Conservez cette référence et saisissez-la dans la rubrique de suivi de la plateforme pour consulter les mises à jour.',
+    privacy: '🔒 Ne partagez pas cette référence avec des personnes non concernées.',
+  },
+  en: {
+    heading: '✅ Your report has been registered',
+    reference: 'Tracking reference',
+    instruction: 'Keep this reference and enter it in the platform tracking section to check for updates.',
+    privacy: '🔒 Do not share this reference with unauthorized people.',
+  },
+  es: {
+    heading: '✅ Tu reporte ha sido registrado',
+    reference: 'Referencia de seguimiento',
+    instruction: 'Conserva esta referencia e introdúcela en la sección de seguimiento de la plataforma para consultar las novedades.',
+    privacy: '🔒 No compartas esta referencia con personas no autorizadas.',
+  },
+}
+
 type FormState = {
   nomCitoyen: string
   telephone: string
@@ -299,28 +331,65 @@ export default function PublicComplaintPage({ onEmployeeLogin }: PublicComplaint
 
   useEffect(() => {
     let cancelled = false
+    let retriedWithHighAccuracy = false
+    let permissionStatus: PermissionStatus | null = null
+
     if (!navigator.geolocation) {
       setShowLocationRequest(true)
       setLocationWarning(locationPermissionCopy.unavailable)
       return () => { cancelled = true }
     }
 
-    // يطلب المتصفح الإذن تلقائياً عند فتح صفحة التبليغ، ثم يربط الموقع بالجماعة.
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        if (cancelled) return
-        setShowLocationRequest(false)
-        selectLocation(position.coords.latitude, position.coords.longitude, true)
-      },
-      (error) => {
-        if (cancelled) return
-        setShowLocationRequest(true)
-        setLocationWarning(getLocationErrorMessage(error, locationPermissionCopy))
-      },
-      { enableHighAccuracy: false, timeout: 20_000, maximumAge: 300_000 },
-    )
+    const requestPosition = (enableHighAccuracy: boolean) => {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          if (cancelled) return
+          setShowLocationRequest(false)
+          setLocationWarning('')
+          selectLocation(position.coords.latitude, position.coords.longitude, true)
+        },
+        (error) => {
+          if (cancelled) return
 
-    return () => { cancelled = true }
+          // إذا فشلت المحاولة السريعة، يعيد المحاولة تلقائياً بواسطة GPS.
+          if (error.code !== error.PERMISSION_DENIED && !retriedWithHighAccuracy) {
+            retriedWithHighAccuracy = true
+            requestPosition(true)
+            return
+          }
+
+          setShowLocationRequest(true)
+          setLocationWarning(getLocationErrorMessage(error, locationPermissionCopy))
+        },
+        {
+          enableHighAccuracy,
+          timeout: enableHighAccuracy ? 30_000 : 15_000,
+          maximumAge: 300_000,
+        },
+      )
+    }
+
+    // يبدأ تحديد الموقع مباشرة عند فتح الصفحة دون انتظار الضغط على أي زر.
+    requestPosition(false)
+
+    // إذا سمح المستخدم بالموقع من إعدادات المتصفح، يبدأ التحديد فوراً دون تحديث الصفحة.
+    if (navigator.permissions) {
+      void navigator.permissions.query({ name: 'geolocation' }).then((status) => {
+        if (cancelled) return
+        permissionStatus = status
+        status.onchange = () => {
+          if (!cancelled && status.state === 'granted') {
+            retriedWithHighAccuracy = false
+            requestPosition(false)
+          }
+        }
+      }).catch(() => undefined)
+    }
+
+    return () => {
+      cancelled = true
+      if (permissionStatus) permissionStatus.onchange = null
+    }
   }, [])
 
   const submitComplaint = async (event: FormEvent<HTMLFormElement>) => {
@@ -362,7 +431,16 @@ export default function PublicComplaintPage({ onEmployeeLogin }: PublicComplaint
   }
 
   const whatsappNumber = normalizeWhatsAppNumber(submittedTelephone)
-  const whatsappMessage = `${copy.successTitle}. ${copy.keepReference} ${reference}.`
+  const whatsappCopy = WHATSAPP_MESSAGE_COPY[language]
+  const whatsappMessage = [
+    whatsappCopy.heading,
+    '',
+    `🆔 *${whatsappCopy.reference}:*`,
+    `*${reference}*`,
+    '',
+    whatsappCopy.instruction,
+    whatsappCopy.privacy,
+  ].join('\n')
   const whatsappUrl = whatsappNumber
     ? `https://wa.me/${whatsappNumber}?text=${encodeURIComponent(whatsappMessage)}`
     : `https://wa.me/?text=${encodeURIComponent(whatsappMessage)}`
