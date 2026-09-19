@@ -76,3 +76,32 @@ export async function sendComplaintReferenceEmail({ recipient, reference, commun
     return 'FAILED'
   }
 }
+
+
+const COMPLAINT_STATUS_LABELS: Record<string, string> = {
+  EN_ATTENTE: 'قيد الاستلام',
+  EN_COURS: 'قيد المعالجة',
+  TRAITEE: 'تمت المعالجة',
+  REJETEE: 'تم إغلاق البلاغ دون متابعة',
+}
+
+export async function sendComplaintStatusEmail(input: ComplaintReferenceEmail & { status: string; workOrderReference?: string | null; notes?: string | null }): Promise<EmailDeliveryStatus> {
+  const configuration = smtpConfiguration()
+  if (!configuration) return 'NOT_CONFIGURED'
+  try {
+    const communeLabel = formatArabicCommune(input.commune)
+    const statusLabel = COMPLAINT_STATUS_LABELS[input.status] || input.status
+    const transporter = nodemailer.createTransport({ host: configuration.host, port: configuration.port, secure: configuration.secure, auth: configuration.auth })
+    await transporter.sendMail({
+      from: configuration.from,
+      to: input.recipient,
+      subject: `تحديث حالة بلاغكم ${input.reference} — ${statusLabel}`,
+      text: `تم تحديث حالة بلاغكم لدى ${communeLabel} إلى: ${statusLabel}. احتفظوا بمرجع التتبع ${input.reference}.`,
+      html: `<div dir="rtl" style="font-family:Arial,sans-serif;line-height:1.8;color:#1e293b"><h2>تحديث حالة البلاغ</h2><p>الجماعة: <strong>${escapeHtml(communeLabel)}</strong></p><p>الحالة الحالية: <strong>${escapeHtml(statusLabel)}</strong></p>${input.workOrderReference ? `<p>مرجع أمر العمل: <strong>${escapeHtml(input.workOrderReference)}</strong></p>` : ''}${input.notes ? `<p>ملاحظة الإدارة: ${escapeHtml(input.notes)}</p>` : ''}<p>مرجع التتبع: <strong>${escapeHtml(input.reference)}</strong></p></div>`,
+    })
+    return 'SENT'
+  } catch (error) {
+    console.error('Complaint status email error:', error)
+    return 'FAILED'
+  }
+}

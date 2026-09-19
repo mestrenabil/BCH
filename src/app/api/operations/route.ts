@@ -42,6 +42,20 @@ export async function GET(request: NextRequest) {
 
     const now = new Date()
     const nextDay = new Date(now.getTime() + 24 * 60 * 60 * 1000)
+    const moroccoParts = new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Casablanca', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(now)
+    const part = (type: string) => Number(moroccoParts.find((item) => item.type === type)?.value)
+    const localMidnight = new Date(part('year'), part('month') - 1, part('day'))
+    const offsetMinutes = -Number(new Intl.DateTimeFormat('en-US', { timeZone: 'Africa/Casablanca', timeZoneName: 'longOffset' }).formatToParts(localMidnight).find((item) => item.type === 'timeZoneName')?.value.replace('GMT', '').replace(':', '.') || 0) * 60
+    const todayStart = new Date(Date.UTC(part('year'), part('month') - 1, part('day')) + offsetMinutes * 60_000)
+    const tomorrowStart = new Date(todayStart.getTime() + 24 * 60 * 60 * 1000)
+    const communeWhere = communeFilter ? { commune: communeFilter } : {}
+    const [newComplaints, publicComplaints, scheduledOrders, completedToday, activeAgents] = await Promise.all([
+      db.complaint.count({ where: { ...communeWhere, dateReception: { gte: todayStart, lt: tomorrowStart } } }),
+      db.complaint.count({ where: { ...communeWhere, source: 'PUBLIC', dateReception: { gte: todayStart, lt: tomorrowStart } } }),
+      db.workOrder.count({ where: { ...communeWhere, scheduledFor: { gte: todayStart, lt: tomorrowStart } } }),
+      db.workOrder.count({ where: { ...communeWhere, completedAt: { gte: todayStart, lt: tomorrowStart } } }),
+      db.agent.count({ where: { ...communeWhere, actif: true } }),
+    ])
     const openOrders = workOrders.filter((workOrder) => !TERMINAL_STATUSES.has(workOrder.status))
     const overdue = openOrders.filter((workOrder) => effectiveDueAt(workOrder) < now)
     const dueSoon = openOrders.filter((workOrder) => {
@@ -83,6 +97,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       generatedAt: now,
+      daily: { newComplaints, publicComplaints, scheduledOrders, completedToday, activeAgents },
       metrics: {
         total: workOrders.length,
         open: openOrders.length,

@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { canAccessCommune, isAdmin, requireAuth } from '@/lib/auth'
 import { recordActivity } from '@/lib/activity-log'
 import { syncComplaintDossier } from '@/lib/vigilance-links'
+import { sendComplaintStatusEmail } from '@/lib/complaint-email'
 
 const COMPLAINT_STATUSES = new Set(['EN_ATTENTE', 'EN_COURS', 'TRAITEE', 'REJETEE'])
 
@@ -108,6 +109,10 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         interventionId: complaint.interventionId,
       },
     })
+
+    if (body.statut && body.statut !== existing.statut && complaint.email) {
+      await sendComplaintStatusEmail({ recipient: complaint.email, reference: complaint.reference, commune: complaint.commune, status: complaint.statut, notes: complaint.observations })
+    }
 
     const dossier = await db.dossier.findFirst({ where: { complaintId: complaint.id }, orderBy: { createdAt: 'desc' }, select: { id: true, reference: true, status: true, dueDate: true, closedAt: true } })
     return NextResponse.json({ ...complaint, dossier: dossier || null })

@@ -3,6 +3,7 @@ import { canAccessCommune, isFieldAgent, requireAuth } from '@/lib/auth'
 import { recordActivity } from '@/lib/activity-log'
 import { NextRequest, NextResponse } from 'next/server'
 import { isCoordinateInCommune } from '@/lib/commune-boundaries'
+import { sendComplaintStatusEmail } from '@/lib/complaint-email'
 
 const PRIORITIES = new Set(['URGENTE', 'HAUTE', 'NORMALE', 'BASSE'])
 const STATUSES = new Set(['NOUVEAU', 'ASSIGNE', 'EN_ROUTE', 'EN_COURS', 'TERMINE', 'ANNULE'])
@@ -79,7 +80,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     const { id } = await params
     const existing = await db.workOrder.findUnique({
       where: { id },
-      include: { complaint: { select: { id: true, statut: true } } },
+      include: { complaint: { select: { id: true, reference: true, commune: true, statut: true, email: true } } },
     })
     if (!existing) return NextResponse.json({ error: 'أمر العمل غير موجود' }, { status: 404 })
     if (!canAccessCommune(authResult.user, existing.commune)) {
@@ -165,6 +166,14 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       if (requestedStatus === 'TERMINE' && !existing.completedAt) updateData.completedAt = new Date()
     }
 
+    if (requestedStatus === 'TERMINE') {
+      const completionNotes = body.completionNotes !== undefined ? text(body.completionNotes, 2000) : existing.completionNotes || ''
+      if (completionNotes.length < 5) return NextResponse.json({ error: 'يرجى إدخال ملاحظات واضحة عن الأشغال المنجزة' }, { status: 400 })
+      const evidence = await db.workOrderPhoto.groupBy({ by: ['type'], where: { workOrderId: id }, _count: { _all: true } })
+      const counts = Object.fromEntries(evidence.map((item) => [item.type, item._count._all]))
+      if (!counts.BEFORE || !counts.AFTER) return NextResponse.json({ error: 'لا يمكن إغلاق أمر العمل قبل إرفاق صورة قبل التنفيذ وصورة بعده' }, { status: 400 })
+    }
+
     const workOrder = await db.$transaction(async (transaction) => {
       const updated = await transaction.workOrder.update({
         where: { id },
@@ -173,10 +182,12 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       })
 
       if (requestedStatus === 'TERMINE' && existing.complaint && existing.complaint.statut !== 'REJETEE') {
-        await transaction.complaint.update({
-          where: { id: existing.complaint.id },
-          data: { statut: 'TRAITEE', dateTraitement: new Date() },
-        })
+        await transaction.complaint.update({ where: { id: existing.complaint.id }, data: { statut: 'TRAITEE', dateTraitement: new Date() } })
+      }
+      if (existing.complaint && requestedStatus) {
+        const dossier = await transaction.dossier.findFirst({ where: { complaintId: existing.complaint.id }, orderBy: { createdAt: 'desc' } })
+        const nextDossierStatus = requestedStatus === 'TERMINE' ? 'CLOSED' : requestedStatus === 'EN_COURS' ? 'IN_PROGRESS' : ['ASSIGNE', 'EN_ROUTE'].includes(requestedStatus) ? 'ASSIGNED' : dossier?.status
+        if (dossier && nextDossierStatus && nextDossierStatus !== dossier.status) await transaction.dossier.update({ where: { id: dossier.id }, data: { workOrderId: updated.id, status: nextDossierStatus, closedAt: nextDossierStatus === 'CLOSED' ? new Date() : null, events: { create: { fromStatus: dossier.status, toStatus: nextDossierStatus, action: 'STATUS_CHANGE', reason: `مزامنة أمر العمل ${updated.reference}`, changedBy: authResult.user.id, changedByName: authResult.user.nom } } } })
       }
 
       return updated
@@ -197,6 +208,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       },
     })
 
+    if (requestedStatus === 'TERMINE' && existing.complaint?.email && existing.complaint.statut !== 'TRAITEE') await sendComplaintStatusEmail({ recipient: existing.complaint.email, reference: existing.complaint.reference, commune: existing.complaint.commune, status: 'TRAITEE', workOrderReference: workOrder.reference, notes: workOrder.completionNotes })
     return NextResponse.json(workOrder)
   } catch (error) {
     console.error('PUT work order error:', error)

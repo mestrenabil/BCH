@@ -125,10 +125,13 @@ export default function FieldAppPage() {
 
   const completeOrder = async () => {
     if (!completionOrder) return
-    const completed = await updateOrder(completionOrder, 'TERMINE', completionNotes)
-    if (!completed) return
+    if (completionNotes.trim().length < 5) { setError('يرجى كتابة ملاحظات واضحة عن الأشغال المنجزة.'); return }
+    if (!completionOrder.photos.some((photo) => photo.type === 'BEFORE')) { setError('أرفق صورة واحدة على الأقل قبل التنفيذ أولاً.'); return }
+    if (!completionPhotos.length) { setError('أرفق صورة واحدة على الأقل بعد التنفيذ.'); return }
     const uploaded = await uploadPhotos(completionOrder, completionPhotos, 'AFTER')
-    if (uploaded) {
+    if (!uploaded) return
+    const completed = await updateOrder(completionOrder, 'TERMINE', completionNotes.trim())
+    if (completed) {
       setCompletionOrder(null)
       setCompletionNotes('')
       setCompletionPhotos([])

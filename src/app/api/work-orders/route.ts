@@ -5,6 +5,7 @@ import { recordActivity } from '@/lib/activity-log'
 import { NextRequest, NextResponse } from 'next/server'
 import { getTerritoryFilterFromValue, isCommuneInTerritoryScope } from '@/lib/territory-scope'
 import { isCoordinateInCommune } from '@/lib/commune-boundaries'
+import { sendComplaintStatusEmail } from '@/lib/complaint-email'
 
 const PRIORITIES = new Set(['URGENTE', 'HAUTE', 'NORMALE', 'BASSE'])
 const STATUSES = new Set(['NOUVEAU', 'ASSIGNE', 'EN_ROUTE', 'EN_COURS', 'TERMINE', 'ANNULE'])
@@ -175,10 +176,11 @@ export async function POST(request: NextRequest) {
       })
 
       if (complaint && complaint.statut === 'EN_ATTENTE') {
-        await transaction.complaint.update({
-          where: { id: complaint.id },
-          data: { statut: 'EN_COURS' },
-        })
+        await transaction.complaint.update({ where: { id: complaint.id }, data: { statut: 'EN_COURS' } })
+      }
+      if (complaint) {
+        const dossier = await transaction.dossier.findFirst({ where: { complaintId: complaint.id }, orderBy: { createdAt: 'desc' } })
+        if (dossier) await transaction.dossier.update({ where: { id: dossier.id }, data: { workOrderId: created.id, status: assignedAgentId ? 'ASSIGNED' : 'ACTION_REQUIRED', events: { create: { fromStatus: dossier.status, toStatus: assignedAgentId ? 'ASSIGNED' : 'ACTION_REQUIRED', action: 'LINK', reason: `ربط أمر العمل ${created.reference}`, changedBy: user.id, changedByName: user.nom } } } })
       }
 
       return created
@@ -198,6 +200,7 @@ export async function POST(request: NextRequest) {
       },
     })
 
+    if (complaint?.email && complaint.statut === 'EN_ATTENTE') await sendComplaintStatusEmail({ recipient: complaint.email, reference: complaint.reference, commune: complaint.commune, status: 'EN_COURS', workOrderReference: workOrder.reference })
     return NextResponse.json(workOrder, { status: 201 })
   } catch (error) {
     console.error('POST work order error:', error)
