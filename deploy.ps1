@@ -1,7 +1,8 @@
 $ErrorActionPreference = "Stop"
 $LocalUrl = "http://localhost:3000"
 $LocalHealthUrl = "$LocalUrl/api/health"
-$LocalStartupTimeoutSeconds = 120
+$LocalHealthTimeoutSeconds = 20
+$LocalStartupTimeoutSeconds = 240
 $ProductionUrl = "https://bch.dabahelp.com"
 $DeploymentTimeoutSeconds = 900
 
@@ -32,7 +33,8 @@ function Get-CurrentCommit {
 
 function Test-LocalSite {
     try {
-        $health = Invoke-RestMethod -Uri $LocalHealthUrl -Method Get -TimeoutSec 5
+        # قد يحتاج Turbopack وقتاً إضافياً لتجميع مسار الصحة عند أول طلب.
+        $health = Invoke-RestMethod -Uri $LocalHealthUrl -Method Get -TimeoutSec $LocalHealthTimeoutSeconds
         return $health.status -eq "ok" -and $health.database -eq "ok"
     }
     catch {
@@ -139,6 +141,7 @@ function Start-LocalPreview {
             -PassThru
 
         $deadline = (Get-Date).AddSeconds($LocalStartupTimeoutSeconds)
+        $lastProgressAt = Get-Date
         while ((Get-Date) -lt $deadline) {
             if ($localProcess.HasExited) {
                 $outputTail = if (Test-Path -LiteralPath $stdoutLog) { (Get-Content -LiteralPath $stdoutLog -Tail 30) -join [Environment]::NewLine } else { "" }
@@ -151,6 +154,10 @@ function Start-LocalPreview {
             }
             if (Test-LocalSite) {
                 break
+            }
+            if (((Get-Date) - $lastProgressAt).TotalSeconds -ge 30) {
+                Write-Host "Still waiting for Next.js and the database health check..." -ForegroundColor DarkYellow
+                $lastProgressAt = Get-Date
             }
             Start-Sleep -Seconds 2
             $localProcess.Refresh()

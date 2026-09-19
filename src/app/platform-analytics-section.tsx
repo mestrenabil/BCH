@@ -41,6 +41,7 @@ type AnalyticsData = {
 }
 
 const PERIODS = [
+  { value: 1, label: 'اليوم' },
   { value: 7, label: '7 أيام' },
   { value: 30, label: '30 يوماً' },
   { value: 90, label: '3 أشهر' },

@@ -2,10 +2,50 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { requireAdmin } from '@/lib/auth'
 
-const VALID_PERIODS = new Set([7, 30, 90, 365])
+const VALID_PERIODS = new Set([1, 7, 30, 90, 365])
 const PAGE_VIEW_KINDS = new Set(['PUBLIC_SITE', 'REPORT_PAGE', 'PLATFORM'])
+const ANALYTICS_TIME_ZONE = 'Africa/Casablanca'
 
-const dayKey = (date: Date) => date.toISOString().slice(0, 10)
+function dateParts(date: Date, timeZone: string) {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(date)
+  const value = (type: Intl.DateTimeFormatPartTypes) => Number(parts.find((part) => part.type === type)?.value || 0)
+  return {
+    year: value('year'),
+    month: value('month'),
+    day: value('day'),
+    hour: value('hour'),
+    minute: value('minute'),
+    second: value('second'),
+  }
+}
+
+function timeZoneOffset(date: Date, timeZone: string): number {
+  const parts = dateParts(date, timeZone)
+  return Date.UTC(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute, parts.second) - date.getTime()
+}
+
+function startOfAnalyticsDay(now: Date, offsetDays = 0): Date {
+  const local = dateParts(now, ANALYTICS_TIME_ZONE)
+  const nominalUtc = Date.UTC(local.year, local.month - 1, local.day + offsetDays)
+  let result = new Date(nominalUtc)
+  result = new Date(nominalUtc - timeZoneOffset(result, ANALYTICS_TIME_ZONE))
+  result = new Date(nominalUtc - timeZoneOffset(result, ANALYTICS_TIME_ZONE))
+  return result
+}
+
+function dayKey(date: Date): string {
+  const parts = dateParts(date, ANALYTICS_TIME_ZONE)
+  return `${parts.year}-${String(parts.month).padStart(2, '0')}-${String(parts.day).padStart(2, '0')}`
+}
 
 export async function GET(request: NextRequest) {
   const authResult = await requireAdmin()
@@ -15,11 +55,8 @@ export async function GET(request: NextRequest) {
     const requestedDays = Number(request.nextUrl.searchParams.get('days') || 30)
     const days = VALID_PERIODS.has(requestedDays) ? requestedDays : 30
     const now = new Date()
-    const from = new Date(now)
-    from.setUTCHours(0, 0, 0, 0)
-    from.setUTCDate(from.getUTCDate() - days + 1)
-    const previousFrom = new Date(from)
-    previousFrom.setUTCDate(previousFrom.getUTCDate() - days)
+    const from = startOfAnalyticsDay(now, -days + 1)
+    const previousFrom = startOfAnalyticsDay(now, -days * 2 + 1)
 
     const [events, previousVisits, users, publicReportCounts] = await Promise.all([
       db.platformVisit.findMany({
@@ -60,8 +97,7 @@ export async function GET(request: NextRequest) {
 
     const dailyMap = new Map<string, { publicSite: number; reports: number; platform: number }>()
     for (let index = 0; index < days; index += 1) {
-      const date = new Date(from)
-      date.setUTCDate(from.getUTCDate() + index)
+      const date = startOfAnalyticsDay(now, index - days + 1)
       dailyMap.set(dayKey(date), { publicSite: 0, reports: 0, platform: 0 })
     }
 
@@ -88,11 +124,13 @@ export async function GET(request: NextRequest) {
         if (event.kind === 'PLATFORM') daily.platform += 1
       }
 
-      const commune = event.commune || 'سجل قديم — الموقع غير متوفر'
-      const communeEntry = communeMap.get(commune) || { visits: 0, visitors: new Set<string>() }
-      communeEntry.visits += 1
-      communeEntry.visitors.add(event.visitorHash)
-      communeMap.set(commune, communeEntry)
+      // السجلات القديمة التي لا تتوفر على جماعة تبقى في الإجمالي ولا تظهر في ترتيب الجماعات.
+      if (event.commune) {
+        const communeEntry = communeMap.get(event.commune) || { visits: 0, visitors: new Set<string>() }
+        communeEntry.visits += 1
+        communeEntry.visitors.add(event.visitorHash)
+        communeMap.set(event.commune, communeEntry)
+      }
 
       const pageEntry = pageMap.get(event.path) || { visits: 0, visitors: new Set<string>() }
       pageEntry.visits += 1
